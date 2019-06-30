@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: cdc4c6dfe2baed8395138f0b1b8e1910                            *
+// IMC XML MD5: 39c2acd684582792490e08b15fccb515                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -322,6 +322,8 @@
 #define DUNE_IMC_GROUPSTREAMVELOCITY 362
 //! Airflow identification number.
 #define DUNE_IMC_AIRFLOW 363
+//! ObstacleState identification number.
+#define DUNE_IMC_OBSTACLESTATE 364
 //! DesiredHeading identification number.
 #define DUNE_IMC_DESIREDHEADING 400
 //! DesiredZ identification number.
@@ -534,6 +536,8 @@
 #define DUNE_IMC_MAPPOINT 604
 //! CcuEvent identification number.
 #define DUNE_IMC_CCUEVENT 606
+//! AisStaticInfo identification number.
+#define DUNE_IMC_AISSTATICINFO 607
 //! VehicleLinks identification number.
 #define DUNE_IMC_VEHICLELINKS 650
 //! TrexObservation identification number.
@@ -652,6 +656,8 @@
 #define DUNE_IMC_SADCREADINGS 907
 //! DmsDetection identification number.
 #define DUNE_IMC_DMSDETECTION 908
+//! CompassHeading identification number.
+#define DUNE_IMC_COMPASSHEADING 909
 //! TotalMagIntensity identification number.
 #define DUNE_IMC_TOTALMAGINTENSITY 2006
 

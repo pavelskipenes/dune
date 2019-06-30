@@ -222,7 +222,7 @@ namespace DUNE
       if (paramChanged(m_speriod))
         m_speriod = 1.0 / m_speriod;
 
-      m_ts.cc = m_course_ctl ? 1 : 0;
+      m_ts.cc = true; //m_course_ctl ? 1 : 0; m_ts.cc = m_course_ctl ? 1 : 0;
       m_ts.loitering = false;
       m_ts.nearby = false;
       m_ts.end_time = Clock::get();

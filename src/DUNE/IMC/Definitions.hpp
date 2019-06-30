@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: cdc4c6dfe2baed8395138f0b1b8e1910                            *
+// IMC XML MD5: 39c2acd684582792490e08b15fccb515                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -10483,9 +10483,9 @@ namespace DUNE
       //! Continuous Yaw.
       fp32_t cyaw;
       //! GPS Rejection Filter Level.
-      fp32_t lbl_rej_level;
-      //! LBL Rejection Filter Level.
       fp32_t gps_rej_level;
+      //! LBL Rejection Filter Level.
+      fp32_t lbl_rej_level;
       //! Variance - Custom Variable X.
       fp32_t custom_x;
       //! Variance - Custom Variable Y.
@@ -11099,6 +11099,89 @@ namespace DUNE
       getFixedSerializationSize(void) const
       {
         return 12;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Obstacle State.
+    class ObstacleState: public Message
+    {
+    public:
+      //! MMSI.
+      uint32_t mmsi;
+      //! Longitude (WGS-84).
+      fp64_t lon;
+      //! Latitude (WGS-84).
+      fp64_t lat;
+      //! Offset north.
+      fp32_t x;
+      //! Offset east.
+      fp32_t y;
+      //! Rotation over z axis.
+      fp32_t psi;
+      //! Ground Velocity X (North).
+      fp32_t u;
+      //! Ground Velocity Y (East).
+      fp32_t v;
+      //! Size A Lenght.
+      fp32_t a;
+      //! Size B Length.
+      fp32_t b;
+      //! Size C Width.
+      fp32_t c;
+      //! Size D Width.
+      fp32_t d;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 364;
+      }
+
+      ObstacleState(void);
+
+      ObstacleState*
+      clone(void) const
+      {
+        return new ObstacleState(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return ObstacleState::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "ObstacleState";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 56;
       }
 
       void
@@ -20413,6 +20496,87 @@ namespace DUNE
       setDestinationEntityNested(uint8_t value__);
     };
 
+    //! AIS Static Info.
+    class AisStaticInfo: public Message
+    {
+    public:
+      //! Id.
+      std::string id;
+      //! Callsign.
+      std::string callsign;
+      //! Name.
+      std::string name;
+      //! Type and Cargo.
+      uint8_t type_and_cargo;
+      //! Size A Length.
+      fp32_t a;
+      //! Size B Length.
+      fp32_t b;
+      //! Size C Width.
+      fp32_t c;
+      //! Size D Width.
+      fp32_t d;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 607;
+      }
+
+      AisStaticInfo(void);
+
+      AisStaticInfo*
+      clone(void) const
+      {
+        return new AisStaticInfo(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return AisStaticInfo::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "AisStaticInfo";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 17;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(id) + IMC::getSerializationSize(callsign) + IMC::getSerializationSize(name);
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
     //! Vehicle Links.
     class VehicleLinks: public Message
     {
@@ -24963,6 +25127,69 @@ namespace DUNE
       getFixedSerializationSize(void) const
       {
         return 64;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Compass Heading.
+    class CompassHeading: public Message
+    {
+    public:
+      //! Device Time.
+      fp64_t time;
+      //! Angle.
+      fp64_t ang;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 909;
+      }
+
+      CompassHeading(void);
+
+      CompassHeading*
+      clone(void) const
+      {
+        return new CompassHeading(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return CompassHeading::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "CompassHeading";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 16;
       }
 
       void

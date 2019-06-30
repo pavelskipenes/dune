@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: cdc4c6dfe2baed8395138f0b1b8e1910                            *
+// IMC XML MD5: 39c2acd684582792490e08b15fccb515                            *
 //***************************************************************************
 
 MESSAGE(1, EntityState)
@@ -175,6 +175,7 @@ MESSAGE(360, LblEstimate)
 MESSAGE(361, AlignmentState)
 MESSAGE(362, GroupStreamVelocity)
 MESSAGE(363, Airflow)
+MESSAGE(364, ObstacleState)
 MESSAGE(400, DesiredHeading)
 MESSAGE(401, DesiredZ)
 MESSAGE(402, DesiredSpeed)
@@ -281,6 +282,7 @@ MESSAGE(602, Map)
 MESSAGE(603, MapFeature)
 MESSAGE(604, MapPoint)
 MESSAGE(606, CcuEvent)
+MESSAGE(607, AisStaticInfo)
 MESSAGE(650, VehicleLinks)
 MESSAGE(651, TrexObservation)
 MESSAGE(652, TrexCommand)
@@ -340,5 +342,6 @@ MESSAGE(905, Tachograph)
 MESSAGE(906, ApmStatus)
 MESSAGE(907, SadcReadings)
 MESSAGE(908, DmsDetection)
+MESSAGE(909, CompassHeading)
 MESSAGE(2006, TotalMagIntensity)
 #undef MESSAGE

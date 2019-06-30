@@ -520,7 +520,7 @@ namespace Sensors
       bool
       hasNMEAMessageCode(const std::string& str, const std::string& code)
       {
-        return String::startsWith(str, "G") && String::endsWith(str, code);
+        return (String::startsWith(str, "G") || String::startsWith(str, "H")) && String::endsWith(str, code);
       }
 
       //! Interpret ZDA sentence (UTC date and time).
@@ -669,7 +669,7 @@ namespace Sensors
         }
       }
 
-      //! Interpret VTG sentence (true heading).
+      //! Interpret HDT sentence (true heading).
       //! @param[in] parts vector of strings from sentence.
       void
       interpretHDT(const std::vector<std::string>& parts)
