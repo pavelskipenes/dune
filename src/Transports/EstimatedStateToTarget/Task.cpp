@@ -64,7 +64,7 @@ namespace Transports
         .defaultValue("10")
         .description("Length to stern from the located AIS ");
      
-		param("Size B", m_args.size_b)
+		    param("Size B", m_args.size_b)
         .units(Units::Meter)
         .minimumValue("0")
         .maximumValue("50")
@@ -87,19 +87,17 @@ namespace Transports
 
   
         // Register handler routines. 
-		bind<IMC::EstimatedState>(this);
+		    bind<IMC::EstimatedState>(this);
       }
-
-
 
 
       void
       onUpdateParameters(void)
       {
-		obstacle.a = m_args.size_a;
-		obstacle.b = m_args.size_b;
-		obstacle.c = m_args.size_c;
-		obstacle.d = m_args.size_d;
+        obstacle.a = m_args.size_a;
+		    obstacle.b = m_args.size_b;
+		    obstacle.c = m_args.size_c;
+		    obstacle.d = m_args.size_d;
 		
       }
 
@@ -107,37 +105,40 @@ namespace Transports
       void
       onResourceInitialization(void)
       {
-		obstacle.lat = 0.0;
-		obstacle.lon = 0.0;
-		obstacle.x = 0.0;
-		obstacle.y = 0.0;
-		obstacle.psi = 0.0;
-		obstacle.u = 0.0;
-		obstacle.v = 0.0;
-		obstacle.a = 0.0;	
-		obstacle.b = 0.0;
-		obstacle.c = 0.0;
-		obstacle.d = 0.0;
+        obstacle.lat = 0.0;
+		    obstacle.lon = 0.0;
+		    obstacle.x = 0.0;
+		    obstacle.y = 0.0;
+		    obstacle.psi = 0.0;
+		    obstacle.u = 0.0;
+		    obstacle.v = 0.0;
+		    obstacle.a = 0.0;	
+		    obstacle.b = 0.0;
+		    obstacle.c = 0.0;
+		    obstacle.d = 0.0;
       }
 
 
       void
       consume(const IMC::EstimatedState* msg)
       {
-		obstacle.lat = msg->lat;
-		obstacle.lon = msg->lon;
-		obstacle.x = msg->x;
-		obstacle.y = msg->y;
-		obstacle.psi = msg->psi;
-		obstacle.u = msg->vx;
-		obstacle.v = msg->vy;
-		obstacle.a = m_args.size_a;
-		obstacle.b = m_args.size_b;
-		obstacle.c = m_args.size_c;
-		obstacle.d = m_args.size_d;
+        obstacle.lat = msg->lat;
+		    obstacle.lon = msg->lon;
+		    obstacle.x = msg->x;
+		    obstacle.y = msg->y;
+		    obstacle.psi = msg->psi;
+		    obstacle.u = msg->vx;
+		    obstacle.v = msg->vy;
+		    obstacle.a = m_args.size_a;
+		    obstacle.b = m_args.size_b;
+		    obstacle.c = m_args.size_c;
+		    obstacle.d = m_args.size_d;
 		
+		    
+        spew("Obstacle# (lon,lat,psi,u,v) %0.1f %0.1f %0.1f %0.1f %0.1f",
+                     obstacle.lon, obstacle.lat, Angles::degrees(obstacle.psi), obstacle.u, obstacle.v);
 
-		dispatch(obstacle);
+        dispatch(obstacle);
       }
 
 

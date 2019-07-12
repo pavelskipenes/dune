@@ -389,7 +389,88 @@ namespace Control
           //spew("Thruster Actuation: %d", thruster_act);
         }
 
-        //! From AIS Task - Static vessel information
+        //! ObstacleState: Received from EstimatedStateToTarget - simulated obstacles, ex asv-obstacle-1 [Simulation Mode]
+        void
+        consume(const IMC::ObstacleState* o_msg)
+        {
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+
+          // Real WGS-84 Coordinates [rad]. Static coordinates need to compensate for displacement in x/y-direction (WGS84::displace)
+          m_lat_obst = o_msg->lat;
+          m_lon_obst = o_msg->lon;
+          WGS84::displace(o_msg->x, o_msg->y, &m_lat_obst, &m_lon_obst);
+
+          // Distance between ASV - Obstacle
+          double dist_x = 0.0;
+          double dist_y = 0.0;
+          WGS84::displacement(m_lat_asv, m_lon_asv, 0, m_lat_obst, m_lon_obst, 0, &dist_x, &dist_y);
+          double displacement = sqrt(dist_x * dist_x + dist_y * dist_y);
+
+          std::string system_name = Utils::String::str(resolveSystemId(o_msg->getSource()));
+          //spew("Obstacle_Name: %s obst_vec.size: %d displacment: %0.1f dist_x: %0.1f dist_y: %0.1f range_parameter: %0.1f",
+          //system_name.c_str(), obst_vec.size(), displacement, dist_x, dist_y, m_args.out_of_range);
+
+          bool obs_exists = false;
+
+          // Obstacle vector (Add/Update/Remove)
+          for (unsigned i = 0; i < obst_vec.size(); i++)
+          {
+            //spew("Update Obstacle vector: Source: %d Vector size: %d", obst_vec[i].getSource(), obst_vec.size());
+            if (obst_vec[i].getSource() == o_msg->getSource())
+            {
+              obs_exists = true;
+              if (obs_exists)
+              {
+                if (displacement < m_args.out_of_range)
+                { // Obstacle exists & inside range - Update
+                  obst_vec[i].lon = dist_x; //! Lon expressed as dx [m]
+                  obst_vec[i].lat = dist_y; //! Lat expressed as dy [m]
+                  obst_vec[i].psi = o_msg->psi;
+                  obst_vec[i].u = o_msg->u;
+                  obst_vec[i].v = o_msg->v;
+                  obst_vec[i].a = o_msg->a;
+                  obst_vec[i].b = o_msg->b;
+                  obst_vec[i].c = o_msg->c;
+                  obst_vec[i].d = o_msg->d;
+
+                  //spew("Obstacle source %d UPDATE - Obstacle exists & inside range: %s",obst_temp.getSource(), system_name.c_str());
+                  break;
+                }
+                else
+                { // Outside range - Remove Obstacle
+                  obst_vec.erase(obst_vec.begin() + i);
+                  spew("Obstacle Source: %d Getting removed - Outside range, vector size: %lu",
+                       obst_temp.getSource(), obst_vec.size());
+                  break;
+                }
+              }
+            }
+          }
+
+          // New Obstacle - Add to vector
+          if (obs_exists == false && (displacement < m_args.out_of_range))
+          {
+            // Temp obstacle for storage
+            obst_temp.setSource(o_msg->getSource());
+            obst_temp.lon = dist_x;
+            obst_temp.lat = dist_y;
+            obst_temp.psi = o_msg->psi;
+            obst_temp.u = o_msg->u;
+            obst_temp.v = o_msg->v;
+            obst_temp.a = o_msg->a;
+            obst_temp.b = o_msg->b;
+            obst_temp.c = o_msg->c;
+            obst_temp.d = o_msg->d;
+
+            obst_vec.push_back(obst_temp);
+            spew("New Obstacle Added: Vehicle: %s Source: %d   obst_vec.size: %lu",
+                 system_name.c_str(), obst_temp.getSource(), obst_vec.size());
+          }
+
+          obs_exists = false;
+        }
+
+        //! From AIS Task - Static vessel information [Hardware mode]
         void
         consume(const IMC::AisStaticInfo* ais_static)
         {
@@ -417,6 +498,30 @@ namespace Control
           }
         }
 
+        //! From AIS Task - Receive Dynamic vessel AIS information [Hardware mode]
+        void
+        consume(const IMC::RemoteSensorInfo* ais_msg)
+        {
+          uint32_t source_mmsi = atoi(ais_msg->id.c_str());
+
+          //! Temporary storage for AIS-Obstacles
+          IMC::ObstacleState obst_ais;
+          obst_ais.setSource(ais_msg->getSource());
+          obst_ais.mmsi = source_mmsi;
+          obst_ais.lat = ais_msg->lat;
+          obst_ais.lon = ais_msg->lon;
+          obst_ais.psi = ais_msg->heading;
+          obst_ais.u = (0.51444) * ais_msg->alt; // NB ! ais_msg->alt (altitude) is acutally speed: See Sensor/AIS/Task. Converting from knots --> m/s
+          obst_ais.v = 0;
+          obst_ais.a = 150; //Assumed size (L,W): 300, 50 meter. Oil Tanker
+          obst_ais.b = 150;
+          obst_ais.c = 25;
+          obst_ais.d = 25;
+
+          //Update Obstacle-vector
+          updateObstacles(&obst_ais);
+        }
+
         //! From GPS Task
         void
         consume(const IMC::GpsFix* msg)
@@ -439,10 +544,11 @@ namespace Control
           counter = counter + 1;
         }
 
+        //! From PathController
         void
         consume(const IMC::DesiredPath* dpath)
         {
-          //! From PathController - Speed reference
+          // Speed reference
           u_pcs = dpath->speed;
           u_pcs_unit = dpath->speed_units;
           m_speed.value = u_pcs;
@@ -478,30 +584,6 @@ namespace Control
 
           //spew("AutoNaut(lat,lon): %f %f (lat[deg],lon[deg]): %f %f ", m_lat_asv, m_lon_asv, c_degrees_per_radian*m_lat_asv, c_degrees_per_radian*m_lon_asv);
           //spew("AutoNaut(x,y,psi,u,v,vx,vy): %0.1f %0.1f %0.1f %0.5f %0.1f %0.1f %0.1f", asv_state(0), asv_state(1), c_degrees_per_radian*asv_state(2), estate->u, estate->v, asv_state(3), asv_state(4));
-        }
-
-        //! From AIS Task - Receive Dynamic vessel AIS information [Hardware mode]
-        void
-        consume(const IMC::RemoteSensorInfo* ais_msg)
-        {
-          uint32_t source_mmsi = atoi(ais_msg->id.c_str());
-
-          //! Temporary storage for AIS-Obstacles
-          IMC::ObstacleState obst_ais;
-          obst_ais.setSource(ais_msg->getSource());
-          obst_ais.mmsi = source_mmsi;
-          obst_ais.lat = ais_msg->lat;
-          obst_ais.lon = ais_msg->lon;
-          obst_ais.psi = ais_msg->heading;
-          obst_ais.u = (0.51444) * ais_msg->alt; // NB ! ais_msg->alt (altitude) is acutally speed: See Sensor/AIS/Task. Converting from knots --> m/s
-          obst_ais.v = 0;
-          obst_ais.a = 150; //Assumed size (L,W): 300, 50 meter. Oil Tanker
-          obst_ais.b = 150;
-          obst_ais.c = 25;
-          obst_ais.d = 25;
-
-          //Update Obstacle-vector
-          updateObstacles(&obst_ais);
         }
 
         //! Updates the Obstacle-vector [Hardware mode]
@@ -589,87 +671,6 @@ namespace Control
           obs_exists = false;
         }
 
-        //! ObstacleState: Received from EstimatedStateToTarget - simulated obstacles, ex asv-obstacle-1 [Simulation Mode]
-        void
-        consume(const IMC::ObstacleState* o_msg)
-        {
-          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-
-          // Real WGS-84 Coordinates [rad]. Static coordinates need to compensate for displacement in x/y-direction (WGS84::displace)
-          m_lat_obst = o_msg->lat;
-          m_lon_obst = o_msg->lon;
-          WGS84::displace(o_msg->x, o_msg->y, &m_lat_obst, &m_lon_obst);
-
-          // Distance between ASV - Obstacle
-          double dist_x = 0.0;
-          double dist_y = 0.0;
-          WGS84::displacement(m_lat_asv, m_lon_asv, 0, m_lat_obst, m_lon_obst, 0, &dist_x, &dist_y);
-          double displacement = sqrt(dist_x * dist_x + dist_y * dist_y);
-
-          std::string system_name = Utils::String::str(resolveSystemId(o_msg->getSource()));
-//          spew("Obstacle_Name: %s obst_vec.size: %d displacment: %0.1f dist_x: %0.1f dist_y: %0.1f range_parameter: %0.1f",
-//               system_name.c_str(), obst_vec.size(), displacement, dist_x, dist_y, m_args.out_of_range);
-
-          bool obs_exists = false;
-
-          // Obstacle vector (Add/Update/Remove)
-          for (unsigned i = 0; i < obst_vec.size(); i++)
-          {
-            //spew("Update Obstacle vector: Source: %d Vector size: %d", obst_vec[i].getSource(), obst_vec.size());
-            if (obst_vec[i].getSource() == o_msg->getSource())
-            {
-              obs_exists = true;
-              if (obs_exists)
-              {
-                if (displacement < m_args.out_of_range)
-                { // Obstacle exists & inside range - Update
-                  obst_vec[i].lon = dist_x; //! Lon expressed as dx [m]
-                  obst_vec[i].lat = dist_y; //! Lat expressed as dy [m]
-                  obst_vec[i].psi = o_msg->psi;
-                  obst_vec[i].u = o_msg->u;
-                  obst_vec[i].v = o_msg->v;
-                  obst_vec[i].a = o_msg->a;
-                  obst_vec[i].b = o_msg->b;
-                  obst_vec[i].c = o_msg->c;
-                  obst_vec[i].d = o_msg->d;
-
-                  //spew("Obstacle source %d UPDATE - Obstacle exists & inside range: %s",obst_temp.getSource(), system_name.c_str());
-                  break;
-                }
-                else
-                { // Outside range - Remove Obstacle
-                  obst_vec.erase(obst_vec.begin() + i);
-                  spew("Obstacle Source: %d Getting removed - Outside range, vector size: %lu",
-                       obst_temp.getSource(), obst_vec.size());
-                  break;
-                }
-              }
-            }
-          }
-
-          // New Obstacle - Add to vector
-          if (obs_exists == false && (displacement < m_args.out_of_range))
-          {
-            // Temp obstacle for storage
-            obst_temp.setSource(o_msg->getSource());
-            obst_temp.lon = dist_x;
-            obst_temp.lat = dist_y;
-            obst_temp.psi = o_msg->psi;
-            obst_temp.u = o_msg->u;
-            obst_temp.v = o_msg->v;
-            obst_temp.a = o_msg->a;
-            obst_temp.b = o_msg->b;
-            obst_temp.c = o_msg->c;
-            obst_temp.d = o_msg->d;
-
-            obst_vec.push_back(obst_temp);
-            spew("New Obstacle Added: Vehicle: %s Source: %d   obst_vec.size: %lu",
-                 system_name.c_str(), obst_temp.getSource(), obst_vec.size());
-          }
-
-          obs_exists = false;
-        }
-
         void
         step(const IMC::EstimatedState& state, const TrackingState& ts)
         {
@@ -708,10 +709,7 @@ namespace Control
               obst_state(i, 8) = obst_vec[i].d;
 
               if (m_args.print_cas)
-                spew("Autonaut (lon,lat,psi,u,v) %0.1f %0.1f %0.1f %0.1f %0.1f | Obstacle#%u (lon,lat,psi,u,v) %0.1f %0.1f %0.1f %0.1f %0.1f | Rudder: %d Thruster: %d",
-                     asv_state(0), asv_state(1), Angles::degrees(asv_state(2)), asv_state(3), asv_state(4),
-                     i, obst_state(i, 0), obst_state(i, 1), Angles::degrees(obst_state(i, 2)), obst_state(i, 3), obst_state(i, 4),
-                     rudder_cmd, thruster_act);
+                spew("Autonaut (lon,lat,psi,u,v) %0.1f %0.1f %0.1f %0.1f %0.1f | %d.Obstacle (lon,lat,psi,u,v) %0.1f %0.1f %0.1f %0.1f %0.1f | Rudder_cmd %d Thruster_act %d", asv_state(0), asv_state(1), c_degrees_per_radian*asv_state(2), asv_state(3), asv_state(4), i, obst_state(i,0), obst_state(i,1), c_degrees_per_radian*obst_state(i,2), obst_state(i,3), obst_state(i,4), rudder_cmd, thruster_act);
             }
 
             //! Collision Avoidance Algorithm - Compute heading offset/(speed offset)
@@ -725,6 +723,9 @@ namespace Control
 
             //! Send to IMC bus
             dispatch(m_heading);
+
+            if (m_args.print_cas)
+                spew("AutoNaut(x,y,psi,u,v): %0.1f %0.1f %0.3f %0.3f %0.1f | Heading: %0.3f Heading offset: %0.1f | Desired Speed %0.3f n_obst: %d | Rudder: %d Thruster: %d", asv_state(0), asv_state(1), c_degrees_per_radian*asv_state(2), asv_state(3), asv_state(4), c_degrees_per_radian*m_heading.value, c_degrees_per_radian*psi_os, u_pcs_test, obst_vec.size(), rudder_cmd, thruster_act);
           }
 
           //! Speed from DesiredSpeed
@@ -740,10 +741,7 @@ namespace Control
             {
               m_timestamp_prev = m_timestamp_new;
               if (m_args.print_cas)
-                spew("AutoNaut (x,y,psi,u,v): %0.1f %0.1f %0.3f %0.3f %0.1f | Heading: %0.3f Heading offset: %0.1f | Desired Speed %0.3f n_obst: %lu | Rudder: %d Thruster: %d",
-                     asv_state(0), asv_state(1), Angles::degrees(asv_state(2)), asv_state(3), asv_state(4),
-                     Angles::degrees(m_heading.value), Angles::degrees(psi_os),
-                     u_pcs_test, obst_vec.size(), rudder_cmd, thruster_act);
+                spew("AutoNaut(x,y,psi,u,v): %0.1f %0.1f %0.3f %0.3f %0.1f | Heading: %0.3f Heading offset: %0.1f | Desired Speed %0.3f n_obst: %d | Rudder: %d Thruster: %d", asv_state(0), asv_state(1), c_degrees_per_radian*asv_state(2), asv_state(3), asv_state(4), c_degrees_per_radian*m_heading.value, c_degrees_per_radian*psi_os, u_pcs_test, obst_vec.size(), rudder_cmd, thruster_act);
             }
             dispatch(m_heading);
           }
