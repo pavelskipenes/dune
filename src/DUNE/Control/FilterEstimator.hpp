@@ -24,30 +24,87 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Ricardo Martins                                                  *
+// Author: Alberto Dallolio                                                 *
 //***************************************************************************
 
-#ifndef DUNE_CONTROL_HPP_INCLUDED_
-#define DUNE_CONTROL_HPP_INCLUDED_
+#ifndef DUNE_CONTROL_FILTER_HPP_INCLUDED_
+#define DUNE_CONTROL_FILTER_HPP_INCLUDED_
+
+// Should not be needed.
+/*#include <stdio.h>
+#include <math.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <inttypes.h>*/
+
+// DUNE headers.
+#include <DUNE/Tasks/Task.hpp>
 
 namespace DUNE
 {
-  //! %Control related routines and classes.
   namespace Control
-  { }
-}
+  {
+    // Export DLL Symbol.
+    class DUNE_DLL_SYM FilterEstimator;
 
-#include <DUNE/Control/PathController.hpp>
-#include <DUNE/Control/ProxyPathController.hpp>
-#include <DUNE/Control/BasicRemoteOperation.hpp>
-#include <DUNE/Control/BasicAutopilot.hpp>
-#include <DUNE/Control/BasicUAVAutopilot.hpp>
-#include <DUNE/Control/BottomTracker.hpp>
-#include <DUNE/Control/DiscretePID.hpp>
-#include <DUNE/Control/YoYoMotion.hpp>
-#include <DUNE/Control/AUVModel.hpp>
-#include <DUNE/Control/LinearSystem.hpp>
-#include <DUNE/Control/CoarseAltitude.hpp>
-#include <DUNE/Control/FilterEstimator.hpp>
+    //enum filterType {LPF, HPF, BPF, BSF, NOTCH};
+
+    class FilterEstimator
+    {
+    public:
+      //! Constructor.
+      FilterEstimator(void);
+
+      //! Destructor.
+      ~FilterEstimator(void);
+
+      //! Build Filter.
+      void build(std::string filt_t, double freq_cutoff, double freq_sampl, int order);
+      void build(std::string filt_t, double freq_high, double freq_low, double freq_sampl, int order);
+
+      //! Low-pass filter.
+      void LPF(double freq_cutoff, double freq_sampl, int order);
+      //! High-pass filter.
+      void HPF(double freq_cutoff, double freq_sampl, int order);
+	    //! Band-pass filter.
+	    void BPF(double freq_high, double freq_low, double freq_sampl, int order);
+	    //! Band-stop filter.
+	    void BSF(double freq_high, double freq_low, double freq_sampl, int order);
+	    //! Notch filter.
+	    void NF(double freq_cutoff, double freq_sampl, int order);
+
+      //! Filter Data.
+      double
+      step(double sample);
+
+      //! Reset filter variables
+      //void
+      //reset(void);
+
+    private:
+    	//! Filter Type.
+    	std::string m_filt_t;
+    	//! Data Sampling Frequency (Hz).
+    	double m_freq_sampl;
+    	//! Filter cutoff frequency (Hz).
+    	double m_freq_cutoff;
+    	//! Filter Order.
+    	int m_order;
+    	//! Highest Frequency to be included (Hz).
+    	double m_freq_high;
+    	//! Lowest Frequency to be included (Hz).
+    	double m_freq_low;
+    	//! Nyquist Angular Frequency.
+    	double m_omega;
+    	//! Nyquist Angular Frequency Low.
+    	double m_omega_low;
+    	//! Nyquist Angular Frequency High.
+    	double m_omega_high;
+      //! Vector of coefficients.
+    	double *m_coeff;
+    };
+  }
+}
 
 #endif
