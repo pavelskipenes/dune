@@ -30,6 +30,7 @@
 // ISO C++ 98 headers.
 #include <vector>
 #include <cmath>
+#include <complex>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
@@ -99,6 +100,8 @@ namespace
           double m_ampl_est;
           //! Estimator Gain.
           double m_gain;
+          // Average factor.
+          int m_avg;
           //! Estimation Duration timer.
           Time::Counter<float> m_timer;
           //! Derivative for Estimatore.
@@ -112,15 +115,24 @@ namespace
           //! Estimator parameter 2 deriv.
           double m_zeta_2_dot;
           //! Parameter Estimate.
-          double m_phi_est;
+          //double m_phi_est;
+          std::complex<double> m_phi_est;
+          //! Estimated Wave Frequency - Complex.
+          std::complex<double> m_wave_cplx;
           //! Parameter Estimate Derivative.
           double m_phi_est_dot;
           //! Parameter Estimate Last.
-          double m_phi_est_last;
+          std::complex<double> m_phi_est_last; //double m_phi_est_last;
           //Low-pass filter for amplitude estimation.
           FilterEstimator lowpass_ampl;
           //Lowpass filter for wave freq estimation.
           FilterEstimator lowpass_est;
+          //Average Estimated Wave Frequency - Dispatch.
+          IMC::EstimatedFreq m_wave_avg;
+          // Last Average Estimated Wave Frequency.
+          double m_wave_avg_last;
+          // Estimated Wave Frequency.
+          double m_wave;
           // Filter types.
           //filterType LPF, HPF, NF, BSF, BPF;
 
@@ -132,12 +144,16 @@ namespace
             m_heave_acc_sq(0.0),
             m_ampl_est(0.0),
             m_gain(0.0),
+            m_avg(0.0),
             m_zeta_1(0.0),
             m_zeta_2(0.0),
             m_zeta_2_dot(0.0),
             m_phi_est(0.0),
+            m_wave_cplx(0.0),
             m_phi_est_dot(0.0),
-            m_phi_est_last(0.0)
+            m_phi_est_last(0.0),
+            m_wave_avg_last(0.0),
+            m_wave(0.0)
           {
             param("Amplitude LP cutoff frequency", m_args.lp_ampl_cutoff)
               .units(Units::Hertz)
@@ -220,6 +236,13 @@ namespace
           {
             if(paramChanged(m_args.duration))
               m_timer.setTop(m_args.period+m_args.duration);
+
+            if(paramChanged(m_args.lp_ampl_cutoff) ||
+              paramChanged(m_args.data_sampl_freq) ||
+              paramChanged(m_args.lp_ampl_order) ||
+              paramChanged(m_args.lp_est_cutoff) ||
+              paramChanged(m_args.data_sampl_freq))
+              buildFilters();
           }
 
           //! Reserve entity identifiers.
@@ -244,12 +267,21 @@ namespace
           void
           onResourceInitialization(void)
           {
+            buildFilters();
+            m_timer.setTop(m_args.period+m_args.duration);
           }
 
           //! Release resources.
           void
           onResourceRelease(void)
           {
+          }
+
+          void
+          buildFilters(void)
+          {
+            lowpass_ampl.build("LPF", m_args.lp_ampl_cutoff, m_args.data_sampl_freq, m_args.lp_ampl_order);
+            lowpass_est.build("LPF", m_args.lp_est_cutoff, m_args.data_sampl_freq, 2);
           }
 
           void
@@ -265,44 +297,61 @@ namespace
               //Estimation can start.
               //Create new LP Filter and Estimate Wave Amplitude. 
               m_heave_acc_sq = pow(m_heave_acc,2);
-              spew("Acceleration Squared:%f",m_heave_acc_sq);
-              lowpass_ampl.build("LPF", m_args.lp_ampl_cutoff, m_args.data_sampl_freq, m_args.lp_ampl_order);
+              //spew("Acceleration Squared:%f",m_heave_acc_sq);
               m_ampl_est = 2*lowpass_ampl.step(m_heave_acc_sq);
               m_ampl_est = sqrt(m_ampl_est);
 
-              spew("Estimated Amplitude:%f",m_ampl_est);
+              //spew("Estimated Amplitude:%f",m_ampl_est);
 
               if(m_ampl_est>m_args.a_switch)
                 m_gain = m_args.gain_min;
               else
                 m_gain = m_args.gain_max;
 
-              lowpass_est.build("LPF", m_args.lp_est_cutoff, m_args.data_sampl_freq, 2);
-
               //Compute zeta_2_dot.
-              m_zeta_1 = lowpass_est.step(m_heave_acc);
+              m_zeta_1 = lowpass_est.step(m_heave_acc);              
               m_zeta_2 = m_deriv.update(m_zeta_1);
-              m_zeta_2_dot = -2*m_args.lp_est_cutoff*m_zeta_2 - pow(m_args.lp_est_cutoff,2)*m_zeta_1 + pow(m_args.lp_est_cutoff,2)*m_heave_acc;
+              m_zeta_2_dot = -2*m_args.lp_est_cutoff*m_zeta_2 - pow(m_args.lp_est_cutoff,2)*m_zeta_1 + pow(m_args.lp_est_cutoff,2)*m_heave_acc;              
 
               //Compute phi_dot.
-              m_phi_est_dot = m_gain*m_zeta_1*(m_zeta_2_dot-m_phi_est*m_zeta_1);
+              m_phi_est_dot = m_gain*m_zeta_1*(m_zeta_2_dot-(real(m_phi_est)*m_zeta_1));
+
+              // Compute Time Delta.
+              double tstep = m_delta.getDelta();
+              // Check if we have a valid time delta.
+              if (tstep < 0.0)
+                return;
+              
               //Backward Euler Method.
-              m_phi_est = m_phi_est_last + m_delta.getDelta()*m_phi_est_dot;
+              m_phi_est = m_phi_est_last + tstep*m_phi_est_dot;
 
               //Post-process data.
-              m_phi_est = -m_phi_est;
-              m_phi_est = sqrt(m_phi_est);
-
-              //dispatch(m_phi_est);
+              m_wave_cplx = -m_phi_est;
+              m_wave_cplx = sqrt(m_wave_cplx);
+              //spew("Wave Frequency:%f\n ",m_wave_cplx);
 
               m_phi_est_last = m_phi_est;
-                            
-              //spew("ESTIMATOR ACTIVE!!!!!!");
+
+              m_wave = real(m_wave_cplx);
+              //spew("Wave Frequency:%f\n",m_wave);
+
+              if(m_avg==0)
+                m_wave_avg.value = m_wave;
+              else
+                m_wave_avg.value = (m_wave_avg_last * m_avg + m_wave) / (m_avg + 1);
+
+              m_avg++;
+              m_wave_avg_last = m_wave_avg.value;
 
             }
 
             if(m_timer.overflow())
-                m_timer.reset();
+            {
+              //buildFilters();
+              m_timer.reset();
+              dispatch(m_wave_avg);
+              //spew("Averaged Estimated Frequency: %f\n",m_wave_avg.value);
+            }
 
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
           }

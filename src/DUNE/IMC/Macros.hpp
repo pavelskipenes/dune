@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 39c2acd684582792490e08b15fccb515                            *
+// IMC XML MD5: db94a37e22deb3cfc97166d80b959a19                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -660,5 +660,13 @@
 #define DUNE_IMC_COMPASSHEADING 909
 //! TotalMagIntensity identification number.
 #define DUNE_IMC_TOTALMAGINTENSITY 2006
+//! PanelsPower identification number.
+#define DUNE_IMC_PANELSPOWER 910
+//! SystemLoad identification number.
+#define DUNE_IMC_SYSTEMLOAD 911
+//! ThrusterLoad identification number.
+#define DUNE_IMC_THRUSTERLOAD 912
+//! EstimatedFreq identification number.
+#define DUNE_IMC_ESTIMATEDFREQ 913
 
 #endif

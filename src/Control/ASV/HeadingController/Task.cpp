@@ -51,6 +51,14 @@ namespace Control
         std::vector<float> yaw_gains;
         //! Log the size of each PID parcel
         bool log_parcels;
+        //! Filter activation variable.
+        bool filtering;
+        //! Low-pass filter order.
+        double lpf_order;
+        //! Low-pass filter gain.
+        double lpf_gain;
+        //! Notch filter order.
+        double nf_order;
       };
 
       struct Task: public Tasks::Task
@@ -71,10 +79,21 @@ namespace Control
         uint32_t m_scope_ref;
         //! Task arguments.
         Arguments m_args;
+        //! Low-pass filter for amplitude estimation.
+        FilterEstimator lpf;
+        //! Lowpass filter for wave freq estimation.
+        FilterEstimator nf;
+        //! Estimated Wave Frequency.
+        double m_wave_freq;
+        //! Timestep.
+        double m_tstep;
+
 
         Task(const std::string& name, Tasks::Context& ctx):
           Tasks::Task(name, ctx),
-          m_scope_ref(0)
+          m_scope_ref(0),
+          m_wave_freq(0.0),
+          m_tstep(0.0)
         {
           param("Maximum Rudder Actuation", m_args.act_max)
           .defaultValue("1.0")
@@ -93,6 +112,25 @@ namespace Control
           .defaultValue("false")
           .description("Log the size of each PID parcel");
 
+          param("Activate Filtering", m_args.filtering)
+          .defaultValue("false")
+          .description("Activate filtering of computed rudder angle");
+
+          param("LPF order", m_args.lpf_order)
+          .defaultValue("1.0")
+          .minimumValue("1.0")
+          .description("Low-pass filter order");
+
+          param("LPF gain", m_args.lpf_gain)
+          .defaultValue("1.2")
+          .minimumValue("1.0")
+          .description("Low-pass filter gain to remove HF components");
+
+          param("NF order", m_args.nf_order)
+          .defaultValue("2.0")
+          .minimumValue("1.0")
+          .description("Notch filter order");
+
           // Initialize entity state.
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
 
@@ -101,6 +139,7 @@ namespace Control
           bind<IMC::EstimatedState>(this);
           bind<IMC::DesiredHeading>(this);
           bind<IMC::ControlLoops>(this);
+          bind<IMC::EstimatedFreq>(this);
         }
 
         void
@@ -113,6 +152,12 @@ namespace Control
             reset();
             setup();
           }
+
+          if(paramChanged(m_args.filtering) ||
+             paramChanged(m_args.lpf_order) ||
+             paramChanged(m_args.nf_order) ||
+             paramChanged(m_args.lpf_gain))
+            buildFilters();
         }
 
         //! Reserve entities.
@@ -185,6 +230,13 @@ namespace Control
         }
 
         void
+        buildFilters(void)
+        {
+          lpf.build("LPF", m_args.lpf_gain*m_wave_freq, m_tstep, m_args.lpf_order);
+          //nf.build("NF", m_wave_freq, m_tstep, m_args.nf_order);
+        }
+
+        void
         consume(const IMC::EstimatedState* msg)
         {
 		      // Controller not active. Use current yaw
@@ -195,20 +247,20 @@ namespace Control
           }
 
           // Compute Time Delta.
-          double tstep = m_delta.getDelta();
+          m_tstep = m_delta.getDelta();
           // Check if we have a valid time delta.
-          if (tstep < 0.0)
+          if (m_tstep < 0.0)
             return;
 
 		      // Heading Error (From desired heading)
           float err_yaw = Angles::normalizeRadian(m_desired_yaw - msg->psi);
 
           // Yaw Controller (PID controller) 
-          float rudder_cmd = m_yaw_pid.step(tstep, err_yaw);
+          float rudder_cmd = m_yaw_pid.step(m_tstep, err_yaw);
           m_act.value = -rudder_cmd;
 
-		      spew("AutoNaut - Rudder_cmd/m_act: %0.3f  Desired heading: %0.3f", m_act.value, c_degrees_per_radian*m_desired_yaw);			
-          dispatchRudder(m_act.value, tstep);
+		      //spew("AutoNaut - Rudder_cmd/m_act: %0.3f  Desired heading: %0.3f", m_act.value, c_degrees_per_radian*m_desired_yaw);			
+          dispatchRudder(m_act.value, m_tstep);
 
           //! Desired Rudder Angle
       	  int16_t print_rudder;
@@ -216,7 +268,7 @@ namespace Control
           print_rudder = roundToInteger(m_act.value*45*10);
           print_rudder = trimValue(print_rudder, -45, 45);
 
-          spew("ServoPosition value: %d", print_rudder);
+          //spew("ServoPosition value: %d", print_rudder);
         }
 
         void
@@ -227,6 +279,19 @@ namespace Control
 
           m_desired_yaw = msg->value;
           //spew("AutoNaut - Desired Heading: %0.3f  ", c_degrees_per_radian*msg->value);
+        }
+
+        void
+        consume(const IMC::EstimatedFreq* msg)
+        {
+          if (!isActive())
+            return;
+
+          m_wave_freq = msg->value;
+          if(m_wave_freq != 0)
+            buildFilters();
+
+          spew("Consumed Wave Frequency: %f", m_wave_freq);
         }
 
         void
@@ -260,8 +325,7 @@ namespace Control
         void
         dispatchRudder(float value, double timestep)
         {
-
-			//Activated if act_ramp (Config file) is set > 0
+			    //Activated if act_ramp (Config file) is set > 0
           if ((value > m_last_act.value) && (m_args.act_ramp > 0.0))
           {
             value = m_last_act.value + trimValue((value - m_last_act.value) / timestep,
@@ -270,9 +334,24 @@ namespace Control
 
           m_act.value = trimValue(value, -m_args.act_max, m_args.act_max);
           
-          dispatch(m_act);
+          if(m_args.filtering == true)
+          {
+            //buildFilters();
+            if (m_wave_freq == 0)
+              dispatch(m_act);
+            else
+              {
+                // Apply LPF coefficients, NF still to be implemented.
+                m_act.value = lpf.step(m_act.value);
+                dispatch(m_act);
+                spew("Filtering.");
+              }
+          }
+          else
+            dispatch(m_act);
+          
           m_last_act.value = m_act.value;
-          spew("AutoNaut - Rudder dispatched: %0.3f  ", m_act.value);
+          //spew("AutoNaut - Rudder dispatched: %0.3f  ", m_act.value);
         }
 
         void

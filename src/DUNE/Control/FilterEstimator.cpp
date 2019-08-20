@@ -9,7 +9,7 @@
 // accordance with the commercial licence agreement provided with the       *
 // Software or, alternatively, in accordance with the terms contained in a  *
 // written agreement between you and Faculdade de Engenharia da             *
-// Universidade do Porto. For licensing terms, conditions, and further      *
+// Universidade do Porto. For licenstd::sing terms, conditions, and further      *
 // information contact lsts@fe.up.pt.                                       *
 //                                                                          *
 // Modified European Union Public Licence - EUPL v.1.1 Usage                *
@@ -97,17 +97,39 @@ namespace DUNE
       m_freq_cutoff = freq_cutoff/freq_sampl;
       m_omega = 2*M_PI*freq_cutoff;
       int middle = order/2; //integer division, dropping remainder.
-      int i;
 
-      for(i=-middle;i<middle;i++)
+      /*
+      printf("freq_cutoff:%f\n",m_freq_cutoff);
+      printf("freq_sampl:%f\n",freq_sampl);
+      printf("order:%d\n",order);
+      printf("middle:%d\n",middle);
+      printf("m_omega:%f\n",m_omega);
+      */
+
+      if(middle==0)
       {
+        m_coeff[middle] = 2*freq_cutoff;
+        printf("m_coeff %d:%f\n",middle,m_coeff[middle]);
+      }
+
+      for(int i=-middle;i<middle;i++)
+      {
+        //printf("i:%d\n",i);
         if(i==0)
         {
           m_coeff[middle] = 2*freq_cutoff;
+          printf("m_coeff %d:%f\n",middle,m_coeff[middle]);
         }
         else
-          m_coeff[i+middle] = sin(m_omega*i)/(M_PI*i);
+        {
+          m_coeff[i+middle] = std::sin(Math::Angles::radians(m_omega)*i)/(M_PI*i);
+          printf("m_coeff %d: %f\n",i+middle,m_coeff[i+middle]);
+          //printf("PI: %f\n",M_PI*i);
+          //printf("OMEGA: %f\n",m_omega*i);
+        }        
       }
+      //printf("m_coeff1:%f\n",m_coeff[0]);
+      //printf("m_coeff2:%f\n",m_coeff[1]);
     }
 
     void 
@@ -127,7 +149,7 @@ namespace DUNE
           m_coeff[middle] = 1-2*freq_cutoff;
         }
         else
-          m_coeff[i+middle] = -sin(m_omega*i)/(M_PI*i);
+          m_coeff[i+middle] = -std::sin(Math::Angles::radians(m_omega)*i)/(M_PI*i);
       }
     }
 
@@ -155,7 +177,7 @@ namespace DUNE
           m_coeff[middle] = 2*(m_freq_high-m_freq_low);
         }
         else
-          m_coeff[i+middle] = sin(m_omega_high*i)/(M_PI*i)-sin(m_omega_low*i)/(M_PI*i);
+          m_coeff[i+middle] = std::sin(Math::Angles::radians(m_omega_high)*i)/(M_PI*i)-std::sin(Math::Angles::radians(m_omega_low)*i)/(M_PI*i);
       }
     }
 
@@ -179,19 +201,23 @@ namespace DUNE
           m_coeff[middle] = 1-2*(m_freq_high-m_freq_low);
         }
         else
-          m_coeff[i+middle] = sin(m_omega_high*i)/(M_PI*i)-sin(m_omega_low*i)/(M_PI*i);
+          m_coeff[i+middle] = std::sin(Math::Angles::radians(m_omega_high)*i)/(M_PI*i)-std::sin(Math::Angles::radians(m_omega_low)*i)/(M_PI*i);
       }
     }
 
     double 
     FilterEstimator::step(double data_sample)
     {
-      int i;
       double result=0.0;
-      for(i=0;i<m_order;i++)
+      //printf("m_coeff1:%f\n",m_coeff[0]);
+      //printf("m_coeff2:%f\n",m_coeff[1]);
+      for(int i=0;i<m_order;i++)
       {
         result += data_sample * m_coeff[i];
+        //printf("COEFF:%f\n",m_coeff[i]);
       }
+      //printf("RESULT:%f\n",result);
+      //printf("DATA:%f\n",data_sample);
       return result;
     }
   }

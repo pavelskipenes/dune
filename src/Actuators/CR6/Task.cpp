@@ -92,6 +92,12 @@ namespace Actuators
       Arguments m_args;
       //! Battery Voltage.
       IMC::Voltage m_volt;
+      //! Power Produced by Solar Panels.
+      IMC::PanelsPower m_panels;
+      //! Current consumed by system.
+      IMC::SystemLoad m_system;
+      //! Power consumed by system.
+      IMC::ThrusterLoad m_thruster;
       //! Characters to ignore in the beginning and end of a string.
       const char* c_blanks = " \t\r\n";
 
@@ -350,11 +356,37 @@ namespace Actuators
             commas.push_back(i);
         }
 
-        std::string volt = proper.substr(commas[4]+1,5);
+        std::string volt = proper.substr(commas[7]+1,5); //was 4 before.
         //spew("%s\n",volt.c_str());
         m_volt.value = std::atof(volt.c_str());
         spew("Voltage:%f\n",m_volt.value);
         dispatch(m_volt);
+
+        std::string panels = proper.substr(commas[2]+1,5);
+        //spew("%s\n",panels.c_str());
+        m_panels.value = std::atof(panels.c_str());
+        spew("Panels Power:%f\n",m_panels.value);
+        //dispatch(m_panels);
+
+        std::string current = proper.substr(commas[3]+1,5);
+        std::string power = proper.substr(commas[4]+1,5);
+        //spew("%s\n",current.c_str());
+        //spew("%s\n",power.c_str());
+        m_system.current = std::atof(current.c_str());
+        m_system.power = std::atof(power.c_str());
+        spew("Drawn Current:%f\n",m_system.current);
+        spew("Drawn Power:%f\n",m_system.power);
+        //dispatch(m_system);
+
+        std::string thruster_current = proper.substr(commas[5]+1,5);
+        std::string thruster_power = proper.substr(commas[6]+1,5);
+        //spew("%s\n",thruster_current.c_str());
+        //spew("%s\n",thruster_power.c_str());
+        m_thruster.current = std::atof(thruster_current.c_str());
+        m_thruster.power = std::atof(thruster_power.c_str());
+        spew("Thruster Current:%f\n",m_thruster.current);
+        spew("Thruster Power:%f\n",m_thruster.power);
+        //dispatch(m_thruster);
 
       }
 

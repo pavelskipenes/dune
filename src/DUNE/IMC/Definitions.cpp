@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 39c2acd684582792490e08b15fccb515                            *
+// IMC XML MD5: db94a37e22deb3cfc97166d80b959a19                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -26817,6 +26817,266 @@ namespace DUNE
 
     void
     TotalMagIntensity::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "value", value, nindent__);
+    }
+
+    PanelsPower::PanelsPower(void)
+    {
+      m_header.mgid = 910;
+      clear();
+    }
+
+    void
+    PanelsPower::clear(void)
+    {
+      value = 0;
+    }
+
+    bool
+    PanelsPower::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::PanelsPower& other__ = static_cast<const PanelsPower&>(msg__);
+      if (value != other__.value) return false;
+      return true;
+    }
+
+    int
+    PanelsPower::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    PanelsPower::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(value, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    PanelsPower::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(value, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    PanelsPower::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(value, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    fp64_t
+    PanelsPower::getValueFP(void) const
+    {
+      return static_cast<fp64_t>(value);
+    }
+
+    void
+    PanelsPower::setValueFP(fp64_t val)
+    {
+      value = static_cast<fp64_t>(val);
+    }
+
+    void
+    PanelsPower::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "value", value, nindent__);
+    }
+
+    SystemLoad::SystemLoad(void)
+    {
+      m_header.mgid = 911;
+      clear();
+    }
+
+    void
+    SystemLoad::clear(void)
+    {
+      current = 0;
+      power = 0;
+    }
+
+    bool
+    SystemLoad::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::SystemLoad& other__ = static_cast<const SystemLoad&>(msg__);
+      if (current != other__.current) return false;
+      if (power != other__.power) return false;
+      return true;
+    }
+
+    int
+    SystemLoad::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    SystemLoad::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(current, ptr__);
+      ptr__ += IMC::serialize(power, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    SystemLoad::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(current, bfr__, size__);
+      bfr__ += IMC::deserialize(power, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    SystemLoad::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(current, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(power, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    SystemLoad::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "current", current, nindent__);
+      IMC::toJSON(os__, "power", power, nindent__);
+    }
+
+    ThrusterLoad::ThrusterLoad(void)
+    {
+      m_header.mgid = 912;
+      clear();
+    }
+
+    void
+    ThrusterLoad::clear(void)
+    {
+      current = 0;
+      power = 0;
+    }
+
+    bool
+    ThrusterLoad::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::ThrusterLoad& other__ = static_cast<const ThrusterLoad&>(msg__);
+      if (current != other__.current) return false;
+      if (power != other__.power) return false;
+      return true;
+    }
+
+    int
+    ThrusterLoad::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    ThrusterLoad::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(current, ptr__);
+      ptr__ += IMC::serialize(power, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    ThrusterLoad::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(current, bfr__, size__);
+      bfr__ += IMC::deserialize(power, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    ThrusterLoad::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(current, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(power, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    ThrusterLoad::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "current", current, nindent__);
+      IMC::toJSON(os__, "power", power, nindent__);
+    }
+
+    EstimatedFreq::EstimatedFreq(void)
+    {
+      m_header.mgid = 913;
+      clear();
+    }
+
+    void
+    EstimatedFreq::clear(void)
+    {
+      value = 0;
+    }
+
+    bool
+    EstimatedFreq::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::EstimatedFreq& other__ = static_cast<const EstimatedFreq&>(msg__);
+      if (value != other__.value) return false;
+      return true;
+    }
+
+    int
+    EstimatedFreq::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    EstimatedFreq::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(value, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    EstimatedFreq::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(value, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    EstimatedFreq::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(value, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    fp64_t
+    EstimatedFreq::getValueFP(void) const
+    {
+      return static_cast<fp64_t>(value);
+    }
+
+    void
+    EstimatedFreq::setValueFP(fp64_t val)
+    {
+      value = static_cast<fp64_t>(val);
+    }
+
+    void
+    EstimatedFreq::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
     {
       IMC::toJSON(os__, "value", value, nindent__);
     }

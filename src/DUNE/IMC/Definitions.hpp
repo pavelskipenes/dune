@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 39c2acd684582792490e08b15fccb515                            *
+// IMC XML MD5: db94a37e22deb3cfc97166d80b959a19                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -25245,6 +25245,266 @@ namespace DUNE
       getName(void) const
       {
         return "TotalMagIntensity";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 8;
+      }
+
+      fp64_t
+      getValueFP(void) const;
+
+      void
+      setValueFP(fp64_t val);
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Total Produced Panels Power.
+    class PanelsPower: public Message
+    {
+    public:
+      //! Value.
+      fp64_t value;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 910;
+      }
+
+      PanelsPower(void);
+
+      PanelsPower*
+      clone(void) const
+      {
+        return new PanelsPower(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return PanelsPower::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "PanelsPower";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 8;
+      }
+
+      fp64_t
+      getValueFP(void) const;
+
+      void
+      setValueFP(fp64_t val);
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! System Load Current and Power.
+    class SystemLoad: public Message
+    {
+    public:
+      //! Current.
+      fp64_t current;
+      //! Power.
+      fp64_t power;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 911;
+      }
+
+      SystemLoad(void);
+
+      SystemLoad*
+      clone(void) const
+      {
+        return new SystemLoad(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return SystemLoad::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "SystemLoad";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 16;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Thruster Load Current and Power.
+    class ThrusterLoad: public Message
+    {
+    public:
+      //! Current.
+      fp64_t current;
+      //! Power.
+      fp64_t power;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 912;
+      }
+
+      ThrusterLoad(void);
+
+      ThrusterLoad*
+      clone(void) const
+      {
+        return new ThrusterLoad(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return ThrusterLoad::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "ThrusterLoad";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 16;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Estimated Wave Frequency.
+    class EstimatedFreq: public Message
+    {
+    public:
+      //! Value.
+      fp64_t value;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 913;
+      }
+
+      EstimatedFreq(void);
+
+      EstimatedFreq*
+      clone(void) const
+      {
+        return new EstimatedFreq(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return EstimatedFreq::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "EstimatedFreq";
       }
 
       unsigned
