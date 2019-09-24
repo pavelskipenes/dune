@@ -1,0 +1,2 @@
+/usr/bin/ar qc libSupervisors.ClockPPS.a  CMakeFiles/Supervisors.ClockPPS.dir/src/Supervisors/ClockPPS/Task.cpp.o
+/usr/bin/ranlib libSupervisors.ClockPPS.a

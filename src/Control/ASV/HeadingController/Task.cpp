@@ -51,14 +51,18 @@ namespace Control
         std::vector<float> yaw_gains;
         //! Log the size of each PID parcel
         bool log_parcels;
-        //! Filter activation variable.
-        bool filtering;
-        //! Low-pass filter order.
-        double lpf_order;
-        //! Low-pass filter gain.
-        double lpf_gain;
-        //! Notch filter order.
-        double nf_order;
+        //! Filter activation variables.
+        bool lp_filtering, n_filtering, bs_filtering;
+        //! Low-pass filter taps.
+        double lpf_taps;
+        //! Low-pass filter scaling.
+        double lpf_scaling;
+        //! Notch filter taps.
+        double nf_taps;
+        //! Band-stop filter taps.
+        double bsf_taps;
+        //! Band-stop filter scaling.
+        double bsf_scaling;
       };
 
       struct Task: public Tasks::Task
@@ -79,10 +83,12 @@ namespace Control
         uint32_t m_scope_ref;
         //! Task arguments.
         Arguments m_args;
-        //! Low-pass filter for amplitude estimation.
+        //! Low-pass filter for wave filtering.
         FilterEstimator lpf;
-        //! Lowpass filter for wave freq estimation.
+        //! Notch filter for wave filtering.
         FilterEstimator nf;
+        //! Band-stop filter for wave filtering.
+        FilterEstimator bs;
         //! Estimated Wave Frequency.
         double m_wave_freq;
         //! Timestep.
@@ -112,24 +118,42 @@ namespace Control
           .defaultValue("false")
           .description("Log the size of each PID parcel");
 
-          param("Activate Filtering", m_args.filtering)
+          param("Activate LP Filtering", m_args.lp_filtering)
           .defaultValue("false")
-          .description("Activate filtering of computed rudder angle");
+          .description("Activate Low-pass filtering of computed rudder angle");
 
-          param("LPF order", m_args.lpf_order)
-          .defaultValue("1.0")
+          param("Activate N Filtering", m_args.n_filtering)
+          .defaultValue("false")
+          .description("Activate Notch filtering of computed rudder angle");
+
+          param("Activate BS Filtering", m_args.bs_filtering)
+          .defaultValue("false")
+          .description("Activate Band-stop filtering of computed rudder angle");
+
+          param("LP taps", m_args.lpf_taps)
+          .defaultValue("10.0")
           .minimumValue("1.0")
-          .description("Low-pass filter order");
+          .description("Low-pass filter number of taps");
 
-          param("LPF gain", m_args.lpf_gain)
+          param("LPF scaling", m_args.lpf_scaling)
           .defaultValue("1.2")
           .minimumValue("1.0")
           .description("Low-pass filter gain to remove HF components");
 
-          param("NF order", m_args.nf_order)
-          .defaultValue("2.0")
+          param("NF taps", m_args.nf_taps)
+          .defaultValue("10.0")
           .minimumValue("1.0")
-          .description("Notch filter order");
+          .description("Notch filter number of taps");
+
+          param("BSF taps", m_args.bsf_taps)
+          .defaultValue("10.0")
+          .minimumValue("1.0")
+          .description("Band-stop filter(s) number of taps");
+
+          param("BSF scaling", m_args.bsf_scaling)
+          .defaultValue("20")
+          .minimumValue("1")
+          .description("BSF scaling percentage around cut-off estimated frequency");
 
           // Initialize entity state.
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
@@ -153,10 +177,14 @@ namespace Control
             setup();
           }
 
-          if(paramChanged(m_args.filtering) ||
-             paramChanged(m_args.lpf_order) ||
-             paramChanged(m_args.nf_order) ||
-             paramChanged(m_args.lpf_gain))
+          if(paramChanged(m_args.lp_filtering) ||
+             paramChanged(m_args.n_filtering) ||
+             paramChanged(m_args.bs_filtering) ||
+             paramChanged(m_args.lpf_taps) ||
+             paramChanged(m_args.nf_taps) ||
+             paramChanged(m_args.lpf_scaling) ||
+             paramChanged(m_args.bsf_taps) ||
+             paramChanged(m_args.bsf_scaling))
             buildFilters();
         }
 
@@ -232,8 +260,12 @@ namespace Control
         void
         buildFilters(void)
         {
-          lpf.build("LPF", m_args.lpf_gain*m_wave_freq, m_tstep, m_args.lpf_order);
-          //nf.build("NF", m_wave_freq, m_tstep, m_args.nf_order);
+          if(m_args.lp_filtering==true)
+            lpf.build("LPF", m_args.lpf_taps, 1/m_tstep, pow(2*M_PI/(m_args.lpf_scaling*m_wave_freq),-1)); // Assuming delta is in seconds.
+          if(m_args.n_filtering==true)
+            nf.build("NF", m_args.nf_taps, 1/m_tstep, pow(2*M_PI/m_wave_freq,-1)); //
+          if(m_args.bs_filtering==true)
+            bs.build("BSF", m_args.nf_taps, 1/m_tstep, pow(2*M_PI/m_wave_freq,-1)-pow(2*M_PI/m_wave_freq,-1)*(m_args.bsf_scaling/100), pow(2*M_PI/m_wave_freq,-1)+pow(2*M_PI/m_wave_freq,-1)*(m_args.bsf_scaling/100));
         }
 
         void
@@ -257,7 +289,7 @@ namespace Control
 
           // Yaw Controller (PID controller) 
           float rudder_cmd = m_yaw_pid.step(m_tstep, err_yaw);
-          m_act.value = -rudder_cmd;
+          m_act.value = rudder_cmd; // - for simulation, but has to be adjusted.
 
 		      //spew("AutoNaut - Rudder_cmd/m_act: %0.3f  Desired heading: %0.3f", m_act.value, c_degrees_per_radian*m_desired_yaw);			
           dispatchRudder(m_act.value, m_tstep);
@@ -288,7 +320,7 @@ namespace Control
             return;
 
           m_wave_freq = msg->value;
-          if(m_wave_freq != 0)
+          if(m_wave_freq != 0 && (m_args.lp_filtering==true || m_args.n_filtering==true || m_args.bs_filtering==true))
             buildFilters();
 
           spew("Consumed Wave Frequency: %f", m_wave_freq);
@@ -334,21 +366,43 @@ namespace Control
 
           m_act.value = trimValue(value, -m_args.act_max, m_args.act_max);
           
-          if(m_args.filtering == true)
-          {
-            //buildFilters();
-            if (m_wave_freq == 0)
+          if (m_wave_freq == 0.0)
               dispatch(m_act);
-            else
+          else
+            {
+              if(m_args.lp_filtering == true && m_args.n_filtering == false && m_args.bs_filtering == false)
               {
-                // Apply LPF coefficients, NF still to be implemented.
+                // Apply LPF coefficients.
                 m_act.value = lpf.step(m_act.value);
                 dispatch(m_act);
-                spew("Filtering.");
+                spew("LP Filtering.");
               }
-          }
-          else
-            dispatch(m_act);
+              else if(m_args.lp_filtering == false && m_args.n_filtering == true && m_args.bs_filtering == false)
+              {
+                // Apply NF coefficients.
+                m_act.value = nf.step(m_act.value);
+                dispatch(m_act);
+                spew("NF Filtering.");
+              }
+              else if(m_args.lp_filtering == true && m_args.n_filtering == true && m_args.bs_filtering == false)
+              {                
+                // Apply NF+LPF coefficients.
+                m_act.value = nf.step(m_act.value);
+                m_act.value = lpf.step(m_act.value);
+                dispatch(m_act);
+                spew("NF + LP Filtering.");
+              }
+              else if(m_args.lp_filtering == true && m_args.n_filtering == false && m_args.bs_filtering == true)
+              {
+                // Apply BS+LPF coefficients.
+                m_act.value = bs.step(m_act.value);
+                m_act.value = lpf.step(m_act.value);
+                dispatch(m_act);
+                spew("BS + LP Filtering.");
+              }
+              else
+                dispatch(m_act);
+            }
           
           m_last_act.value = m_act.value;
           //spew("AutoNaut - Rudder dispatched: %0.3f  ", m_act.value);

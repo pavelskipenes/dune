@@ -49,7 +49,9 @@ Sensors.prototype.m_msgs =
         'Salinity': { },
         'Conductivity': { },
         'Current': { },
+        'Power': { },
         'Voltage': { },
+        'EstimatedFreq': { },
         'RSSI': { },
         'LinkLevel':
         {

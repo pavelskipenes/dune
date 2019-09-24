@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: db94a37e22deb3cfc97166d80b959a19                            *
+// IMC XML MD5: ec8ae6c8e72b7d9edd8ff47a9d1c3141                            *
 //***************************************************************************
 
 MESSAGE(1, EntityState)
@@ -344,8 +344,7 @@ MESSAGE(907, SadcReadings)
 MESSAGE(908, DmsDetection)
 MESSAGE(909, CompassHeading)
 MESSAGE(2006, TotalMagIntensity)
-MESSAGE(910, PanelsPower)
-MESSAGE(911, SystemLoad)
-MESSAGE(912, ThrusterLoad)
-MESSAGE(913, EstimatedFreq)
+MESSAGE(910, Power)
+MESSAGE(911, EstimatedFreq)
+MESSAGE(912, PowerSettings)
 #undef MESSAGE

@@ -31,6 +31,8 @@
 #include <DUNE/Control/FilterEstimator.hpp>
 #include <DUNE/Math.hpp>
 
+#define MAX_NUM_FILTER_TAPS 1000
+
 namespace DUNE
 {
   namespace Control
@@ -41,184 +43,195 @@ namespace DUNE
       m_filt_t(),
       m_freq_sampl(0.0),
       m_freq_cutoff(0.0),
-      m_order(0),
-      m_freq_high(0.0),
-      m_freq_low(0.0),
-      m_omega(0.0),
-      m_omega_low(0.0),
-      m_omega_high(0.0),
-      m_coeff(NULL)
+      m_num_taps(0),
+      m_lambda(0.0),
+      m_freq_high(0.0)
       {}
 
-        //! Destructor.
+    //! Destructor.
     FilterEstimator::~FilterEstimator()
     {
-      if(m_coeff!= NULL) free(m_coeff);
+    }
+
+    //! Free allocated memory.
+    void
+    FilterEstimator::freeMem(void)
+    {
+      if(m_taps != NULL) free(m_taps);
+      if(m_sr != NULL) free(m_sr);
     }
 
     // Low-pass, High-pass and Notch Filters.
     void
-    FilterEstimator::build(std::string filt_t, double freq_cutoff, double freq_sampl, int order)
+    FilterEstimator::build(std::string filt_t, int num_taps, double freq_sampl, double freq_cutoff)
     {
       m_filt_t = filt_t;
       m_freq_sampl = freq_sampl;
       m_freq_cutoff = freq_cutoff;
-      m_order = order;
-      m_coeff = NULL;
-      m_coeff = (double*)malloc(m_order * sizeof(double));
-      if(m_filt_t.compare("LPF") == 0) LPF(m_freq_cutoff, m_freq_sampl, m_order);
-      else if(m_filt_t.compare("HPF") == 0) HPF(m_freq_cutoff, m_freq_sampl, m_order);
-      else if(m_filt_t.compare("NF") == 0) NF(m_freq_cutoff, m_freq_sampl, m_order);
+      m_num_taps = num_taps;
+      m_lambda = M_PI * freq_cutoff / (freq_sampl/2);
+      
+      //printf("taps:%d\n",m_num_taps);
+      //printf("lambda:%f\n",m_lambda);
+      //printf("freq_cutoff:%f\n",m_freq_cutoff);
+      //printf("freq_sampl:%f\n",m_freq_sampl);
+
+      if(m_num_taps > MAX_NUM_FILTER_TAPS) m_num_taps = MAX_NUM_FILTER_TAPS;
+
+      m_taps = m_sr = NULL;
+      m_taps = (double*)malloc( m_num_taps * sizeof(double) );
+      m_sr = (double*)malloc( m_num_taps * sizeof(double) );
+
+      if(m_filt_t.compare("LPF") == 0) LPF();
+      else if(m_filt_t.compare("HPF") == 0) HPF();
+      else if(m_filt_t.compare("NF") == 0) NF();
+
+      init();
+
     }
 
     // Band-pass and Band-stop Filters.
     void
-    FilterEstimator::build(std::string filt_t, double freq_high, double freq_low, double freq_sampl, int order)
+    FilterEstimator::build(std::string filt_t, int num_taps, double freq_sampl, double freq_low, double freq_high)
     {
       m_filt_t = filt_t;
       m_freq_sampl = freq_sampl;
       m_freq_high = freq_high;
-      m_freq_low = freq_low;
-      m_order = order;
-      m_coeff = NULL;
-      m_coeff = (double*)malloc(m_order * sizeof(double));
-      // freq_high = highest frequency to be included.
-      // freq_low = lowest frequency to be included.
-      if(m_filt_t.compare("BPF") == 0) BPF(m_freq_high, m_freq_low, m_freq_sampl, m_order);
-      // freq_high = highest frequency to be included in the bottom band.
-      // freq_low = lowest frequency to be included in the top band.
-      else if(m_filt_t.compare("BSF") == 0) BSF(m_freq_high, m_freq_low, m_freq_sampl, m_order);
-    }
+      m_freq_cutoff = freq_low;
+      m_num_taps = num_taps;
 
-    void
-    FilterEstimator::LPF(double freq_cutoff, double freq_sampl, int order)
-    {
-      //Normalize f_c and ω_c so that pi is equal to the Nyquist angular frequency
-      m_freq_cutoff = freq_cutoff/freq_sampl;
-      m_omega = 2*M_PI*freq_cutoff;
-      int middle = order/2; //integer division, dropping remainder.
+      if(m_num_taps > MAX_NUM_FILTER_TAPS) m_num_taps = MAX_NUM_FILTER_TAPS;
 
-      /*
-      printf("freq_cutoff:%f\n",m_freq_cutoff);
-      printf("freq_sampl:%f\n",freq_sampl);
-      printf("order:%d\n",order);
-      printf("middle:%d\n",middle);
-      printf("m_omega:%f\n",m_omega);
-      */
+      m_taps = m_sr = NULL;
+      m_taps = (double*)malloc( m_num_taps * sizeof(double) );
+      m_sr = (double*)malloc( m_num_taps * sizeof(double) );
 
-      if(middle==0)
-      {
-        m_coeff[middle] = 2*freq_cutoff;
-        printf("m_coeff %d:%f\n",middle,m_coeff[middle]);
-      }
+      m_lambda = M_PI * m_freq_cutoff / (freq_sampl/2);
+      m_phi = M_PI * m_freq_high / (freq_sampl/2);
 
-      for(int i=-middle;i<middle;i++)
-      {
-        //printf("i:%d\n",i);
-        if(i==0)
-        {
-          m_coeff[middle] = 2*freq_cutoff;
-          printf("m_coeff %d:%f\n",middle,m_coeff[middle]);
-        }
-        else
-        {
-          m_coeff[i+middle] = std::sin(Math::Angles::radians(m_omega)*i)/(M_PI*i);
-          printf("m_coeff %d: %f\n",i+middle,m_coeff[i+middle]);
-          //printf("PI: %f\n",M_PI*i);
-          //printf("OMEGA: %f\n",m_omega*i);
-        }        
-      }
-      //printf("m_coeff1:%f\n",m_coeff[0]);
-      //printf("m_coeff2:%f\n",m_coeff[1]);
+      if(m_filt_t.compare("BPF") == 0) BPF();
+      else if(m_filt_t.compare("BSF") == 0) BSF();
+
+      init();
     }
 
     void 
-    FilterEstimator::HPF(double freq_cutoff, double freq_sampl, int order)
+    FilterEstimator::init()
     {
-      //Normalize f_c and ω_c so that pi is equal to the Nyquist angular frequency
-      m_freq_cutoff = freq_cutoff/freq_sampl;
-      m_omega = 2*M_PI*freq_cutoff;
-      int middle = order/2; //integer division, dropping remainder.
-
       int i;
 
-      for(i=-middle;i<middle;i++)
-      {
-        if(i==0)
-        {
-          m_coeff[middle] = 1-2*freq_cutoff;
-        }
-        else
-          m_coeff[i+middle] = -std::sin(Math::Angles::radians(m_omega)*i)/(M_PI*i);
-      }
+      for(i = 0; i < m_num_taps; i++) m_sr[i] = 0;
+  
+      return;
     }
+
+    void
+    FilterEstimator::LPF()
+    {
+      int n;
+      double mm;
+
+      for(n = 0; n < m_num_taps; n++)
+      {
+        mm = n - (m_num_taps - 1.0) / 2.0;
+        if(mm == 0.0)
+        {
+          m_taps[n] = m_lambda / M_PI;
+          //printf("coeff0:%f\n",m_taps[n]);
+        }
+        else 
+        {
+          m_taps[n] = std::sin(mm * m_lambda) / (mm * M_PI);
+          //printf("coeff_others:%f\n",m_taps[n]);
+        }
+      }
+
+      return;
+    }
+
 
     void 
-    FilterEstimator::NF(double freq_cutoff, double freq_sampl, int order)
+    FilterEstimator::HPF()
     {
-      //Implement a Notch Filter.
+      int n;
+      double mm;
+
+      for(n = 0; n < m_num_taps; n++)
+      {
+        mm = n - (m_num_taps - 1.0) / 2.0;
+        if( mm == 0.0 ) m_taps[n] = 1.0 - m_lambda / M_PI;
+        else m_taps[n] = -std::sin(mm * m_lambda) / (mm * M_PI);
+      }
+
+      return;
+    }
+
+
+    void 
+    FilterEstimator::NF()
+    {
+      int n;
+      double mm;
+
+      for(n = 0; n < m_num_taps; n++)
+      {
+        mm = n - (m_num_taps - 1.0) / 2.0;
+        if( mm == 0.0 ) m_taps[n] = 1.0 - m_lambda / M_PI;
+        else m_taps[n] = 2*std::sin(mm * m_lambda) / (mm * M_PI);
+      }
+
+      return;
     }
 
     void
-    FilterEstimator::BPF(double freq_high, double freq_low, double freq_sampl, int order)
+    FilterEstimator::BPF()
     {
-      m_freq_low = freq_low/freq_sampl;
-      m_freq_high = freq_high/freq_sampl;
-      m_omega_low = 2*M_PI*m_freq_low;
-      m_omega_high = 2*M_PI*m_freq_high;
-      int middle = order/2;    //integer division, dropping remainder.
+      int n;
+      double mm;
 
-      int i;
-
-      for(i=-middle;i<middle;i++)
+      for(n = 0; n < m_num_taps; n++)
       {
-        if(i==0)
-        {
-          m_coeff[middle] = 2*(m_freq_high-m_freq_low);
-        }
-        else
-          m_coeff[i+middle] = std::sin(Math::Angles::radians(m_omega_high)*i)/(M_PI*i)-std::sin(Math::Angles::radians(m_omega_low)*i)/(M_PI*i);
+        mm = n - (m_num_taps - 1.0) / 2.0;
+        if( mm == 0.0 ) m_taps[n] = (m_phi - m_lambda) / M_PI;
+        else m_taps[n] = (std::sin(mm * m_phi) - std::sin(mm * m_lambda)) / (mm * M_PI);
       }
+
+      return;
     }
 
     void
-    FilterEstimator::BSF(double freq_high, double freq_low, double freq_sampl, int order)
+    FilterEstimator::BSF()
     {
-      // freq_high = highest frequency to be included in the bottom band.
-      // freq_low = lowest frequency to be included in the top band.
-      m_freq_low = freq_low/freq_sampl;
-      m_freq_high = freq_high/freq_sampl; 
-      m_omega_low = 2*M_PI*m_freq_low;
-      m_omega_high = 2*M_PI*m_freq_high;
-      int middle = order/2;    //integer division, dropping remainder.
+      int n;
+      double mm;
 
-      int i;
-
-      for(i=-middle;i<middle;i++)
+      for(n = 0; n < m_num_taps; n++)
       {
-        if(i==0)
-        {
-          m_coeff[middle] = 1-2*(m_freq_high-m_freq_low);
-        }
-        else
-          m_coeff[i+middle] = std::sin(Math::Angles::radians(m_omega_high)*i)/(M_PI*i)-std::sin(Math::Angles::radians(m_omega_low)*i)/(M_PI*i);
+        mm = n - (m_num_taps - 1.0) / 2.0;
+        if( mm == 0.0 ) m_taps[n] = (1-(m_phi - m_lambda)) / M_PI;
+        else m_taps[n] = (std::sin(mm * m_phi) - std::sin(mm * m_lambda)) / (mm * M_PI);
       }
+
+      return;
     }
 
     double 
     FilterEstimator::step(double data_sample)
     {
-      double result=0.0;
-      //printf("m_coeff1:%f\n",m_coeff[0]);
-      //printf("m_coeff2:%f\n",m_coeff[1]);
-      for(int i=0;i<m_order;i++)
+      int i;
+      double result;
+
+      for(i = m_num_taps - 1; i >= 1; i--)
       {
-        result += data_sample * m_coeff[i];
-        //printf("COEFF:%f\n",m_coeff[i]);
-      }
+        m_sr[i] = m_sr[i-1];
+      } 
+      m_sr[0] = data_sample;
+
+      result = 0;
+      for(i = 0; i < m_num_taps; i++) result += m_sr[i] * m_taps[i];
+
       //printf("RESULT:%f\n",result);
-      //printf("DATA:%f\n",data_sample);
-      return result;
+      return result;      
     }
   }
 }

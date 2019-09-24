@@ -52,21 +52,11 @@ namespace
         struct Arguments
         {
           //! Low-pass filter: cutoff frequency.
-          double lp_ampl_cutoff;
-          //! Low-pass filter: order.
-          double lp_ampl_order;
+          double lpf_ampl_cutoff;
           //! Low-pass filter: cutoff frequency.
-          double lp_est_cutoff;
-          //! Band-stop filter: high frequency.
-          double bs_high_freq;
-          //! Band-stop filter: low frequency.
-          double bs_low_freq;
-          //! Band-stop filter: order.
-          double bs_order;
-          //! Notch filter: cutoff frequency.
-          double nf_cutoff;
-          //! Notch filter: order.
-          double nf_order;
+          double lpf_est_cutoff;
+          //! Low-pass filter taps.
+          int lpf_taps;
           //! Acceleration Sampling Frequency.
           double data_sampl_freq;
           //! Estimator Period.
@@ -79,6 +69,8 @@ namespace
           double gain_min;
           //! Switching Amplitude.
           double a_switch;
+          //! Activate Estimator.
+          bool active;
 
         };
 
@@ -133,10 +125,8 @@ namespace
           double m_wave_avg_last;
           // Estimated Wave Frequency.
           double m_wave;
-          // Filter types.
-          //filterType LPF, HPF, NF, BSF, BPF;
-
-
+          //! Current consumed by thruster.
+          //IMC::PowerSettings m_pwr_settings;
 
           Task(const std::string& name, Tasks::Context& ctx):
             DUNE::Tasks::Task(name, ctx),
@@ -155,45 +145,24 @@ namespace
             m_wave_avg_last(0.0),
             m_wave(0.0)
           {
-            param("Amplitude LP cutoff frequency", m_args.lp_ampl_cutoff)
+            param("Active", m_args.active)
+              .defaultValue("false")
+              .description("Determines if output has to be used");
+
+            param("Amplitude LPF cutoff frequency", m_args.lpf_ampl_cutoff)
               .units(Units::Hertz)
               .defaultValue("10.0")
               .description("Low-pass filter cutoff frequency");
 
-            param("Amplitude LP order", m_args.lp_ampl_order)
+            param("Omega_f LPF cutoff frequency", m_args.lpf_est_cutoff)
+              .units(Units::Hertz)
               .defaultValue("1.0")
+              .description("Low-pass filter cutoff frequency");
+
+            param("LPF taps", m_args.lpf_taps)
+              .defaultValue("10.0")
               .minimumValue("1.0")
-              .description("Low-pass filter order");
-
-            param("Omega_f LP cutoff frequency", m_args.lp_est_cutoff)
-              .units(Units::Hertz)
-              .defaultValue("10.0")
-              .description("Low-pass filter cutoff frequency");              
-
-            param("BS high frequency", m_args.bs_high_freq)
-              .units(Units::Hertz)
-              .defaultValue("10.0")
-              .description("Band-stop filter high frequency");
-
-            param("BS low frequency", m_args.bs_low_freq)
-              .units(Units::Hertz)
-              .defaultValue("10.0")
-              .description("Band-stop filter low frqeuency");
-
-            param("BS order", m_args.bs_order)
-              .defaultValue("1.0")
-              .minimumValue("1.0")
-              .description("Band-stop filter order");
-
-            param("NF cutoff frequency", m_args.nf_cutoff)
-              .units(Units::Hertz)
-              .defaultValue("10.0")
-              .description("Notch filter cutoff frequency");
-
-            param("NF order", m_args.nf_order)
-              .defaultValue("1.0")
-              .minimumValue("1.0")
-              .description("Notch filter order");
+              .description("Low-pass filter(s) number of taps");            
 
             param("Data Sampling Frequency", m_args.data_sampl_freq)
               .units(Units::Hertz)
@@ -237,11 +206,15 @@ namespace
             if(paramChanged(m_args.duration))
               m_timer.setTop(m_args.period+m_args.duration);
 
-            if(paramChanged(m_args.lp_ampl_cutoff) ||
+            if(paramChanged(m_args.lpf_ampl_cutoff) ||
+              paramChanged(m_args.lpf_est_cutoff) ||
+              paramChanged(m_args.lpf_taps) ||
               paramChanged(m_args.data_sampl_freq) ||
-              paramChanged(m_args.lp_ampl_order) ||
-              paramChanged(m_args.lp_est_cutoff) ||
-              paramChanged(m_args.data_sampl_freq))
+              paramChanged(m_args.period) ||
+              paramChanged(m_args.duration) ||
+              paramChanged(m_args.gain_min) ||
+              paramChanged(m_args.gain_max) ||
+              paramChanged(m_args.a_switch))
               buildFilters();
           }
 
@@ -280,29 +253,31 @@ namespace
           void
           buildFilters(void)
           {
-            lowpass_ampl.build("LPF", m_args.lp_ampl_cutoff, m_args.data_sampl_freq, m_args.lp_ampl_order);
-            lowpass_est.build("LPF", m_args.lp_est_cutoff, m_args.data_sampl_freq, 2);
+            lowpass_ampl.build("LPF", m_args.lpf_taps, m_args.data_sampl_freq, m_args.lpf_ampl_cutoff);
+            lowpass_est.build("LPF", m_args.lpf_taps, m_args.data_sampl_freq, m_args.lpf_est_cutoff);
           }
 
           void
           consume(const IMC::Acceleration* acc)
           {
-
-            m_heave_acc = acc->z;
+            
+            m_heave_acc = acc->z - DUNE::Math::c_gravity; // SenTiBoard provides datum with acceleration.
             //spew("Consumed Acceleration:%f",m_heave_acc);
 
             if(m_timer.getElapsed()>=m_args.period && m_timer.getElapsed()<=m_args.period+m_args.duration)
             {
               
-              //Estimation can start.
-              //Create new LP Filter and Estimate Wave Amplitude. 
+              if(m_avg==0) //then this is the first iteration, build filters.
+                buildFilters();
+
+              //Estimate Wave Amplitude. 
               m_heave_acc_sq = pow(m_heave_acc,2);
               //spew("Acceleration Squared:%f",m_heave_acc_sq);
               m_ampl_est = 2*lowpass_ampl.step(m_heave_acc_sq);
               m_ampl_est = sqrt(m_ampl_est);
 
-              //spew("Estimated Amplitude:%f",m_ampl_est);
-
+              spew("Estimated Amplitude:%f",m_ampl_est);
+            
               if(m_ampl_est>m_args.a_switch)
                 m_gain = m_args.gain_min;
               else
@@ -311,7 +286,7 @@ namespace
               //Compute zeta_2_dot.
               m_zeta_1 = lowpass_est.step(m_heave_acc);              
               m_zeta_2 = m_deriv.update(m_zeta_1);
-              m_zeta_2_dot = -2*m_args.lp_est_cutoff*m_zeta_2 - pow(m_args.lp_est_cutoff,2)*m_zeta_1 + pow(m_args.lp_est_cutoff,2)*m_heave_acc;              
+              m_zeta_2_dot = -2*m_args.lpf_est_cutoff*m_zeta_2 - pow(m_args.lpf_est_cutoff,2)*m_zeta_1 + pow(m_args.lpf_est_cutoff,2)*m_heave_acc;              
 
               //Compute phi_dot.
               m_phi_est_dot = m_gain*m_zeta_1*(m_zeta_2_dot-(real(m_phi_est)*m_zeta_1));
@@ -338,10 +313,13 @@ namespace
               if(m_avg==0)
                 m_wave_avg.value = m_wave;
               else
-                m_wave_avg.value = (m_wave_avg_last * m_avg + m_wave) / (m_avg + 1);
+                m_wave_avg.value = ((m_wave_avg_last * m_avg + m_wave) / (m_avg + 1));
 
               m_avg++;
               m_wave_avg_last = m_wave_avg.value;
+
+              if(m_args.active==true)
+                m_wave_avg.value = m_wave_avg.value*100.0;
 
             }
 
@@ -350,7 +328,23 @@ namespace
               //buildFilters();
               m_timer.reset();
               dispatch(m_wave_avg);
-              //spew("Averaged Estimated Frequency: %f\n",m_wave_avg.value);
+              spew("Averaged Estimated Frequency: %f\n",m_wave_avg.value*100.0);
+              // Reset weighted average.
+              //m_avg=0;
+              // Free allocated filters memory.
+              //lowpass_ampl.freeMem();
+              //lowpass_est.freeMem();
+
+              //! Fake power settings.
+              /*
+              m_pwr_settings.l2=0;
+              m_pwr_settings.l3=0;
+              m_pwr_settings.iridium=0;
+              m_pwr_settings.modem=0;
+              m_pwr_settings.pumps=0;
+              m_pwr_settings.vhf=1;
+              dispatch(m_pwr_settings);
+              */
             }
 
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);

@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: db94a37e22deb3cfc97166d80b959a19                            *
+// IMC XML MD5: ec8ae6c8e72b7d9edd8ff47a9d1c3141                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -25263,8 +25263,8 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
-    //! Total Produced Panels Power.
-    class PanelsPower: public Message
+    //! Power.
+    class Power: public Message
     {
     public:
       //! Value.
@@ -25276,12 +25276,12 @@ namespace DUNE
         return 910;
       }
 
-      PanelsPower(void);
+      Power(void);
 
-      PanelsPower*
+      Power*
       clone(void) const
       {
-        return new PanelsPower(*this);
+        return new Power(*this);
       }
 
       void
@@ -25305,13 +25305,13 @@ namespace DUNE
       uint16_t
       getId(void) const
       {
-        return PanelsPower::getIdStatic();
+        return Power::getIdStatic();
       }
 
       const char*
       getName(void) const
       {
-        return "PanelsPower";
+        return "Power";
       }
 
       unsigned
@@ -25330,132 +25330,6 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
-    //! System Load Current and Power.
-    class SystemLoad: public Message
-    {
-    public:
-      //! Current.
-      fp64_t current;
-      //! Power.
-      fp64_t power;
-
-      static uint16_t
-      getIdStatic(void)
-      {
-        return 911;
-      }
-
-      SystemLoad(void);
-
-      SystemLoad*
-      clone(void) const
-      {
-        return new SystemLoad(*this);
-      }
-
-      void
-      clear(void);
-
-      bool
-      fieldsEqual(const Message& msg__) const;
-
-      int
-      validate(void) const;
-
-      uint8_t*
-      serializeFields(uint8_t* bfr__) const;
-
-      uint16_t
-      deserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      getId(void) const
-      {
-        return SystemLoad::getIdStatic();
-      }
-
-      const char*
-      getName(void) const
-      {
-        return "SystemLoad";
-      }
-
-      unsigned
-      getFixedSerializationSize(void) const
-      {
-        return 16;
-      }
-
-      void
-      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
-    };
-
-    //! Thruster Load Current and Power.
-    class ThrusterLoad: public Message
-    {
-    public:
-      //! Current.
-      fp64_t current;
-      //! Power.
-      fp64_t power;
-
-      static uint16_t
-      getIdStatic(void)
-      {
-        return 912;
-      }
-
-      ThrusterLoad(void);
-
-      ThrusterLoad*
-      clone(void) const
-      {
-        return new ThrusterLoad(*this);
-      }
-
-      void
-      clear(void);
-
-      bool
-      fieldsEqual(const Message& msg__) const;
-
-      int
-      validate(void) const;
-
-      uint8_t*
-      serializeFields(uint8_t* bfr__) const;
-
-      uint16_t
-      deserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      getId(void) const
-      {
-        return ThrusterLoad::getIdStatic();
-      }
-
-      const char*
-      getName(void) const
-      {
-        return "ThrusterLoad";
-      }
-
-      unsigned
-      getFixedSerializationSize(void) const
-      {
-        return 16;
-      }
-
-      void
-      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
-    };
-
     //! Estimated Wave Frequency.
     class EstimatedFreq: public Message
     {
@@ -25466,7 +25340,7 @@ namespace DUNE
       static uint16_t
       getIdStatic(void)
       {
-        return 913;
+        return 911;
       }
 
       EstimatedFreq(void);
@@ -25518,6 +25392,77 @@ namespace DUNE
 
       void
       setValueFP(fp64_t val);
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! AutoNaut Power Settings.
+    class PowerSettings: public Message
+    {
+    public:
+      //! Level2.
+      int8_t l2;
+      //! Level3.
+      int8_t l3;
+      //! Iridium.
+      int8_t iridium;
+      //! Modem.
+      int8_t modem;
+      //! Pumps.
+      int8_t pumps;
+      //! VHF.
+      int8_t vhf;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 912;
+      }
+
+      PowerSettings(void);
+
+      PowerSettings*
+      clone(void) const
+      {
+        return new PowerSettings(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return PowerSettings::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "PowerSettings";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 6;
+      }
 
       void
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;

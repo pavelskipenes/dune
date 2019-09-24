@@ -33,6 +33,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <string>
+#include <sstream>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
@@ -65,13 +67,17 @@ namespace Actuators
       int16_t thruster_USER;
       //! Print Serial msg
       bool print_serial;
-
+      //! User-defined Power Settings String.
+      std::string user_pwrSettings;
     };
+
+    //! Labels for states voltages
+    //const char* c_voltage_label = "12V";
 
     struct Task: public DUNE::Tasks::Task
     {
       //! Maximum buffer size.
-      static const int c_bfr_size = 256;
+      static const int c_bfr_size = 512;
       //! Serial port handle.
       SerialPort* m_uart;
       //! I/O Multiplexer
@@ -93,11 +99,21 @@ namespace Actuators
       //! Battery Voltage.
       IMC::Voltage m_volt;
       //! Power Produced by Solar Panels.
-      IMC::PanelsPower m_panels;
-      //! Current consumed by system.
-      IMC::SystemLoad m_system;
+      IMC::Power m_panelspwr;
       //! Power consumed by system.
-      IMC::ThrusterLoad m_thruster;
+      IMC::Power m_syspwr;
+      //! Power consumed by thruster.
+      IMC::Power m_thrpwr;
+      //! Current consumed by system.
+      IMC::Current m_syscurr;
+      //! Current consumed by thruster.
+      IMC::Current m_thrcurr;
+      //! Dispatched power settings.
+      IMC::PowerSettings m_pwr_settings;
+      //! Power Settings String.
+      std::string pwrSettings;
+      //! Binary Integers for relays.
+      int l2, l3, iridium, modem, pumps, vhf;
       //! Characters to ignore in the beginning and end of a string.
       const char* c_blanks = " \t\r\n";
 
@@ -107,7 +123,13 @@ namespace Actuators
         thruster_act(0),
         thrust_max(100.0),
         rudder_max(45),
-        rudder_cmd(0)
+        rudder_cmd(0),
+        l2(0),
+        l3(0),
+        iridium(0),
+        modem(0),
+        pumps(0),
+        vhf(0)
       {
         param("Serial Port - Device", m_args.uart_dev)
         .defaultValue("")
@@ -152,16 +174,32 @@ namespace Actuators
         .maximumValue("100.0")
         .description("User defines the applied thruster actuation / sent over serial.  Condition: Enable Thruster Controller = False.");
 
+        param("Power Settings", m_args.user_pwrSettings)
+        .defaultValue("000000")
+        .description("User-defined relays settings on L1");
+
 
         bind<IMC::SetThrusterActuation>(this);
         bind<IMC::SetServoPosition>(this);
+        bind<IMC::PowerSettings>(this);
       }
 
+      void
+      onEntityReservation(void)
+      {
+        m_volt.setSourceEntity(reserveEntity("Batteries"));
+        m_panelspwr.setSourceEntity(reserveEntity("Panels Power"));
+        m_syspwr.setSourceEntity(reserveEntity("System Consumed Power"));
+        m_thrpwr.setSourceEntity(reserveEntity("Thruster Consumed Power"));
+        m_syscurr.setSourceEntity(reserveEntity("System Consumed Current"));
+        m_thrcurr.setSourceEntity(reserveEntity("Thruster Consumed Current"));
+        m_pwr_settings.setSourceEntity(reserveEntity("Relay Power Settings"));
+      }
 
       void
       onResourceAcquisition(void)
       {
-        spew("Aquiring Serial Port: ");
+        //spew("Aquiring Serial Port: ");
         try{
           m_uart = new SerialPort(m_args.uart_dev, m_args.uart_baud);
         }
@@ -170,8 +208,16 @@ namespace Actuators
           war(DTR("Connection problem - %s"), e.what());
           throw RestartNeeded(DTR("I/O error"), 5);
         }
-        spew("*** Success m_uart = new Serial Port");
+        //spew("*** Success m_uart = new Serial Port");
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+      }
+
+      //! Update internal state with new parameter values.
+      void
+      onUpdateParameters(void)
+      {
+        if(paramChanged(m_args.user_pwrSettings))
+          pwrSettings = m_args.user_pwrSettings;
       }
 
       void
@@ -209,6 +255,19 @@ namespace Actuators
         spew("ServoPosition value: %d", rudder_cmd);
       }
 
+      //! Consume a PowerSettings Message.
+      void
+      consume(const IMC::PowerSettings* msg)
+      {
+        l2 = msg->l2;
+        l3 = msg->l3;
+        iridium = msg->iridium;
+        modem = msg->modem;
+        pumps = msg->pumps;
+        vhf = msg->vhf;
+
+        spew("pwrSettings consumed:%d%d%d%d%d%d",l2,l3,iridium,modem,pumps,vhf);
+      }
 
       //! Create NMEA & Controller Selector
       std::string createNMEA(void)
@@ -220,21 +279,22 @@ namespace Actuators
         //        450           Desired heading, degrees
         //       -100           Thruster actuation, percent
         */
+
         NMEAWriter stn("BBB01");
 
         // Active controller selector: Remote or Heading &/or Speed
         if((!m_args.enable_thruster) && (!m_args.enable_heading)){		// User defines
-          stn << String::str("%d,%d", m_args.rudder_USER, m_args.thruster_USER);
+          stn << String::str("%d,%d", m_args.rudder_USER, m_args.thruster_USER) << String::str("%d%d%d%d%d%d",l2,l3,iridium,modem,pumps,vhf);
         }
         else if((m_args.enable_thruster) && (!m_args.enable_heading)){	// Speed-Controller
-          stn << String::str("%d,%d", m_args.rudder_USER, thruster_act);
+          stn << String::str("%d,%d", m_args.rudder_USER, thruster_act) << String::str("%d%d%d%d%d%d",l2,l3,iridium,modem,pumps,vhf);
         }
         else if((!m_args.enable_thruster) && (m_args.enable_heading)){	// Heading-Controller
-          stn << String::str("%d,%d", rudder_cmd, m_args.thruster_USER);
+          stn << String::str("%d,%d", rudder_cmd, m_args.thruster_USER) << String::str("%d%d%d%d%d%d",l2,l3,iridium,modem,pumps,vhf);
 
         }
         else{
-          stn << String::str("%d,%d", rudder_cmd, thruster_act);		//	H- & S-Controller
+          stn << String::str("%d,%d", rudder_cmd, thruster_act) << String::str("%d%d%d%d%d%d",l2,l3,iridium,modem,pumps,vhf);		//	H- & S-Controller
         }
 
         return stn.sentence();
@@ -277,9 +337,12 @@ namespace Actuators
             if (bfr[i] == '\n')
             {
               setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-              sendNMEA();
               spew("%s\n",m_line.c_str());
+              // Process NMEA sentence.
+              extractNMEA(m_line);
+
               m_line.clear();
+              sendNMEA();
               break;
             }
             else
@@ -295,9 +358,9 @@ namespace Actuators
           m_line.clear();
         }
 
-
+/*
         //! Original code - Got different checksum errors when reading NMEA. Now, it transmit when uart receives
-/*        char bfr[c_bfr_size];
+        char bfr[c_bfr_size];
         size_t rv;
         try
         {
@@ -335,7 +398,7 @@ namespace Actuators
         } */
       }
 
-      //! Extract voltage.
+      //! Extract Info.
       void
       extractNMEA(const std::string sentence)
       {
@@ -357,37 +420,71 @@ namespace Actuators
         }
 
         std::string volt = proper.substr(commas[7]+1,5); //was 4 before.
-        //spew("%s\n",volt.c_str());
         m_volt.value = std::atof(volt.c_str());
-        spew("Voltage:%f\n",m_volt.value);
+        //spew("Voltage:%f\n",m_volt.value);
         dispatch(m_volt);
 
         std::string panels = proper.substr(commas[2]+1,5);
-        //spew("%s\n",panels.c_str());
-        m_panels.value = std::atof(panels.c_str());
-        spew("Panels Power:%f\n",m_panels.value);
-        //dispatch(m_panels);
+        m_panelspwr.value = std::atof(panels.c_str());
+        //spew("Panels Power:%f\n",m_panelspwr.value);
+        dispatch(m_panelspwr);
 
         std::string current = proper.substr(commas[3]+1,5);
         std::string power = proper.substr(commas[4]+1,5);
-        //spew("%s\n",current.c_str());
-        //spew("%s\n",power.c_str());
-        m_system.current = std::atof(current.c_str());
-        m_system.power = std::atof(power.c_str());
-        spew("Drawn Current:%f\n",m_system.current);
-        spew("Drawn Power:%f\n",m_system.power);
-        //dispatch(m_system);
+        m_syscurr.value = std::atof(current.c_str());
+        m_syspwr.value = std::atof(power.c_str());
+        //spew("Drawn Current:%f\n",m_syscurr.value);
+        //spew("Drawn Power:%f\n",m_syspwr.value);
+        dispatch(m_syscurr);
+        dispatch(m_syspwr);
 
         std::string thruster_current = proper.substr(commas[5]+1,5);
         std::string thruster_power = proper.substr(commas[6]+1,5);
-        //spew("%s\n",thruster_current.c_str());
-        //spew("%s\n",thruster_power.c_str());
-        m_thruster.current = std::atof(thruster_current.c_str());
-        m_thruster.power = std::atof(thruster_power.c_str());
-        spew("Thruster Current:%f\n",m_thruster.current);
-        spew("Thruster Power:%f\n",m_thruster.power);
-        //dispatch(m_thruster);
+        m_thrcurr.value = std::atof(thruster_current.c_str());
+        m_thrpwr.value = std::atof(thruster_power.c_str());
+        //spew("Thruster Current:%f\n",m_thrcurr.value);
+        //spew("Thruster Power:%f\n",m_thrpwr.value);
+        dispatch(m_thrcurr);
+        dispatch(m_thrpwr);
 
+        //! Power Settings
+        std::stringstream pw1(proper.substr(commas[1]+1,1));
+        int pwrsettings1_int = 0;
+        pw1 >> pwrsettings1_int;
+        std::stringstream pw2(proper.substr(commas[1]+2,1));
+        int pwrsettings2_int = 0;
+        pw2 >> pwrsettings2_int;
+        std::stringstream pw3(proper.substr(commas[1]+3,1));
+        int pwrsettings3_int = 0;
+        pw3 >> pwrsettings3_int;
+        std::stringstream pw4(proper.substr(commas[1]+4,1));
+        int pwrsettings4_int = 0;
+        pw4 >> pwrsettings4_int;
+        std::stringstream pw5(proper.substr(commas[1]+5,1));
+        int pwrsettings5_int = 0;
+        pw5 >> pwrsettings5_int;
+        std::stringstream pw6(proper.substr(commas[1]+6,1));
+        int pwrsettings6_int = 0;
+        pw6 >> pwrsettings6_int;
+        
+        m_pwr_settings.l2 = pwrsettings1_int;
+        m_pwr_settings.l3 = pwrsettings2_int;
+        m_pwr_settings.iridium = pwrsettings3_int;
+        m_pwr_settings.modem = pwrsettings4_int;
+        m_pwr_settings.pumps = pwrsettings5_int;
+        m_pwr_settings.vhf= pwrsettings6_int;
+
+        dispatch(m_pwr_settings, DF_LOOP_BACK);
+
+        /*
+        spew("POWER SETTINGS: %d", pwrsettings1_int);
+        spew("POWER SETTINGS: %d", pwrsettings2_int);
+        spew("POWER SETTINGS: %d", pwrsettings3_int);
+        spew("POWER SETTINGS: %d", pwrsettings4_int);
+        spew("POWER SETTINGS: %d", pwrsettings5_int);
+        spew("POWER SETTINGS: %d", pwrsettings6_int);
+        */
+        
       }
 
 
@@ -423,7 +520,7 @@ namespace Actuators
 
           consumeMessages();
 
-          if (Poll::poll(*m_uart, 1.0)){
+          if (Poll::poll(*m_uart, 0.1)){
             readUART();
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
           }

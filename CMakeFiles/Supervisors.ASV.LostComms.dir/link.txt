@@ -1,0 +1,2 @@
+/usr/bin/ar qc libSupervisors.ASV.LostComms.a  CMakeFiles/Supervisors.ASV.LostComms.dir/src/Supervisors/ASV/LostComms/Task.cpp.o
+/usr/bin/ranlib libSupervisors.ASV.LostComms.a

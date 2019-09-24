@@ -30,14 +30,6 @@
 #ifndef DUNE_CONTROL_FILTER_HPP_INCLUDED_
 #define DUNE_CONTROL_FILTER_HPP_INCLUDED_
 
-// Should not be needed.
-/*#include <stdio.h>
-#include <math.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <inttypes.h>*/
-
 // DUNE headers.
 #include <DUNE/Tasks/Task.hpp>
 
@@ -59,20 +51,26 @@ namespace DUNE
       //! Destructor.
       ~FilterEstimator(void);
 
+      //! Free allocated memory.
+      void freeMem(void);
+
       //! Build Filter.
-      void build(std::string filt_t, double freq_cutoff, double freq_sampl, int order);
-      void build(std::string filt_t, double freq_high, double freq_low, double freq_sampl, int order);
+      void build(std::string filt_t, int num_taps, double freq_sampl, double freq_cutoff);
+      void build(std::string filt_t, int num_taps, double freq_sampl, double freq_low, double freq_high);
+
+      //! Initialize.
+      void init();
 
       //! Low-pass filter.
-      void LPF(double freq_cutoff, double freq_sampl, int order);
+      void LPF();
       //! High-pass filter.
-      void HPF(double freq_cutoff, double freq_sampl, int order);
+      void HPF();
 	    //! Band-pass filter.
-	    void BPF(double freq_high, double freq_low, double freq_sampl, int order);
+	    void BPF();
 	    //! Band-stop filter.
-	    void BSF(double freq_high, double freq_low, double freq_sampl, int order);
+	    void BSF();
 	    //! Notch filter.
-	    void NF(double freq_cutoff, double freq_sampl, int order);
+	    void NF();
 
       //! Filter Data.
       double
@@ -89,20 +87,17 @@ namespace DUNE
     	double m_freq_sampl;
     	//! Filter cutoff frequency (Hz).
     	double m_freq_cutoff;
-    	//! Filter Order.
-    	int m_order;
+    	//! Number of taps.
+    	int m_num_taps;
+      //! Lambda.
+      double m_lambda;
+      //! phi.
+      double m_phi;
+      
+      double *m_taps;
+      double *m_sr;
     	//! Highest Frequency to be included (Hz).
     	double m_freq_high;
-    	//! Lowest Frequency to be included (Hz).
-    	double m_freq_low;
-    	//! Nyquist Angular Frequency.
-    	double m_omega;
-    	//! Nyquist Angular Frequency Low.
-    	double m_omega_low;
-    	//! Nyquist Angular Frequency High.
-    	double m_omega_high;
-      //! Vector of coefficients.
-    	double *m_coeff;
     };
   }
 }
