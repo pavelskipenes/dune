@@ -1,2 +1,0 @@
-/usr/bin/ar qc libSensors.SenTiBoard.a  CMakeFiles/Sensors.SenTiBoard.dir/src/Sensors/SenTiBoard/Task.cpp.o
-/usr/bin/ranlib libSensors.SenTiBoard.a

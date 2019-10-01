@@ -1,2 +1,0 @@
-/usr/bin/ar qc libSimulators.UnderwaterAcoustics.a  CMakeFiles/Simulators.UnderwaterAcoustics.dir/src/Simulators/UnderwaterAcoustics/Task.cpp.o
-/usr/bin/ranlib libSimulators.UnderwaterAcoustics.a

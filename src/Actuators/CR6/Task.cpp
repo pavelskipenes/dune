@@ -96,6 +96,8 @@ namespace Actuators
       std::string m_line;
       //! Task parameters.
       Arguments m_args;
+      //! Timer.
+      Time::Counter<float> m_timer;
       //! Battery Voltage.
       IMC::Voltage m_volt;
       //! Power Produced by Solar Panels.
@@ -114,6 +116,8 @@ namespace Actuators
       std::string pwrSettings;
       //! Binary Integers for relays.
       int l2, l3, iridium, modem, pumps, vhf;
+      //! Check if Power Settings received from Task/Neptus.
+      bool pwr_sett_rec;
       //! Characters to ignore in the beginning and end of a string.
       const char* c_blanks = " \t\r\n";
 
@@ -124,12 +128,7 @@ namespace Actuators
         thrust_max(100.0),
         rudder_max(45),
         rudder_cmd(0),
-        l2(0),
-        l3(0),
-        iridium(0),
-        modem(0),
-        pumps(0),
-        vhf(0)
+        pwr_sett_rec(false)
       {
         param("Serial Port - Device", m_args.uart_dev)
         .defaultValue("")
@@ -217,7 +216,26 @@ namespace Actuators
       onUpdateParameters(void)
       {
         if(paramChanged(m_args.user_pwrSettings))
-          pwrSettings = m_args.user_pwrSettings;
+        {
+        	int l2_new = m_args.user_pwrSettings[0]- '0';
+        	int l3_new = m_args.user_pwrSettings[1] - '0';
+        	int iridium_new = m_args.user_pwrSettings[2] - '0';
+        	int modem_new = m_args.user_pwrSettings[3]- '0';
+        	int pumps_new = m_args.user_pwrSettings[4]- '0';
+        	int vhf_new = m_args.user_pwrSettings[5]- '0';
+        	
+        	l2 = l2_new;
+          	l3 = l3_new;
+          	iridium = iridium_new;
+          	modem = modem_new;
+        	pumps = pumps_new;
+        	vhf = vhf_new;
+        	spew("DATA %d%d%d%d%d%d", l2,l3,iridium,modem,pumps,vhf);
+        	
+        	// Initialize timer to overflow after 3s.
+        	m_timer.setTop(3.0);
+        	pwr_sett_rec = true;
+        }
       }
 
       void
@@ -265,6 +283,13 @@ namespace Actuators
         modem = msg->modem;
         pumps = msg->pumps;
         vhf = msg->vhf;
+
+        if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"Relay Power Settings"))
+        {
+        	m_timer.setTop(3.0);
+        	pwr_sett_rec = true;
+        	spew("NEW ENTITYYYYYYYYYYY: %s",resolveEntity(msg->getSourceEntity()).c_str());
+        }
 
         spew("pwrSettings consumed:%d%d%d%d%d%d",l2,l3,iridium,modem,pumps,vhf);
       }
@@ -474,7 +499,15 @@ namespace Actuators
         m_pwr_settings.pumps = pwrsettings5_int;
         m_pwr_settings.vhf= pwrsettings6_int;
 
-        dispatch(m_pwr_settings, DF_LOOP_BACK);
+       	if(pwr_sett_rec==false)
+       		dispatch(m_pwr_settings, DF_LOOP_BACK);
+       	if(pwr_sett_rec==true && m_timer.overflow())
+       	{
+       		dispatch(m_pwr_settings, DF_LOOP_BACK);
+       		pwr_sett_rec=false;
+       		m_timer.reset();	
+       	}
+
 
         /*
         spew("POWER SETTINGS: %d", pwrsettings1_int);
@@ -520,7 +553,7 @@ namespace Actuators
 
           consumeMessages();
 
-          if (Poll::poll(*m_uart, 0.1)){
+          if (Poll::poll(*m_uart, 1.0)){
             readUART();
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
           }

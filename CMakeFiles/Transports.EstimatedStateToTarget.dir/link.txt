@@ -1,2 +1,0 @@
-/usr/bin/ar qc libTransports.EstimatedStateToTarget.a  CMakeFiles/Transports.EstimatedStateToTarget.dir/src/Transports/EstimatedStateToTarget/Task.cpp.o
-/usr/bin/ranlib libTransports.EstimatedStateToTarget.a

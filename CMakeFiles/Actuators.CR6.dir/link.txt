@@ -1,2 +1,0 @@
-/usr/bin/ar qc libActuators.CR6.a  CMakeFiles/Actuators.CR6.dir/src/Actuators/CR6/Task.cpp.o
-/usr/bin/ranlib libActuators.CR6.a

@@ -1,2 +1,0 @@
-/usr/bin/ar qc libControl.ASV.SpeedController.a  CMakeFiles/Control.ASV.SpeedController.dir/src/Control/ASV/SpeedController/Task.cpp.o
-/usr/bin/ranlib libControl.ASV.SpeedController.a
