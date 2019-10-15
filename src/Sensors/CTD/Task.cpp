@@ -32,14 +32,14 @@
 
 namespace Sensors
 {
-  namespace EcoPuck
+  namespace CTD
   {
     using DUNE_NAMESPACES;
 
     //! Task arguments.
     struct Arguments
     {
-      //! GPIO state.
+      //! GPIO toggle.
       bool state;
     };
 
@@ -92,14 +92,17 @@ namespace Sensors
       onEntityResolution(void)
       {
       }
-      
+
       //! Acquire resources.
       void
       onResourceAcquisition(void)
       {
-        m_gpio = new Hardware::GPIO(64);
+        m_gpio = new Hardware::GPIO(66);
         m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
         m_gpio->setValue(0);
+        
+        // Set the task to sleep while the sensor is off
+        requestDeactivation();
       }
 
       //! Initialize resources.
@@ -118,8 +121,7 @@ namespace Sensors
       //! Main loop.
       void
       onMain(void)
-      { 
-        
+      {
         while (!stopping())
         {
           // protection to avoid dereferencing a NULL pointer

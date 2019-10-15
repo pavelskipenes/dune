@@ -24,22 +24,23 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: renalberto                                                       *
+// Author: renan                                                            *
 //***************************************************************************
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
+#include <DUNE/Hardware/GPIO.hpp>
 
 namespace Sensors
 {
-  namespace EcoPuck
+  namespace NortekADCP500
   {
     using DUNE_NAMESPACES;
 
     //! Task arguments.
     struct Arguments
     {
-      //! GPIO state.
+      //! GPIO toggle.
       bool state;
     };
 
@@ -92,14 +93,17 @@ namespace Sensors
       onEntityResolution(void)
       {
       }
-      
+
       //! Acquire resources.
       void
       onResourceAcquisition(void)
       {
-        m_gpio = new Hardware::GPIO(64);
+        m_gpio = new Hardware::GPIO(65);
         m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
         m_gpio->setValue(0);
+
+        // Set the task to sleep while the sensor is off
+        requestDeactivation();
       }
 
       //! Initialize resources.
@@ -118,8 +122,7 @@ namespace Sensors
       //! Main loop.
       void
       onMain(void)
-      { 
-        
+      {
         while (!stopping())
         {
           // protection to avoid dereferencing a NULL pointer
