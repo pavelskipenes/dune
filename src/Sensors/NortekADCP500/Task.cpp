@@ -47,7 +47,7 @@ namespace Sensors
     struct Task: public DUNE::Tasks::Task
     {
       Hardware::GPIO* m_gpio;
-      bool m_gpio_state;
+      bool m_state;           // Task and sensor state
       Arguments m_args;
       
       //! Constructor.
@@ -70,7 +70,7 @@ namespace Sensors
       {
         if (paramChanged(m_args.state))
         {
-          m_gpio_state = m_args.state;
+          m_state = m_args.state;
 
           // If sensor has been turned on, activate the task
           // If sensor has been turned off, deactivate the task
@@ -125,14 +125,15 @@ namespace Sensors
       {
         while (!stopping())
         {
-          // protection to avoid dereferencing a NULL pointer
-          if (m_gpio == NULL)
-            return;
+          // If task is active, do thing
+          if(isActive()){
+            // protection to avoid dereferencing a NULL pointer
+            if (m_gpio == NULL)
+              return;
+            m_gpio->setValue(m_state);
+          }
 
-          m_gpio->setValue(1);
-          Delay::wait(10.0);
-          m_gpio->setValue(0);
-          Delay::wait(10.0);
+          waitForMessages(0.01);
         }
       }
     };
