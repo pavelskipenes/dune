@@ -286,12 +286,10 @@ namespace Actuators
 
         if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"Relay Power Settings"))
         {
-        	//m_timer.setTop(2.0);
+        	m_timer.setTop(3.0);
         	pwr_sett_rec = true;
         	spew("NEW ENTITYYYYYYYYYYY: %s",resolveEntity(msg->getSourceEntity()).c_str());
         }
-
-        //sendNMEA();
 
         spew("pwrSettings consumed:%d%d%d%d%d%d",l2,l3,iridium,modem,pumps,vhf);
       }
@@ -501,17 +499,6 @@ namespace Actuators
         m_pwr_settings.pumps = pwrsettings5_int;
         m_pwr_settings.vhf= pwrsettings6_int;
 
-        l2 = pwrsettings1_int;
-        l3 = pwrsettings2_int;
-        iridium = pwrsettings3_int;
-        modem = pwrsettings4_int;
-        pumps = pwrsettings5_int;
-        vhf = pwrsettings6_int;
-
-        dispatch(m_pwr_settings);
-
-        /*
-       	
        	if(pwr_sett_rec==false)
        		dispatch(m_pwr_settings, DF_LOOP_BACK);
        	if(pwr_sett_rec==true && m_timer.overflow())
@@ -521,6 +508,8 @@ namespace Actuators
        		m_timer.reset();	
        	}
 
+
+        /*
         spew("POWER SETTINGS: %d", pwrsettings1_int);
         spew("POWER SETTINGS: %d", pwrsettings2_int);
         spew("POWER SETTINGS: %d", pwrsettings3_int);
