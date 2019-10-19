@@ -338,11 +338,11 @@ namespace
               //! Fake power settings.
               
               m_pwr_settings.l2=0;
-              m_pwr_settings.l3=0;
+              m_pwr_settings.l3=1;
               m_pwr_settings.iridium=0;
               m_pwr_settings.modem=0;
-              m_pwr_settings.pumps=0;
-              m_pwr_settings.vhf=1;
+              m_pwr_settings.pumps=1;
+              m_pwr_settings.vhf=0;
               dispatch(m_pwr_settings);
               
             }
