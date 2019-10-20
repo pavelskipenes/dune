@@ -98,6 +98,8 @@ namespace Sensors
       Hardware::GPIO* m_gpio;
       //! Sensor SSR state
       bool m_gpio_state;
+      //! Flag for activation
+      bool m_activate;
       //! Last compensated depth.
       double m_depth;
       //! Last defined salinity.
@@ -123,13 +125,14 @@ namespace Sensors
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx), 
         m_gpio(NULL),
+        m_activate(false),
         m_depth(0.0),
         m_salinity(0.0),
         m_temperature(0.0),
         m_uart(NULL)
       {
-        paramActive(Tasks::Parameter::SCOPE_IDLE,
-                    Tasks::Parameter::VISIBILITY_USER);
+        // paramActive(Tasks::Parameter::SCOPE_IDLE,
+        //             Tasks::Parameter::VISIBILITY_USER);
 
         // Define configuration parameters.
         param("GPIO - State", m_args.state)
@@ -164,7 +167,7 @@ namespace Sensors
         param(DTR_RT("Automatic Activation"), m_args.auto_activation)
         .defaultValue("false")
         .visibility(Tasks::Parameter::VISIBILITY_USER)
-        .scope(Tasks::Parameter::SCOPE_IDLE)
+        // .scope(Tasks::Parameter::SCOPE_IDLE)
         .description("Operator is able to control device");
 
         param("Entity Label - Temperature", m_args.elabel_temp)
@@ -182,7 +185,7 @@ namespace Sensors
       void
       onUpdateParameters(void)
       {
-        if (paramChanged(m_args.state))
+        if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.state))
         {
           m_gpio_state = m_args.state;
 
@@ -190,9 +193,15 @@ namespace Sensors
           // If sensor has been turned off, deactivate the task
           // SSRs are normally-closed (NC), so deactivation means GPIO state = 1
           if(m_args.state)
+          {
+            m_activate = false;
             requestDeactivation();
+          }
           else
+          {
+            m_activate = true;
             requestActivation();
+          }
         }
 
         if (isActive() && paramChanged(m_args.period))
@@ -522,8 +531,22 @@ namespace Sensors
         // Run while task is active
         while(!stopping())
         {
+          if(m_activate)
+          {
+            spew("Activating sensor and task");
+            m_gpio->setValue(0);
+            Delay::wait(2.0);
+          } else
+          {
+            spew("Deactivating sensor and task");
+            m_gpio->setValue(1);
+            Delay::wait(2.0);
+          }
+
+          // Get data from sensor
           listen();
 
+          // Not received communication for a while
           if (m_wdog.overflow())
           {
             setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
