@@ -45,8 +45,6 @@ namespace Actuators
   {
     using DUNE_NAMESPACES;
 
-
-
     struct Arguments
     {
       //! Serial port device.
@@ -115,11 +113,13 @@ namespace Actuators
       //! Power Settings String.
       std::string pwrSettings;
       //! Binary Integers for relays.
-      int l2, l3, iridium, modem, pumps, vhf;
+      // int l2, l3, iridium, modem, pumps, vhf;
       //! Check if Power Settings received from Task/Neptus.
       bool pwr_sett_rec;
       //! Characters to ignore in the beginning and end of a string.
       const char* c_blanks = " \t\r\n";
+      //! Number of retries to sync task pwrSettings with pwrSettings in CR6
+      int m_retries;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
@@ -177,10 +177,11 @@ namespace Actuators
         .defaultValue("000000")
         .description("User-defined relays settings on L1");
 
-
         bind<IMC::SetThrusterActuation>(this);
         bind<IMC::SetServoPosition>(this);
         bind<IMC::PowerSettings>(this);
+
+        setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_ACTIVATING);
       }
 
       void
@@ -198,7 +199,7 @@ namespace Actuators
       void
       onResourceAcquisition(void)
       {
-        //spew("Aquiring Serial Port: ");
+        debug("Aquiring Serial Port: ");
         try{
           m_uart = new SerialPort(m_args.uart_dev, m_args.uart_baud);
         }
@@ -207,91 +208,7 @@ namespace Actuators
           war(DTR("Connection problem - %s"), e.what());
           throw RestartNeeded(DTR("I/O error"), 5);
         }
-        //spew("*** Success m_uart = new Serial Port");
-        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-      }
-
-      //! Update internal state with new parameter values.
-      void
-      onUpdateParameters(void)
-      {
-        if(paramChanged(m_args.user_pwrSettings))
-        {
-        	int l2_new = m_args.user_pwrSettings[0]- '0';
-        	int l3_new = m_args.user_pwrSettings[1] - '0';
-        	int iridium_new = m_args.user_pwrSettings[2] - '0';
-        	int modem_new = m_args.user_pwrSettings[3]- '0';
-        	int pumps_new = m_args.user_pwrSettings[4]- '0';
-        	int vhf_new = m_args.user_pwrSettings[5]- '0';
-        	
-        	l2 = l2_new;
-          	l3 = l3_new;
-          	iridium = iridium_new;
-          	modem = modem_new;
-        	pumps = pumps_new;
-        	vhf = vhf_new;
-        	spew("DATA %d%d%d%d%d%d", l2,l3,iridium,modem,pumps,vhf);
-        	
-        	// Initialize timer to overflow after 3s.
-        	m_timer.setTop(3.0);
-        	pwr_sett_rec = true;
-        }
-      }
-
-      void
-      onResourceInitialization(void)
-      {
-        rudder_max = m_args.scale*10;
-        thrust_max = 100;
-      }
-
-      void
-      onResourceRelease(void)
-      {
-        Memory::clear(m_uart);
-      }
-
-      //! From SpeedController
-      void
-      consume(const IMC::SetThrusterActuation* msg)
-      {
-        // Ensure thruster acutation range [-max, max]
-        thruster_act = roundToInteger(msg->value * 100);
-        thruster_act = trimValue(thruster_act, -thrust_max, thrust_max);
-
-        spew("SetThrusterActuation value: %d", thruster_act);
-      }
-
-      //! From HeadingController
-      void
-      consume(const IMC::SetServoPosition* msg)
-      {
-        // Ensure rudder angle range [-max,max]. Scaled by 10 to become 3 digits, ex 450, then saturate.
-        rudder_cmd = roundToInteger(msg->value * m_args.scale*10);
-        rudder_cmd = trimValue(rudder_cmd, -rudder_max, rudder_max);
-
-        spew("ServoPosition value: %d", rudder_cmd);
-      }
-
-      //! Consume a PowerSettings Message.
-      void
-      consume(const IMC::PowerSettings* msg)
-      {
-        l2 = msg->l2;
-        l3 = msg->l3;
-        iridium = msg->iridium;
-        modem = msg->modem;
-        pumps = msg->pumps;
-        vhf = msg->vhf;
-
-        if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"Relay Power Settings"))
-        {
-        	m_timer.setTop(3.0);
-        	pwr_sett_rec = true;
-        	spew("NEW ENTITYYYYYYYYYYY: %s",resolveEntity(msg->getSourceEntity()).c_str());
-        }
-
-        spew("pwrSettings consumed:%d%d%d%d%d%d",l2,l3,iridium,modem,pumps,vhf);
+        debug("*** Success m_uart = new Serial Port");
       }
 
       //! Create NMEA & Controller Selector
@@ -309,17 +226,25 @@ namespace Actuators
 
         // Active controller selector: Remote or Heading &/or Speed
         if((!m_args.enable_thruster) && (!m_args.enable_heading)){		// User defines
-          stn << String::str("%d,%d", m_args.rudder_USER, m_args.thruster_USER) << String::str("%d%d%d%d%d%d",l2,l3,iridium,modem,pumps,vhf);
+          stn << String::str("%d,%d", m_args.rudder_USER, m_args.thruster_USER) 
+              << String::str("%d%d%d%d%d%d",m_pwr_settings.l2,m_pwr_settings.l3,m_pwr_settings.iridium,
+                                            m_pwr_settings.modem,m_pwr_settings.pumps,m_pwr_settings.vhf);
         }
         else if((m_args.enable_thruster) && (!m_args.enable_heading)){	// Speed-Controller
-          stn << String::str("%d,%d", m_args.rudder_USER, thruster_act) << String::str("%d%d%d%d%d%d",l2,l3,iridium,modem,pumps,vhf);
+          stn << String::str("%d,%d", m_args.rudder_USER, thruster_act) 
+              << String::str("%d%d%d%d%d%d",m_pwr_settings.l2,m_pwr_settings.l3,m_pwr_settings.iridium,
+                                            m_pwr_settings.modem,m_pwr_settings.pumps,m_pwr_settings.vhf);
         }
         else if((!m_args.enable_thruster) && (m_args.enable_heading)){	// Heading-Controller
-          stn << String::str("%d,%d", rudder_cmd, m_args.thruster_USER) << String::str("%d%d%d%d%d%d",l2,l3,iridium,modem,pumps,vhf);
+          stn << String::str("%d,%d", rudder_cmd, m_args.thruster_USER) 
+              << String::str("%d%d%d%d%d%d",m_pwr_settings.l2,m_pwr_settings.l3,m_pwr_settings.iridium,
+                                            m_pwr_settings.modem,m_pwr_settings.pumps,m_pwr_settings.vhf);
 
         }
         else{
-          stn << String::str("%d,%d", rudder_cmd, thruster_act) << String::str("%d%d%d%d%d%d",l2,l3,iridium,modem,pumps,vhf);		//	H- & S-Controller
+          stn << String::str("%d,%d", rudder_cmd, thruster_act) 
+              << String::str("%d%d%d%d%d%d",m_pwr_settings.l2,m_pwr_settings.l3,m_pwr_settings.iridium,
+                                            m_pwr_settings.modem,m_pwr_settings.pumps,m_pwr_settings.vhf);		//	H- & S-Controller
         }
 
         return stn.sentence();
@@ -342,17 +267,17 @@ namespace Actuators
         if (m_args.send_nmea)
         {
           stn_str = createNMEA();
+          // spew("sent: %s", stn_str.c_str());
           writeToUART(stn_str);
         }
       }
 
-
       //! Read UART buffer (message) & call processNMEA
       void
-      readUART(void)
+      readUART()
       {
-
         char bfr[c_bfr_size];
+
         try{
           size_t rv = m_uart->readString(bfr, sizeof(bfr));
 
@@ -361,12 +286,14 @@ namespace Actuators
           {
             if (bfr[i] == '\n')
             {
-              setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+              //setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
               spew("%s\n",m_line.c_str());
               // Process NMEA sentence.
-              extractNMEA(m_line);
+              if(!pwr_sett_rec)
+                extractNMEA(m_line);
 
               m_line.clear();
+              // sendToCR6();
               sendNMEA();
               break;
             }
@@ -382,51 +309,16 @@ namespace Actuators
           sendNMEA();
           m_line.clear();
         }
-
-/*
-        //! Original code - Got different checksum errors when reading NMEA. Now, it transmit when uart receives
-        char bfr[c_bfr_size];
-        size_t rv;
-        try
-        {
-          rv = m_uart->readString(bfr, sizeof(bfr));
-        }
-        catch (std::exception& e)
-        {
-          err("%s", e.what());
-          setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
-          throw RestartNeeded(DTR("I/O error"), 5);
-        }
-
-        if (rv == 0)
-        {
-          spew("rv = 0");
-          setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
-          throw RestartNeeded(DTR("I/O error"), 5);
-        }
-
-        //! Creates a string from the buffer - to be processed.
-        for (size_t i = 0; i < rv; ++i)
-        {
-        // Detected line termination.
-          if (bfr[i] == '\n')
-          { 
-            spew("%s\n",m_line.c_str());
-            processNMEA(m_line);															// Main difference - Processing NMEA
-            setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-            m_line.clear();
-          }
-          else
-          {
-            m_line.push_back(bfr[i]);
-          }
-        } */
       }
 
       //! Extract Info.
       void
       extractNMEA(const std::string sentence)
       {
+        // Check for empty string
+        if (sentence.length() == 0)
+          return;
+
         // Clean sentence beginning.
         size_t lead_idx = sentence.find_first_not_of(c_blanks);
         // Clean sentence end.
@@ -499,15 +391,7 @@ namespace Actuators
         m_pwr_settings.pumps = pwrsettings5_int;
         m_pwr_settings.vhf= pwrsettings6_int;
 
-       	if(pwr_sett_rec==false)
-       		dispatch(m_pwr_settings, DF_LOOP_BACK);
-       	if(pwr_sett_rec==true && m_timer.overflow())
-       	{
-       		dispatch(m_pwr_settings, DF_LOOP_BACK);
-       		pwr_sett_rec=false;
-       		m_timer.reset();	
-       	}
-
+        dispatch(m_pwr_settings);
 
         /*
         spew("POWER SETTINGS: %d", pwrsettings1_int);
@@ -520,44 +404,169 @@ namespace Actuators
         
       }
 
-
-      //! Process sentence & call sendNMEA **Not used in this implementation due to checksum errors when NMEAReader**
-      void
-      processNMEA(const std::string msg)
+      // Helper function to get a certain token from a string  
+      std::string getToken(std::string toParse, std::string delim, int n_token = 1)
       {
-        // Validate checksum and extract info of interest.
-        try
-        {
-          NMEAReader* const strn = new NMEAReader(msg);
-          if (std::strcmp(strn->code(), "CR601") == 0){
-            extractNMEA(msg);
-            sendNMEA();
+          std::string token;
+          for (int i = 0; i<n_token; i++)
+          {
+              token = toParse.substr(0, toParse.find(delim));
+              toParse.erase(0, toParse.find(delim) + delim.length());
           }
-          delete strn;
-        }
-        catch (std::exception& e)
-        {
-          //sendNMEA();
-          err("%s", e.what());
-          setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
-          throw RestartNeeded(DTR("I/O error"), 5);
+          return token;
+      }
+
+      void
+      sendToCR6()
+      {
+        // Create a NMEA string and send it back to L1
+        sendNMEA();
+
+        // Try to sync power settings
+        // If max_attempts > 0, try to compare the settings from L1 with the current settings
+        // If they match, exit successfully
+        int n_attempts = 0;
+        while(n_attempts < m_retries){
+          // Create a NMEA string and send it back to L1
+          sendNMEA();
+          
+          // Assemble string with current settings
+          std::string currSettings = String::str("%d%d%d%d%d%d",m_pwr_settings.l2,m_pwr_settings.l3,m_pwr_settings.iridium,
+                                            m_pwr_settings.modem,m_pwr_settings.pumps,m_pwr_settings.vhf);
+          // Get CR6 settings from UART
+          while(Poll::poll(*m_uart, 1.0));
+          readUART();
+          std::string recvSettings = getToken(m_line, ",", 3);  // Third token is the power settings
+          
+          // If settings match, exit successfully
+          if (currSettings.compare(recvSettings) == 0)
+          {
+            m_retries = 0;
+            pwr_sett_rec = false;
+            return;
+          } else
+            n_attempts++;
         }
 
+        m_retries = 0;
+      }
+
+      //! Update internal state with new parameter values.
+      void
+      onUpdateParameters(void)
+      {
+        if(getEntityState() == IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.user_pwrSettings))
+        {
+          m_pwr_settings.l2 = m_args.user_pwrSettings[0] - '0';
+        	m_pwr_settings.l3 = m_args.user_pwrSettings[1] - '0';
+        	m_pwr_settings.iridium = m_args.user_pwrSettings[2] - '0';
+        	m_pwr_settings.modem = m_args.user_pwrSettings[3] - '0';
+        	m_pwr_settings.pumps = m_args.user_pwrSettings[4] - '0';
+        	m_pwr_settings.vhf = m_args.user_pwrSettings[5] - '0';
+        	
+        	spew("Updated pwrSettings: %d%d%d%d%d%d",
+                                    m_pwr_settings.l2, m_pwr_settings.l3,
+                                    m_pwr_settings.iridium, m_pwr_settings.modem,
+                                    m_pwr_settings.pumps, m_pwr_settings.vhf);
+
+          // Set retries to compare between data from CR6 and new parameters
+          m_timer.setTop(3.0);
+          pwr_sett_rec = true;
+        }
+      }
+
+      void
+      onResourceInitialization(void)
+      {
+        rudder_max = m_args.scale*10;
+        thrust_max = 100;
+        
+        m_timer.reset();
+
+        // Set entity state so the task can begin
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+      }
+
+      void
+      onResourceRelease(void)
+      {
+        Memory::clear(m_uart);
+      }
+
+      //! From SpeedController
+      void
+      consume(const IMC::SetThrusterActuation* msg)
+      {
+        // Ensure thruster acutation range [-max, max]
+        thruster_act = roundToInteger(msg->value * 100);
+        thruster_act = trimValue(thruster_act, -thrust_max, thrust_max);
+
+        spew("SetThrusterActuation value: %d", thruster_act);
+      }
+
+      //! From HeadingController
+      void
+      consume(const IMC::SetServoPosition* msg)
+      {
+        // Ensure rudder angle range [-max,max]. Scaled by 10 to become 3 digits, ex 450, then saturate.
+        rudder_cmd = roundToInteger(msg->value * m_args.scale*10);
+        rudder_cmd = trimValue(rudder_cmd, -rudder_max, rudder_max);
+
+        spew("ServoPosition value: %d", rudder_cmd);
+      }
+
+      //! Consume a PowerSettings Message.
+      void
+      consume(const IMC::PowerSettings* msg)
+      {
+        m_pwr_settings.l2 = msg->l2;
+        m_pwr_settings.l3 = msg->l3;
+        m_pwr_settings.iridium = msg->iridium;
+        m_pwr_settings.modem = msg->modem;
+        m_pwr_settings.pumps = msg->pumps;
+        m_pwr_settings.vhf = msg->vhf;
+
+        // if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"Relay Power Settings"))
+        // {
+        // 	m_timer.setTop(3.0);
+        // 	pwr_sett_rec = true;
+        // 	debug("NEW ENTITYYYYYYYYYYY: %s",resolveEntity(msg->getSourceEntity()).c_str());
+        // }
+
+        spew("Received new pwrSettings through IMC:%d%d%d%d%d%d",
+                                              m_pwr_settings.l2, m_pwr_settings.l3,
+                                              m_pwr_settings.iridium, m_pwr_settings.modem,
+                                              m_pwr_settings.pumps, m_pwr_settings.vhf);
+
+        // Set retries to compare between data from CR6 and new parameters
+        m_timer.setTop(3.0);
+        pwr_sett_rec = true;
       }
 
       void
       onMain(void)
       {
+        // Wait until entity has normal state
+        while(getEntityState() != IMC::EntityState::ESTA_NORMAL);
+        spew("Beginning main task loop");
+
+        // Begin operation
         while (!stopping())
         {
-
-          consumeMessages();
-
-          if (Poll::poll(*m_uart, 1.0)){
-            readUART();
-            setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+          consumeMessages();          // Get IMC messages
+          if(Poll::poll(*m_uart, 1.0))
+          {
+            // spew("m_retries: %d", m_retries);
+            // spew("pwrset: %d", pwr_sett_rec);
+            readUART();    // Read 
+            
           }
 
+          if(m_timer.overflow())
+          {
+            pwr_sett_rec = false;
+            m_timer.reset();
+          }
         }
       }
     };
