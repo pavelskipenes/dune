@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: ec8ae6c8e72b7d9edd8ff47a9d1c3141                            *
+// IMC XML MD5: 8276afd2231790a289b4b93413c38162                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -13373,6 +13373,13 @@ namespace DUNE
     class StationKeeping: public Maneuver
     {
     public:
+      //! Flags.
+      enum FlagsBits
+      {
+        //! Keep safe behaviour.
+        FLG_KEEP_SAFE = 0x01
+      };
+
       //! Latitude WGS-84.
       fp64_t lat;
       //! Longitude WGS-84.
@@ -13389,6 +13396,12 @@ namespace DUNE
       fp32_t speed;
       //! Speed Units.
       uint8_t speed_units;
+      //! PopUp Period.
+      uint16_t popup_period;
+      //! PopUp Duration.
+      uint16_t popup_duration;
+      //! Flags.
+      uint8_t flags;
       //! Custom settings for maneuver.
       std::string custom;
 
@@ -13439,7 +13452,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 32;
+        return 37;
       }
 
       unsigned
