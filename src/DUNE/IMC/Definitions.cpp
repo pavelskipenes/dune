@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: ec8ae6c8e72b7d9edd8ff47a9d1c3141                            *
+// IMC XML MD5: 8276afd2231790a289b4b93413c38162                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -13859,6 +13859,9 @@ namespace DUNE
       duration = 0;
       speed = 0;
       speed_units = 0;
+      popup_period = 0;
+      popup_duration = 0;
+      flags = 0;
       custom.clear();
     }
 
@@ -13874,6 +13877,9 @@ namespace DUNE
       if (duration != other__.duration) return false;
       if (speed != other__.speed) return false;
       if (speed_units != other__.speed_units) return false;
+      if (popup_period != other__.popup_period) return false;
+      if (popup_duration != other__.popup_duration) return false;
+      if (flags != other__.flags) return false;
       if (custom != other__.custom) return false;
       return true;
     }
@@ -13898,6 +13904,9 @@ namespace DUNE
       ptr__ += IMC::serialize(duration, ptr__);
       ptr__ += IMC::serialize(speed, ptr__);
       ptr__ += IMC::serialize(speed_units, ptr__);
+      ptr__ += IMC::serialize(popup_period, ptr__);
+      ptr__ += IMC::serialize(popup_duration, ptr__);
+      ptr__ += IMC::serialize(flags, ptr__);
       ptr__ += IMC::serialize(custom, ptr__);
       return ptr__;
     }
@@ -13914,6 +13923,9 @@ namespace DUNE
       bfr__ += IMC::deserialize(duration, bfr__, size__);
       bfr__ += IMC::deserialize(speed, bfr__, size__);
       bfr__ += IMC::deserialize(speed_units, bfr__, size__);
+      bfr__ += IMC::deserialize(popup_period, bfr__, size__);
+      bfr__ += IMC::deserialize(popup_duration, bfr__, size__);
+      bfr__ += IMC::deserialize(flags, bfr__, size__);
       bfr__ += IMC::deserialize(custom, bfr__, size__);
       return bfr__ - start__;
     }
@@ -13930,6 +13942,9 @@ namespace DUNE
       bfr__ += IMC::reverseDeserialize(duration, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(speed, bfr__, size__);
       bfr__ += IMC::deserialize(speed_units, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(popup_period, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(popup_duration, bfr__, size__);
+      bfr__ += IMC::deserialize(flags, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(custom, bfr__, size__);
       return bfr__ - start__;
     }
@@ -13945,6 +13960,9 @@ namespace DUNE
       IMC::toJSON(os__, "duration", duration, nindent__);
       IMC::toJSON(os__, "speed", speed, nindent__);
       IMC::toJSON(os__, "speed_units", speed_units, nindent__);
+      IMC::toJSON(os__, "popup_period", popup_period, nindent__);
+      IMC::toJSON(os__, "popup_duration", popup_duration, nindent__);
+      IMC::toJSON(os__, "flags", flags, nindent__);
       IMC::toJSON(os__, "custom", custom, nindent__);
     }
 
