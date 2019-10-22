@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 8276afd2231790a289b4b93413c38162                            *
+// IMC XML MD5: 71d10281f7021f2c8a74ac9846be925b                            *
 //***************************************************************************
 
 MESSAGE(1, EntityState)
@@ -347,4 +347,6 @@ MESSAGE(2006, TotalMagIntensity)
 MESSAGE(910, Power)
 MESSAGE(911, EstimatedFreq)
 MESSAGE(912, PowerSettings)
+MESSAGE(913, VesselWind)
+MESSAGE(914, RelativeWind)
 #undef MESSAGE

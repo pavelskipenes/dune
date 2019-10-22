@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 8276afd2231790a289b4b93413c38162                            *
+// IMC XML MD5: 71d10281f7021f2c8a74ac9846be925b                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -27059,6 +27059,142 @@ namespace DUNE
       IMC::toJSON(os__, "modem", modem, nindent__);
       IMC::toJSON(os__, "pumps", pumps, nindent__);
       IMC::toJSON(os__, "vhf", vhf, nindent__);
+    }
+
+    VesselWind::VesselWind(void)
+    {
+      m_header.mgid = 913;
+      clear();
+    }
+
+    void
+    VesselWind::clear(void)
+    {
+      angle = 0;
+      reference.clear();
+      speed = 0;
+    }
+
+    bool
+    VesselWind::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::VesselWind& other__ = static_cast<const VesselWind&>(msg__);
+      if (angle != other__.angle) return false;
+      if (reference != other__.reference) return false;
+      if (speed != other__.speed) return false;
+      return true;
+    }
+
+    int
+    VesselWind::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    VesselWind::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(angle, ptr__);
+      ptr__ += IMC::serialize(reference, ptr__);
+      ptr__ += IMC::serialize(speed, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    VesselWind::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(angle, bfr__, size__);
+      bfr__ += IMC::deserialize(reference, bfr__, size__);
+      bfr__ += IMC::deserialize(speed, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    VesselWind::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(angle, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(reference, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(speed, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    VesselWind::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "angle", angle, nindent__);
+      IMC::toJSON(os__, "reference", reference, nindent__);
+      IMC::toJSON(os__, "speed", speed, nindent__);
+    }
+
+    RelativeWind::RelativeWind(void)
+    {
+      m_header.mgid = 914;
+      clear();
+    }
+
+    void
+    RelativeWind::clear(void)
+    {
+      angle = 0;
+      direction.clear();
+      speed = 0;
+    }
+
+    bool
+    RelativeWind::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::RelativeWind& other__ = static_cast<const RelativeWind&>(msg__);
+      if (angle != other__.angle) return false;
+      if (direction != other__.direction) return false;
+      if (speed != other__.speed) return false;
+      return true;
+    }
+
+    int
+    RelativeWind::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    RelativeWind::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(angle, ptr__);
+      ptr__ += IMC::serialize(direction, ptr__);
+      ptr__ += IMC::serialize(speed, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    RelativeWind::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(angle, bfr__, size__);
+      bfr__ += IMC::deserialize(direction, bfr__, size__);
+      bfr__ += IMC::deserialize(speed, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    RelativeWind::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(angle, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(direction, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(speed, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    RelativeWind::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "angle", angle, nindent__);
+      IMC::toJSON(os__, "direction", direction, nindent__);
+      IMC::toJSON(os__, "speed", speed, nindent__);
     }
   }
 }

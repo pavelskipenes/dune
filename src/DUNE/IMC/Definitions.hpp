@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 8276afd2231790a289b4b93413c38162                            *
+// IMC XML MD5: 71d10281f7021f2c8a74ac9846be925b                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -25475,6 +25475,148 @@ namespace DUNE
       getFixedSerializationSize(void) const
       {
         return 6;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Vessel Wind.
+    class VesselWind: public Message
+    {
+    public:
+      //! Angle.
+      fp32_t angle;
+      //! Reference.
+      std::string reference;
+      //! Speed.
+      fp32_t speed;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 913;
+      }
+
+      VesselWind(void);
+
+      VesselWind*
+      clone(void) const
+      {
+        return new VesselWind(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return VesselWind::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "VesselWind";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 8;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(reference);
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Relative Wind.
+    class RelativeWind: public Message
+    {
+    public:
+      //! Angle.
+      fp32_t angle;
+      //! Direction.
+      std::string direction;
+      //! Speed.
+      fp32_t speed;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 914;
+      }
+
+      RelativeWind(void);
+
+      RelativeWind*
+      clone(void) const
+      {
+        return new RelativeWind(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return RelativeWind::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "RelativeWind";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 8;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(direction);
       }
 
       void

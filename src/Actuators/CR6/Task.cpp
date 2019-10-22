@@ -216,8 +216,8 @@ namespace Actuators
       {
         /* NMEA sentence description:
         // eg1. $BBB01,ACT,450,-100*43!(checksum)
-        //        BBB01		Name of unit
-        //		  ACT		Type of message
+        //        BBB01        Name of unit
+        //          ACT        Type of message
         //        450           Desired heading, degrees
         //       -100           Thruster actuation, percent
         */
@@ -225,26 +225,26 @@ namespace Actuators
         NMEAWriter stn("BBB01");
 
         // Active controller selector: Remote or Heading &/or Speed
-        if((!m_args.enable_thruster) && (!m_args.enable_heading)){		// User defines
-          stn << String::str("%d,%d", m_args.rudder_USER, m_args.thruster_USER) 
+        if((!m_args.enable_thruster) && (!m_args.enable_heading)){        // User defines
+          stn << String::str("%d,%d", m_args.rudder_USER, m_args.thruster_USER)
               << String::str("%d%d%d%d%d%d",m_pwr_settings.l2,m_pwr_settings.l3,m_pwr_settings.iridium,
                                             m_pwr_settings.modem,m_pwr_settings.pumps,m_pwr_settings.vhf);
         }
-        else if((m_args.enable_thruster) && (!m_args.enable_heading)){	// Speed-Controller
-          stn << String::str("%d,%d", m_args.rudder_USER, thruster_act) 
+        else if((m_args.enable_thruster) && (!m_args.enable_heading)){    // Speed-Controller
+          stn << String::str("%d,%d", m_args.rudder_USER, thruster_act)
               << String::str("%d%d%d%d%d%d",m_pwr_settings.l2,m_pwr_settings.l3,m_pwr_settings.iridium,
                                             m_pwr_settings.modem,m_pwr_settings.pumps,m_pwr_settings.vhf);
         }
-        else if((!m_args.enable_thruster) && (m_args.enable_heading)){	// Heading-Controller
-          stn << String::str("%d,%d", rudder_cmd, m_args.thruster_USER) 
+        else if((!m_args.enable_thruster) && (m_args.enable_heading)){    // Heading-Controller
+          stn << String::str("%d,%d", rudder_cmd, m_args.thruster_USER)
               << String::str("%d%d%d%d%d%d",m_pwr_settings.l2,m_pwr_settings.l3,m_pwr_settings.iridium,
                                             m_pwr_settings.modem,m_pwr_settings.pumps,m_pwr_settings.vhf);
 
         }
         else{
-          stn << String::str("%d,%d", rudder_cmd, thruster_act) 
+          stn << String::str("%d,%d", rudder_cmd, thruster_act)
               << String::str("%d%d%d%d%d%d",m_pwr_settings.l2,m_pwr_settings.l3,m_pwr_settings.iridium,
-                                            m_pwr_settings.modem,m_pwr_settings.pumps,m_pwr_settings.vhf);		//	H- & S-Controller
+                                            m_pwr_settings.modem,m_pwr_settings.pumps,m_pwr_settings.vhf);        //    H- & S-Controller
         }
 
         return stn.sentence();
@@ -393,6 +393,13 @@ namespace Actuators
 
         dispatch(m_pwr_settings);
 
+        char to_nept[6];
+        sprintf(to_nept, "%d%d%d%d%d%d",  m_pwr_settings.l2, m_pwr_settings.l3,
+            m_pwr_settings.iridium, m_pwr_settings.modem,
+            m_pwr_settings.pumps, m_pwr_settings.vhf);
+
+        m_args.user_pwrSettings = to_nept;
+
         /*
         spew("POWER SETTINGS: %d", pwrsettings1_int);
         spew("POWER SETTINGS: %d", pwrsettings2_int);
@@ -458,13 +465,13 @@ namespace Actuators
         if(getEntityState() == IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.user_pwrSettings))
         {
           m_pwr_settings.l2 = m_args.user_pwrSettings[0] - '0';
-        	m_pwr_settings.l3 = m_args.user_pwrSettings[1] - '0';
-        	m_pwr_settings.iridium = m_args.user_pwrSettings[2] - '0';
-        	m_pwr_settings.modem = m_args.user_pwrSettings[3] - '0';
-        	m_pwr_settings.pumps = m_args.user_pwrSettings[4] - '0';
-        	m_pwr_settings.vhf = m_args.user_pwrSettings[5] - '0';
-        	
-        	spew("Updated pwrSettings: %d%d%d%d%d%d",
+            m_pwr_settings.l3 = m_args.user_pwrSettings[1] - '0';
+            m_pwr_settings.iridium = m_args.user_pwrSettings[2] - '0';
+            m_pwr_settings.modem = m_args.user_pwrSettings[3] - '0';
+            m_pwr_settings.pumps = m_args.user_pwrSettings[4] - '0';
+            m_pwr_settings.vhf = m_args.user_pwrSettings[5] - '0';
+            
+            spew("Updated pwrSettings: %d%d%d%d%d%d",
                                     m_pwr_settings.l2, m_pwr_settings.l3,
                                     m_pwr_settings.iridium, m_pwr_settings.modem,
                                     m_pwr_settings.pumps, m_pwr_settings.vhf);
@@ -528,9 +535,9 @@ namespace Actuators
 
         // if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"Relay Power Settings"))
         // {
-        // 	m_timer.setTop(3.0);
-        // 	pwr_sett_rec = true;
-        // 	debug("NEW ENTITYYYYYYYYYYY: %s",resolveEntity(msg->getSourceEntity()).c_str());
+        //     m_timer.setTop(3.0);
+        //     pwr_sett_rec = true;
+        //     debug("NEW ENTITYYYYYYYYYYY: %s",resolveEntity(msg->getSourceEntity()).c_str());
         // }
 
         spew("Received new pwrSettings through IMC:%d%d%d%d%d%d",
@@ -541,6 +548,13 @@ namespace Actuators
         // Set retries to compare between data from CR6 and new parameters
         m_timer.setTop(3.0);
         pwr_sett_rec = true;
+
+        char out[6];
+        sprintf(out, "%d%d%d%d%d%d",  m_pwr_settings.l2, m_pwr_settings.l3,
+            m_pwr_settings.iridium, m_pwr_settings.modem,
+            m_pwr_settings.pumps, m_pwr_settings.vhf);
+
+        m_args.user_pwrSettings = out;
       }
 
       void
@@ -558,7 +572,7 @@ namespace Actuators
           {
             // spew("m_retries: %d", m_retries);
             // spew("pwrset: %d", pwr_sett_rec);
-            readUART();    // Read 
+            readUART();    // Read
             
           }
 

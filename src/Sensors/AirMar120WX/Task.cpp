@@ -251,7 +251,7 @@ namespace Sensors
           {
             double angle = std::atof(getToken(m_line, ",", 2).c_str());
             std::string ref = getToken(m_line, ",", 3);
-            double speed = std::atof(getToken(m_line, ",", 4).c_str()); // From knots to m/s
+            double speed = std::atof(getToken(m_line, ",", 4).c_str());
             m_vessel_wind.angle = angle;
             m_vessel_wind.reference = ref;
             m_vessel_wind.speed = speed * 0.514;  // From knots to m/s

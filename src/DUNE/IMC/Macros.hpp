@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 8276afd2231790a289b4b93413c38162                            *
+// IMC XML MD5: 71d10281f7021f2c8a74ac9846be925b                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -666,5 +666,9 @@
 #define DUNE_IMC_ESTIMATEDFREQ 911
 //! PowerSettings identification number.
 #define DUNE_IMC_POWERSETTINGS 912
+//! VesselWind identification number.
+#define DUNE_IMC_VESSELWIND 913
+//! RelativeWind identification number.
+#define DUNE_IMC_RELATIVEWIND 914
 
 #endif
