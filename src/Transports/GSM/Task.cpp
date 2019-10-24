@@ -108,6 +108,8 @@ namespace Transports
       unsigned balance_per;
     };
 
+    static const std::string c_balance_request_param = "Request Balance";
+
     struct Task: public DUNE::Tasks::Task
     {
       //! Serial port handle.
@@ -135,7 +137,7 @@ namespace Transports
       int m_rssi;
 
 
-        Task(const std::string& name, Tasks::Context& ctx):
+      Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
         m_uart(NULL),
         m_driver(NULL),
@@ -179,15 +181,16 @@ namespace Transports
         .defaultValue("123")
         .description("USSD code");
 
-        param("Enable Balance Request", m_args.request_balance)
-        .defaultValue("false")
+        param("Request Balance", m_args.request_balance)
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .scope(Tasks::Parameter::SCOPE_GLOBAL)
+        .defaultValue("true")
         .description("Enable Balance Request");
 
         param("Balance Periodicity", m_args.balance_per)
-                .defaultValue("60")
-                .description("Balance Periodicity");
+        .defaultValue("60")
+        .description("Balance Periodicity");
 
-        bind<IMC::Sms>(this);
         bind<IMC::SmsRequest>(this);
         bind<IMC::IoEvent>(this);
       }
@@ -221,6 +224,7 @@ namespace Transports
           debug("manufacturer: %s", m_driver->getManufacturer().c_str());
           debug("model: %s", m_driver->getModel().c_str());
           debug("IMEI: %s", m_driver->getIMEI().c_str());
+          annouceNumber();
         }
         catch (std::runtime_error& e)
         {
@@ -232,14 +236,7 @@ namespace Transports
       void
       onResourceInitialization(void)
       {
-        setEntityState(IMC::EntityState::ESTA_NORMAL , getMessage(Status::CODE_IDLE).c_str());
-          if (m_args.request_balance) {
-              if (m_driver->getBalance(m_args.ussd_code, m_balance)) {
-                  m_success_balance = true;
-                  m_balance_timer.reset();
-                  setEntityState(IMC::EntityState::ESTA_NORMAL, getMessage(Status::CODE_ACTIVE).c_str());
-                 }
-             }
+        setEntityState(IMC::EntityState::ESTA_NORMAL, getMessage(Status::CODE_IDLE).c_str());
       }
 
       void
@@ -281,21 +278,6 @@ namespace Transports
         dispatch(sms_status);
       }
 
-    void
-    consume(const IMC::Sms* msg)
-    {
-      //Conversion to SmsRequest Message
-      IMC::SmsRequest sms_req;
-      //FIXME verify if req_id already exists
-      sms_req.req_id      = m_req_id++;
-      sms_req.destination = msg->number;
-      sms_req.sms_text    = msg->contents;
-      sms_req.timeout = msg->timeout;
-      sms_req.setSource(msg->getSource());
-      sms_req.setSourceEntity(msg->getSourceEntity());
-      dispatch(sms_req,DF_LOOP_BACK);
-    }
-
       void
       consume(const IMC::SmsRequest* msg)
       {
@@ -306,7 +288,7 @@ namespace Transports
         sms_req.src_adr     = msg->getSource();
         sms_req.src_eid     = msg->getSourceEntity();
 
-        if (msg->timeout == 0)
+        if (msg->timeout <= 0)
         {
           sendSmsStatus(&sms_req,IMC::SmsStatus::SMSSTAT_INPUT_FAILURE,"SMS timeout cannot be zero");
           inf("%s", DTR("SMS timeout cannot be zero"));
@@ -324,15 +306,34 @@ namespace Transports
       }
 
       void
+      annouceNumber(void)
+      {
+        std::string number = m_driver->getOwnNumber();
+        if (number != "")
+        {
+
+          std::stringstream os;
+          os << "imc+gsm://" << number << "/";
+
+          IMC::AnnounceService announce;
+          announce.service = os.str();
+          announce.service_type = IMC::AnnounceService::SRV_TYPE_EXTERNAL;
+
+          dispatch(announce);
+
+        }
+      }
+
+      void
       processQueue(void)
       {
         if (m_queue.empty())
         {
-          setEntityState(IMC::EntityState::ESTA_NORMAL , getMessage(Status::CODE_IDLE).c_str());
+          setEntityState(IMC::EntityState::ESTA_NORMAL, getMessage(Status::CODE_IDLE).c_str());
           return;
         }
 
-        setEntityState(IMC::EntityState::ESTA_NORMAL , getMessage(Status::CODE_ACTIVE).c_str());
+        setEntityState(IMC::EntityState::ESTA_NORMAL, getMessage(Status::CODE_ACTIVE).c_str());
 
         SmsRequest sms_req = m_queue.top();
         m_queue.pop();
@@ -340,7 +341,7 @@ namespace Transports
         // Message is too old, discard it.
         if (Time::Clock::getSinceEpoch() >= sms_req.deadline)
         {
-          sendSmsStatus(&sms_req,IMC::SmsStatus::SMSSTAT_ERROR,DTR("SMS timeout"));
+          sendSmsStatus(&sms_req,IMC::SmsStatus::SMSSTAT_INPUT_FAILURE,DTR("SMS timeout"));
           war(DTR("discarded expired SMS to recipient %s"), sms_req.destination.c_str());
           return;
         }
@@ -370,7 +371,6 @@ namespace Transports
           {
             m_rssi_timer.reset();
             m_rssi = m_driver->getRSSI();
-
           }
 
           if (m_rsms_timer.overflow())
@@ -386,6 +386,25 @@ namespace Transports
         }
       }
 
+      void checkBalance(void)
+      {
+        if(m_args.request_balance)
+        {
+          if(m_driver->getBalance(m_args.ussd_code, m_balance))
+            setEntityState(IMC::EntityState::ESTA_NORMAL, getMessage(Status::CODE_ACTIVE).c_str());
+
+          m_args.request_balance = false;
+
+          IMC::SetEntityParameters msg;
+          IMC::EntityParameter balance_param;
+          balance_param.name = c_balance_request_param;
+          balance_param.value = "false";
+          msg.params.push_back(balance_param);
+          msg.name = getEntityLabel();
+          dispatch(msg, DF_LOOP_BACK);
+        }
+      }
+
       void
       onMain(void)
       {
@@ -395,24 +414,14 @@ namespace Transports
           pollStatus();
           processQueue();
 
-          if(m_args.request_balance) {
-            if (m_balance_timer.overflow() || (!m_success_balance && m_rssi > 0)){
-                if(m_driver->getBalance(m_args.ussd_code, m_balance)) {
-                    m_success_balance = true;
-                    m_balance_timer.reset();
-                    setEntityState(IMC::EntityState::ESTA_NORMAL, getMessage(Status::CODE_ACTIVE).c_str());
-                }
-                else {
-                    m_success_balance = false;
-                }
-            }
-          }
+          checkBalance();
+
         }
       }
 
       std::string
-      getMessage(Status::Code code){
-
+      getMessage(Status::Code code)
+      {
         std::stringstream ss;
         ss << getString(code) << m_balance;
 

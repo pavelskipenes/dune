@@ -137,7 +137,7 @@ namespace Control
         //! Has Power Module
         bool pwrm;
         //! WP seconds before reach
-        int secs;
+        float secs;
         //! WP Copter: Minimum wp switch radius
         float cp_wp_radius;
         //! RC setup
@@ -932,20 +932,23 @@ namespace Control
             return;
           }
 
-          uint8_t buf[512], mode;
+          uint8_t buf[512];
           mavlink_message_t msg;
           uint16_t n;
 
-          // Copters must first be set to guided as of AC 3.2
-          // Planes must first be set to guided as of AP 3.3.0
-          mode = (m_vehicle_type == VEHICLE_COPTER) ? (uint8_t)CP_MODE_GUIDED : (uint8_t)PL_MODE_GUIDED;
-          mavlink_msg_set_mode_pack(255, 0, &msg,
-                                    m_sysid,
-                                    1,
-                                    mode);
-          n = mavlink_msg_to_send_buffer(buf, &msg);
-          sendData(buf, n);
-          debug("Guided MODE on ardupilot is set.");
+          if (!((m_mode == CP_MODE_GUIDED) || (m_mode == PL_MODE_GUIDED)))
+          {
+            // Copters must first be set to guided as of AC 3.2
+            // Planes must first be set to guided as of AP 3.3.0
+            uint8_t mode = (m_vehicle_type == VEHICLE_COPTER) ? (uint8_t)CP_MODE_GUIDED : (uint8_t)PL_MODE_GUIDED;
+            mavlink_msg_set_mode_pack(255, 0, &msg,
+                                      m_sysid,
+                                      1,
+                                      mode);
+            n = mavlink_msg_to_send_buffer(buf, &msg);
+            sendData(buf, n);
+            debug("Guided MODE on ardupilot is set.");
+          }
 
           //! Setting airspeed parameter
           if (m_vehicle_type == VEHICLE_COPTER)
@@ -1768,25 +1771,30 @@ namespace Control
           double tstamp = Clock::getSinceEpoch();
 
           IMC::Acceleration acce;
-          acce.x = raw.xacc;
-          acce.y = raw.yacc;
-          acce.z = raw.zacc;
+          // raw_imu acc unit is in milli gs
+          // g used in AP is 9.80665 (see libraries/AP_Math/definitions.h)
+          acce.x = raw.xacc*0.001*9.80665;
+          acce.y = raw.yacc*0.001*9.80665;
+          acce.z = raw.zacc*0.001*9.80665;
           acce.setTimeStamp(tstamp);
-          dispatch(acce);
+          dispatch(acce, DF_KEEP_TIME);
 
+          // raw_imu ars unit is milli rad/s
           IMC::AngularVelocity avel;
-          avel.x = raw.xgyro;
-          avel.y = raw.ygyro;
-          avel.z = raw.zgyro;
+          avel.x = raw.xgyro*0.001;
+          avel.y = raw.ygyro*0.001;
+          avel.z = raw.zgyro*0.001;
           avel.setTimeStamp(tstamp);
-          dispatch(avel);
+          dispatch(avel, DF_KEEP_TIME);
 
+          // raw_imu mag unit is milli Tesla
+          // IMC mag unit is Gauss = 10^-4 Tesla
           IMC::MagneticField magn;
-          magn.x = raw.xmag;
-          magn.y = raw.ymag;
-          magn.z = raw.zmag;
+          magn.x = raw.xmag*0.1;
+          magn.y = raw.ymag*0.1;
+          magn.z = raw.zmag*0.1;
           magn.setTimeStamp(tstamp);
-          dispatch(magn);
+          dispatch(magn, DF_KEEP_TIME);
         }
 
         void
@@ -1811,12 +1819,16 @@ namespace Control
               m_hae_offset = wmm.height(m_lat, m_lon);
               m_reboot = false;
               m_offset_st = true;
+              debug("Height offset at %3.10f/%3.10f is %f", Angles::degrees(m_lat), Angles::degrees(m_lon), m_hae_offset);
             }
           }
-          else
+          else if (m_args.convert_msl == false)
           {
             m_hae_offset = 0;
+            m_offset_st = false;
+            debug("Height offset set to zero (convert?%d, gpstype: %d)",m_args.convert_msl, m_fix.type);
           }
+          //else: m_args.convert_msl is true, but we do not have/have lost GPS: leave m_hae_offset as is
 
           m_estate.lat = m_lat;
           m_estate.lon = m_lon;
@@ -1840,7 +1852,8 @@ namespace Control
           m_estate.depth = -1;
 
           // Save WGS84 height on the ground
-          m_href = m_estate.height;
+          if(m_ground)
+            m_href = m_estate.height;
         }
 
         float
@@ -2175,8 +2188,10 @@ namespace Control
           IMC::DesiredHeading d_head;
           IMC::DesiredZ d_z;
 
-          // As wp_dist is an integer, we calculate distance manually.
-          float copter_distance = 0;
+          // As wp_dist is an integer, and to avoid timing problems with the wp_dist 
+          // not being updated directly after a WP is accepted (sometimes causing two WPs 
+          // to be accepted at the "same" time), we calculate distance manually.
+          float wp_distance = 0;
 
           if (m_vehicle_type == VEHICLE_COPTER)
           {
@@ -2194,12 +2209,29 @@ namespace Control
                                 m_dpath.end_lat, m_dpath.end_lon, alt,
                                 &destination(0), &destination(1), &destination(2));
 
-            copter_distance = (destination - current_pos).norm_2();
-
-            // Store mavlink distance.
-            nav_out.wp_dist = (uint16_t) copter_distance;
-            trace("Copter waypoint dist now: %0.2f", copter_distance);
+            wp_distance = (destination - current_pos).norm_2();
           }
+          else
+          {
+            //Fixed-wing: do not care about height
+            // Calc distance between desired location and current location
+            Matrix destination = Matrix(2, 1, 0.0);
+            Matrix current_pos = Matrix(2, 1, 0.0);
+            current_pos(0) = m_estate.x;
+            current_pos(1) = m_estate.y;
+
+            float alt = (m_dpath.end_z_units & IMC::Z_NONE) ? m_args.alt : (float)m_dpath.end_z;
+
+            WGS84::displacement(m_estate.lat, m_estate.lon, m_estate.height,
+                                m_dpath.end_lat, m_dpath.end_lon, alt,
+                                &destination(0), &destination(1));
+
+            wp_distance = (destination - current_pos).norm_2();
+          }
+
+          // Store mavlink distance.
+          if(!m_service)
+            nav_out.wp_dist = (uint16_t) wp_distance;
 
           d_roll.value = Angles::radians(nav_out.nav_roll);
           d_pitch.value = Angles::radians(nav_out.nav_pitch);
@@ -2225,12 +2257,12 @@ namespace Control
           if (m_vehicle_type == VEHICLE_COPTER)
             is_valid_mode = (m_mode == CP_MODE_GUIDED || (m_mode == CP_MODE_AUTO                     )) ? true : false;
           else
-            is_valid_mode = (m_mode == 15             || (m_mode == 10           && m_current_wp == 3)) ? true : false;
+            is_valid_mode = (m_mode == PL_MODE_GUIDED || (m_mode == PL_MODE_AUTO && m_current_wp == 3)) ? true : false;
 
           // Check Loiter tolerance
           if (m_vehicle_type == VEHICLE_COPTER)
           {
-            if ((copter_distance <= m_args.ltolerance)
+            if ((wp_distance <= m_args.ltolerance)
                && is_valid_mode)
             {
               m_pcs.flags |= PathControlState::FL_LOITERING;
@@ -2238,8 +2270,8 @@ namespace Control
           }
           else
           {
-            if ((nav_out.wp_dist <= m_desired_radius + m_args.ltolerance)
-               && (nav_out.wp_dist >= m_desired_radius - m_args.ltolerance)
+            if ((wp_distance <= m_desired_radius + m_args.ltolerance)
+               && (wp_distance >= m_desired_radius - m_args.ltolerance)
                && is_valid_mode)
             {
               m_pcs.flags |= PathControlState::FL_LOITERING;
@@ -2252,30 +2284,37 @@ namespace Control
           if (m_vehicle_type == VEHICLE_COPTER)
           {
             is_near = (!m_changing_wp
-                && (copter_distance <= m_args.secs * m_gnd_speed
-                    || copter_distance <= m_args.cp_wp_radius)
+                && (wp_distance <= m_args.secs * m_gnd_speed
+                    || wp_distance <= m_args.cp_wp_radius)
                 && is_valid_mode
                 && since_last_wp > 1.0);
           }
           else
           {
+            /* TODO: check ground speed? */
             is_near = (!m_changing_wp
-                && (nav_out.wp_dist <= m_desired_radius + m_args.secs * m_gnd_speed)
-                && (nav_out.wp_dist >= m_desired_radius - m_args.secs * m_gnd_speed)
+                && (wp_distance <= m_desired_radius + m_args.secs * m_gnd_speed)
+                && (wp_distance >= m_desired_radius - m_args.secs * m_gnd_speed)
                 && is_valid_mode
                 && since_last_wp > 1.0);
           }
 
           if (is_near)
           {
+            spew("Is near! dist: %f, rad: %d, gs: %d",wp_distance, m_desired_radius,m_gnd_speed);
             m_pcs.flags |= PathControlState::FL_NEAR;
           }
 
-          if (m_last_wp && since_last_wp > 1.5)
+          // last sent WP took too long. lost? Try again
+          if (m_changing_wp && since_last_wp > 1.5)
+          {
+            war("WP sent to AP not confirmed. Trying to resend");
             receive(&m_dpath);
+          }
+          m_pcs.y = nav_out.xtrack_error;
 
           if (m_gnd_speed)
-            m_pcs.eta = nav_out.wp_dist / m_gnd_speed;
+            m_pcs.eta = wp_distance / m_gnd_speed;
 
           dispatch(m_pcs);
         }

@@ -393,24 +393,32 @@ namespace Actuators
 
         dispatch(m_pwr_settings);
 
-        char to_nept[6];
-        sprintf(to_nept, "%d%d%d%d%d%d",  m_pwr_settings.l2, m_pwr_settings.l3,
-            m_pwr_settings.iridium, m_pwr_settings.modem,
-            m_pwr_settings.pumps, m_pwr_settings.vhf);
+        storePowerSettings();
 
-        m_args.user_pwrSettings = to_nept;
-
-        /*
-        spew("POWER SETTINGS: %d", pwrsettings1_int);
-        spew("POWER SETTINGS: %d", pwrsettings2_int);
-        spew("POWER SETTINGS: %d", pwrsettings3_int);
-        spew("POWER SETTINGS: %d", pwrsettings4_int);
-        spew("POWER SETTINGS: %d", pwrsettings5_int);
-        spew("POWER SETTINGS: %d", pwrsettings6_int);
-        */
-        
       }
 
+      void
+      storePowerSettings()
+      {
+        char sett[7];
+
+        sprintf(sett, "%d%d%d%d%d%d", m_pwr_settings.l2, m_pwr_settings.l3, m_pwr_settings.iridium, m_pwr_settings.modem,
+         m_pwr_settings.pumps, m_pwr_settings.vhf);
+        m_args.user_pwrSettings = sett;
+        m_ctx.config.set("Actuators.CR6", "Power Settings", m_args.user_pwrSettings);
+          
+        IMC::EntityParameter parameter;
+        parameter.name = "Power Settings";
+        parameter.value = m_args.user_pwrSettings;
+       
+        IMC::SetEntityParameters params;
+        params.params.push_back(parameter);
+        params.name = "Servo Serial";
+
+        dispatch(params, DF_LOOP_BACK);
+        spew("Power settings have been set to %s.", m_args.user_pwrSettings.c_str());
+      }
+      
       // Helper function to get a certain token from a string  
       std::string getToken(std::string toParse, std::string delim, int n_token = 1)
       {
@@ -549,12 +557,8 @@ namespace Actuators
         m_timer.setTop(3.0);
         pwr_sett_rec = true;
 
-        char out[6];
-        sprintf(out, "%d%d%d%d%d%d",  m_pwr_settings.l2, m_pwr_settings.l3,
-            m_pwr_settings.iridium, m_pwr_settings.modem,
-            m_pwr_settings.pumps, m_pwr_settings.vhf);
-
-        m_args.user_pwrSettings = out;
+        storePowerSettings();
+      
       }
 
       void
@@ -570,8 +574,10 @@ namespace Actuators
           consumeMessages();          // Get IMC messages
           if(Poll::poll(*m_uart, 1.0))
           {
-            // spew("m_retries: %d", m_retries);
-            // spew("pwrset: %d", pwr_sett_rec);
+            IMC::VehicleMedium medium;
+            medium.medium = IMC::VehicleMedium::VM_WATER;
+            dispatch(medium);
+
             readUART();    // Read
             
           }
