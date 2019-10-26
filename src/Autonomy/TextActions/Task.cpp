@@ -344,6 +344,8 @@ namespace Autonomy
           handleStartCommand(origin, args, false);
         else if (cmd == "force")
           handleStartCommand(origin, args, true);
+        else if (cmd == "CR6")
+          handleCR6Command(args);
         else if (cmd == "abort")
           handleAbortCommand(origin, args);
         else if (cmd == "errors")
@@ -508,6 +510,29 @@ namespace Autonomy
         // Send the plan start request
         dispatch(pc);
         (void)origin;
+      }
+
+      //! Execute command 'CR6'
+      void
+      handleCR6Command(const std::string& args)
+      {
+        // Create PowerSettings Message.
+        IMC::PowerSettings pwr_settings;
+        pwr_settings.l2 = args[0] - '0';
+        pwr_settings.l3 = args[1] - '0';
+        pwr_settings.iridium = args[2] - '0';
+        pwr_settings.modem = args[3] - '0';
+        pwr_settings.pumps = args[4] - '0';
+        pwr_settings.vhf = args[5] - '0';
+            
+        spew("Updated pwrSettings: %d%d%d%d%d%d",
+                                 pwr_settings.l2, pwr_settings.l3,
+                                 pwr_settings.iridium, pwr_settings.modem,
+                                 pwr_settings.pumps, pwr_settings.vhf);
+        
+        // Dispatch power settings to L1.
+        dispatch(pwr_settings);
+
       }
 
 
