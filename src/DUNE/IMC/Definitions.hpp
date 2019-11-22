@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: bd256527da3a36707af54bca6d01ac1d                            *
+// IMC XML MD5: 901f6dd4f601ffa92241429227590b0b                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -12651,6 +12651,89 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
+    //! Peeked DesiredPath.
+    class PeekDesiredPath: public Message
+    {
+    public:
+      //! DesiredPath.
+      InlineMessage<DesiredPath> dpath;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 420;
+      }
+
+      PeekDesiredPath(void);
+
+      PeekDesiredPath*
+      clone(void) const
+      {
+        return new PeekDesiredPath(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return PeekDesiredPath::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "PeekDesiredPath";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 0;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return dpath.getSerializationSize();
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+
+    protected:
+      void
+      setTimeStampNested(double value__);
+
+      void
+      setSourceNested(uint16_t value__);
+
+      void
+      setSourceEntityNested(uint8_t value__);
+
+      void
+      setDestinationNested(uint16_t value__);
+
+      void
+      setDestinationEntityNested(uint8_t value__);
+    };
+
     //! Goto Maneuver.
     class Goto: public Maneuver
     {
@@ -16796,6 +16879,178 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
+    //! Plan Maneuver.
+    class PlanManeuver: public Message
+    {
+    public:
+      //! Maneuver ID.
+      std::string maneuver_id;
+      //! Maneuver Specification.
+      InlineMessage<Maneuver> data;
+      //! Start Actions.
+      MessageList<Message> start_actions;
+      //! End Actions.
+      MessageList<Message> end_actions;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 552;
+      }
+
+      PlanManeuver(void);
+
+      PlanManeuver*
+      clone(void) const
+      {
+        return new PlanManeuver(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return PlanManeuver::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "PlanManeuver";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 0;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(maneuver_id) + data.getSerializationSize() + start_actions.getSerializationSize() + end_actions.getSerializationSize();
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+
+    protected:
+      void
+      setTimeStampNested(double value__);
+
+      void
+      setSourceNested(uint16_t value__);
+
+      void
+      setSourceEntityNested(uint8_t value__);
+
+      void
+      setDestinationNested(uint16_t value__);
+
+      void
+      setDestinationEntityNested(uint8_t value__);
+    };
+
+    //! Peeked Maneuver.
+    class PeekManeuver: public Message
+    {
+    public:
+      //! Maneuver.
+      InlineMessage<PlanManeuver> man;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 497;
+      }
+
+      PeekManeuver(void);
+
+      PeekManeuver*
+      clone(void) const
+      {
+        return new PeekManeuver(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return PeekManeuver::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "PeekManeuver";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 0;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return man.getSerializationSize();
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+
+    protected:
+      void
+      setTimeStampNested(double value__);
+
+      void
+      setSourceNested(uint16_t value__);
+
+      void
+      setSourceEntityNested(uint8_t value__);
+
+      void
+      setDestinationNested(uint16_t value__);
+
+      void
+      setDestinationEntityNested(uint8_t value__);
+    };
+
     //! Magnetometer Maneuver.
     class Magnetometer: public Maneuver
     {
@@ -19055,95 +19310,6 @@ namespace DUNE
 
       void
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
-    };
-
-    //! Plan Maneuver.
-    class PlanManeuver: public Message
-    {
-    public:
-      //! Maneuver ID.
-      std::string maneuver_id;
-      //! Maneuver Specification.
-      InlineMessage<Maneuver> data;
-      //! Start Actions.
-      MessageList<Message> start_actions;
-      //! End Actions.
-      MessageList<Message> end_actions;
-
-      static uint16_t
-      getIdStatic(void)
-      {
-        return 552;
-      }
-
-      PlanManeuver(void);
-
-      PlanManeuver*
-      clone(void) const
-      {
-        return new PlanManeuver(*this);
-      }
-
-      void
-      clear(void);
-
-      bool
-      fieldsEqual(const Message& msg__) const;
-
-      int
-      validate(void) const;
-
-      uint8_t*
-      serializeFields(uint8_t* bfr__) const;
-
-      uint16_t
-      deserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      getId(void) const
-      {
-        return PlanManeuver::getIdStatic();
-      }
-
-      const char*
-      getName(void) const
-      {
-        return "PlanManeuver";
-      }
-
-      unsigned
-      getFixedSerializationSize(void) const
-      {
-        return 0;
-      }
-
-      unsigned
-      getVariableSerializationSize(void) const
-      {
-        return IMC::getSerializationSize(maneuver_id) + data.getSerializationSize() + start_actions.getSerializationSize() + end_actions.getSerializationSize();
-      }
-
-      void
-      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
-
-    protected:
-      void
-      setTimeStampNested(double value__);
-
-      void
-      setSourceNested(uint16_t value__);
-
-      void
-      setSourceEntityNested(uint8_t value__);
-
-      void
-      setDestinationNested(uint16_t value__);
-
-      void
-      setDestinationEntityNested(uint8_t value__);
     };
 
     //! Plan Transition.

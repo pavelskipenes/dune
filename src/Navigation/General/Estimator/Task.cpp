@@ -106,7 +106,6 @@ namespace
           double m_zeta_2;
           //! Estimator parameter 2 deriv.
           double m_zeta_2_dot;
-          //! Parameter Estimate.
           //double m_phi_est;
           std::complex<double> m_phi_est;
           //! Estimated Wave Frequency - Complex.

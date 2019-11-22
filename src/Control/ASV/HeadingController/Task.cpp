@@ -289,7 +289,7 @@ namespace Control
 
           // Yaw Controller (PID controller) 
           float rudder_cmd = m_yaw_pid.step(m_tstep, err_yaw);
-          m_act.value = rudder_cmd; // - for simulation, but has to be adjusted.
+          m_act.value = -rudder_cmd; // - for simulation, but has to be adjusted.
 
 		      //spew("AutoNaut - Rudder_cmd/m_act: %0.3f  Desired heading: %0.3f", m_act.value, c_degrees_per_radian*m_desired_yaw);			
           dispatchRudder(m_act.value, m_tstep);

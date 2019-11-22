@@ -44,7 +44,7 @@ namespace DUNE
 
     class FilterEstimator
     {
-    public:
+      public:
       //! Constructor.
       FilterEstimator(void);
 

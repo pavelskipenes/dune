@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: bd256527da3a36707af54bca6d01ac1d                            *
+// IMC XML MD5: 901f6dd4f601ffa92241429227590b0b                            *
 //***************************************************************************
 
 MESSAGE(1, EntityState)
@@ -194,6 +194,7 @@ MESSAGE(412, ControlParcel)
 MESSAGE(413, Brake)
 MESSAGE(414, DesiredLinearState)
 MESSAGE(415, DesiredThrottle)
+MESSAGE(420, PeekDesiredPath)
 MESSAGE(450, Goto)
 MESSAGE(451, PopUp)
 MESSAGE(452, Teleoperation)
@@ -241,6 +242,7 @@ MESSAGE(493, AutonomousSection)
 MESSAGE(494, FollowPoint)
 MESSAGE(495, Alignment)
 MESSAGE(496, StationKeepingExtended)
+MESSAGE(497, PeekManeuver)
 MESSAGE(499, Magnetometer)
 MESSAGE(500, VehicleState)
 MESSAGE(501, VehicleCommand)

@@ -24,80 +24,92 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Ricardo Martins                                                  *
-//***************************************************************************
-// Automatically generated.                                                 *
-//***************************************************************************
-// IMC XML MD5: 901f6dd4f601ffa92241429227590b0b                            *
+// Author: Alberto Dallolio                                                 *
 //***************************************************************************
 
-#ifndef DUNE_IMC_BITFIELDS_HPP_INCLUDED_
-#define DUNE_IMC_BITFIELDS_HPP_INCLUDED_
+#ifndef DUNE_NAVIGATION_AUTONAUT_HPP_INCLUDED_
+#define DUNE_NAVIGATION_AUTONAUT_HPP_INCLUDED_
+
+// DUNE headers.
+#include <DUNE/DUNE.hpp>
+#include <DUNE/Tasks/Task.hpp>
+#include <Eigen/Dense>
 
 namespace DUNE
 {
-  namespace IMC
+  namespace Navigation
   {
-    //! Control Loops Mask.
-    enum CLoopsMask
-    {
-      //! None.
-      CL_NONE = 0x00000000,
-      //! Path Control.
-      CL_PATH = 0x00000001,
-      //! Teleoperation Control.
-      CL_TELEOPERATION = 0x00000002,
-      //! Altitude Control.
-      CL_ALTITUDE = 0x00000004,
-      //! Depth Control.
-      CL_DEPTH = 0x00000008,
-      //! Roll Control.
-      CL_ROLL = 0x00000010,
-      //! Pitch Control.
-      CL_PITCH = 0x00000020,
-      //! Yaw Control.
-      CL_YAW = 0x00000040,
-      //! Speed Control.
-      CL_SPEED = 0x00000080,
-      //! Yaw Rate Control.
-      CL_YAW_RATE = 0x00000100,
-      //! Vertical Rate Control.
-      CL_VERTICAL_RATE = 0x00000200,
-      //! Torque Control.
-      CL_TORQUE = 0x00000400,
-      //! Force Control.
-      CL_FORCE = 0x00000800,
-      //! Velocity Control.
-      CL_VELOCITY = 0x00001000,
-      //! Throttle Control.
-      CL_THROTTLE = 0x00002000,
-      //! Unspecified External Control.
-      CL_EXTERNAL = 0x40000000,
-      //! Non-overridable control.
-      CL_NO_OVERRIDE = 0x80000000,
-      //! All.
-      CL_ALL = 0xFFFFFFFF
-    };
+    // Export DLL Symbol.
+    class DUNE_DLL_SYM autonaut;
 
-    //! Operational Limits Mask.
-    enum OpLimitsMask
+    class autonaut
     {
-      //! Maximum Depth.
-      OPL_MAX_DEPTH = 0x01,
-      //! Minimum Altitude.
-      OPL_MIN_ALT = 0x02,
-      //! Maximum Altitude.
-      OPL_MAX_ALT = 0x04,
-      //! Minimum Speed.
-      OPL_MIN_SPEED = 0x08,
-      //! Maximum Speed.
-      OPL_MAX_SPEED = 0x10,
-      //! Maximum Vertical Rate.
-      OPL_MAX_VRATE = 0x20,
-      //! Operation Area.
-      OPL_AREA = 0x40
-    };
-  }
-}
+      public:
 
-#endif
+      /// Constructor
+      autonaut(double T, double dt);
+
+      /// Destructor
+      ~autonaut();
+
+      void linearPrediction(const Eigen::Matrix<double,6,1>& state, double u_d, double psi_d, const Eigen::Matrix<double,-1,2>&waypoints, double Chi_ca, int course_change_point, int guidance_strategy, double R, double de, double Ki);
+
+      Eigen::VectorXd getX();
+      Eigen::VectorXd getY();
+      Eigen::VectorXd getPsi();
+      Eigen::VectorXd getU();
+      Eigen::VectorXd getV();
+      Eigen::VectorXd getR();
+
+      double getA();
+      double getB();
+      double getC();
+      double getD();
+
+      double getL();
+      double getW();
+
+      double getT();
+      double getDT();
+      double getNsamp();
+
+      void setT(double T);
+      void setDT(double DT);
+      void setNsamp(int n_samp);
+
+      void setA(double A);
+      void setB(double B);
+      void setC(double C);
+      void setD(double D);
+
+      Eigen::VectorXd m_x;
+      Eigen::VectorXd m_y;
+      Eigen::VectorXd m_psi;
+      Eigen::VectorXd m_u;
+      Eigen::VectorXd m_v;
+      Eigen::VectorXd m_r;
+
+      double m_A, m_B, m_C, m_D, m_l, m_w;
+      double m_os_x, m_os_y;
+
+      private:
+
+      // Calculates the offsets according to the position of the GPS receiver
+      void calculate_position_offsets();
+
+      // Assures that angle is between [-PI, PI)
+      double normalize_angle(double angle);
+
+      // Simulation parameters
+      double m_DT;
+      double m_T;
+      //const int n_samp_;
+      int m_n_samp; // possibility to set from sb_mpc
+                
+    };  
+  
+  
+  }  
+}  
+  
+#endif /* AUTONAUT_HPP_ */

@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2017 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2019 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -107,9 +107,7 @@ namespace Sensors
         {
           if (!openSocket()) // Check if instead of serial is a tcp port
           {
-        spew("Opening AIS SerialPort");
             m_handle = new SerialPort(m_args.uart_dev, m_args.uart_baud);
-            spew("************Success in fetching AIS SerialPort");
             m_handle->flush();
           }
         }
@@ -148,7 +146,7 @@ namespace Sensors
       {
         // Remove carriage return.
         nmea_msg.erase(std::remove(nmea_msg.begin(), nmea_msg.end(), '\r'), nmea_msg.end());
-    
+
         // Log NMEA msg.
         IMC::DevDataText text;
         text.value = nmea_msg;
@@ -156,7 +154,7 @@ namespace Sensors
 
         // Get body of NMEA message.
         std::string nmea_payload = GetBody(nmea_msg.c_str());
-        
+
         // Static and Voyage Related Data, first fragment.
         if (nmea_payload[0] == '5' && !m_nmea5_wait_fg)
         {
@@ -174,31 +172,23 @@ namespace Sensors
           nmea_payload = GetBody(nmea_msg.c_str());
         }
 
+        // We are able to send a message with ship information.
+        IMC::RemoteSensorInfo rsi;
+        // Create string for tuple: rsi.data
+        std::ostringstream ais_data;
+
         // Static and Voyage Related Data, second fragment.
         if (m_nmea5_wait_fg)
         {
           m_nmea5_wait_fg = false;
           Ais5 msg(nmea_payload.c_str(), GetPad(nmea_msg));
-    //spew("Vessel(mmsi): %d  Dimensions of the vessel: (a,b,c,d) %d %d %d %d", msg.mmsi, msg.dim_a, msg.dim_b, msg.dim_c, msg.dim_d);
+
           // Add system MMSI and Type if not existent.
           std::map<int, std::string>::iterator itr = m_systems.find(msg.mmsi);
           if (itr != m_systems.end())
             return;
-          
-          IMC::AisStaticInfo ais_static;
-          ais_static.id = static_cast<std::ostringstream*>(&(std::ostringstream() << msg.mmsi))->str();
-          ais_static.callsign = msg.callsign;
-          ais_static.name = msg.name;
-          ais_static.type_and_cargo = msg.type_and_cargo;
-          ais_static.a = msg.dim_a;
-          ais_static.b = msg.dim_b;
-          ais_static.c = msg.dim_c;
-          ais_static.d = msg.dim_d;
-          
-          
-     //spew("AIS static (mmsi): %d  Name: %s Dimensions of the vessel: (a,b,c,d) %0.2f %0.2f %0.2f %0.2f", msg.mmsi, ais_static.name.c_str(), ais_static.a, ais_static.b, ais_static.c, ais_static.d);
 
-          dispatch(ais_static);
+          ais_data << "CALLSIGN=" << msg.callsign << ";" << "NAME=" << msg.name << ";" << "TYPE_AND_CARGO=" << msg.type_and_cargo << ";" << "A=" << msg.dim_a << ";" << "B=" << msg.dim_b << ";" << "C=" << msg.dim_c << ";" << "D=" << msg.dim_d; //<< "MMSI=" << msg.mmsi << ";" 
 
           m_systems[msg.mmsi] = ShipTypeCode::translate(msg.type_and_cargo);
           return;
@@ -210,10 +200,10 @@ namespace Sensors
             (nmea_payload[0] == '3'))
         {
           Ais1_2_3 msg(nmea_payload.c_str(), GetPad(nmea_msg));
-
-          // We are able to send a message with ship information.
-          IMC::RemoteSensorInfo rsi;
-          rsi.id = static_cast<std::ostringstream*>(&(std::ostringstream() << msg.mmsi))->str();
+          
+          // static_cast<std::ostringstream*>(&(std::ostringstream() << msg.mmsi))->str();
+          int mmsi_ais = (int) msg.mmsi;
+          rsi.id = mmsi_ais;
 
           // Find ship type.
           std::map<int, std::string>::iterator itr = m_systems.find(msg.mmsi);
@@ -223,8 +213,10 @@ namespace Sensors
           rsi.lat = Angles::radians(msg.y);
           rsi.lon = Angles::radians(msg.x);
           rsi.heading = Angles::radians(msg.cog);
-          rsi.alt = msg.sog;        // Storing speed in altitude-variable since RemoteSensorInfo dont have a Speed variable  [knots]
-          //spew("RSI - Vessel(mmsi): %s (lon,lat,heading, speed): %f %f %0.2f %0.2f", rsi.id.c_str(),  c_degrees_per_radian*rsi.lon, c_degrees_per_radian*rsi.lat ,c_degrees_per_radian*rsi.heading, msg.sog);
+          ais_data << ";" << "SOG=" << Angles::radians(msg.sog); // put sog into tuple, RemoteSensorInfo has no field for it.
+          rsi.data = ais_data.str();
+          spew("RSI - Vessel(mmsi): %s (lon,lat,heading, speed): %f %f %0.2f %0.2f", rsi.id.c_str(),  c_degrees_per_radian*rsi.lon, c_degrees_per_radian*rsi.lat ,c_degrees_per_radian*rsi.heading, msg.sog);
+          spew("AIS TUPLE = %s",rsi.data.c_str());
           dispatch(rsi);
 
           return;

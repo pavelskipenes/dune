@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: bd256527da3a36707af54bca6d01ac1d                            *
+// IMC XML MD5: 901f6dd4f601ffa92241429227590b0b                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -12930,6 +12930,108 @@ namespace DUNE
       IMC::toJSON(os__, "value", value, nindent__);
     }
 
+    PeekDesiredPath::PeekDesiredPath(void)
+    {
+      m_header.mgid = 420;
+      clear();
+      dpath.setParent(this);
+    }
+
+    void
+    PeekDesiredPath::clear(void)
+    {
+      dpath.clear();
+    }
+
+    bool
+    PeekDesiredPath::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::PeekDesiredPath& other__ = static_cast<const PeekDesiredPath&>(msg__);
+      if (dpath != other__.dpath) return false;
+      return true;
+    }
+
+    int
+    PeekDesiredPath::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    PeekDesiredPath::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += dpath.serialize(ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    PeekDesiredPath::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += dpath.deserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    PeekDesiredPath::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += dpath.reverseDeserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    PeekDesiredPath::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      dpath.toJSON(os__, "dpath", nindent__);
+    }
+
+    void
+    PeekDesiredPath::setTimeStampNested(double value__)
+    {
+      if (!dpath.isNull())
+      {
+        dpath.get()->setTimeStamp(value__);
+      }
+    }
+
+    void
+    PeekDesiredPath::setSourceNested(uint16_t value__)
+    {
+      if (!dpath.isNull())
+      {
+        dpath.get()->setSource(value__);
+      }
+    }
+
+    void
+    PeekDesiredPath::setSourceEntityNested(uint8_t value__)
+    {
+      if (!dpath.isNull())
+      {
+        dpath.get()->setSourceEntity(value__);
+      }
+    }
+
+    void
+    PeekDesiredPath::setDestinationNested(uint16_t value__)
+    {
+      if (!dpath.isNull())
+      {
+        dpath.get()->setDestination(value__);
+      }
+    }
+
+    void
+    PeekDesiredPath::setDestinationEntityNested(uint8_t value__)
+    {
+      if (!dpath.isNull())
+      {
+        dpath.get()->setDestinationEntity(value__);
+      }
+    }
+
     Goto::Goto(void)
     {
       m_header.mgid = 450;
@@ -18054,6 +18156,250 @@ namespace DUNE
       IMC::toJSON(os__, "custom", custom, nindent__);
     }
 
+    PlanManeuver::PlanManeuver(void)
+    {
+      m_header.mgid = 552;
+      clear();
+      data.setParent(this);
+      start_actions.setParent(this);
+      end_actions.setParent(this);
+    }
+
+    void
+    PlanManeuver::clear(void)
+    {
+      maneuver_id.clear();
+      data.clear();
+      start_actions.clear();
+      end_actions.clear();
+    }
+
+    bool
+    PlanManeuver::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::PlanManeuver& other__ = static_cast<const PlanManeuver&>(msg__);
+      if (maneuver_id != other__.maneuver_id) return false;
+      if (data != other__.data) return false;
+      if (start_actions != other__.start_actions) return false;
+      if (end_actions != other__.end_actions) return false;
+      return true;
+    }
+
+    int
+    PlanManeuver::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    PlanManeuver::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(maneuver_id, ptr__);
+      ptr__ += data.serialize(ptr__);
+      ptr__ += start_actions.serialize(ptr__);
+      ptr__ += end_actions.serialize(ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    PlanManeuver::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(maneuver_id, bfr__, size__);
+      bfr__ += data.deserialize(bfr__, size__);
+      bfr__ += start_actions.deserialize(bfr__, size__);
+      bfr__ += end_actions.deserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    PlanManeuver::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(maneuver_id, bfr__, size__);
+      bfr__ += data.reverseDeserialize(bfr__, size__);
+      bfr__ += start_actions.reverseDeserialize(bfr__, size__);
+      bfr__ += end_actions.reverseDeserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    PlanManeuver::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "maneuver_id", maneuver_id, nindent__);
+      data.toJSON(os__, "data", nindent__);
+      start_actions.toJSON(os__, "start_actions", nindent__);
+      end_actions.toJSON(os__, "end_actions", nindent__);
+    }
+
+    void
+    PlanManeuver::setTimeStampNested(double value__)
+    {
+      if (!data.isNull())
+      {
+        data.get()->setTimeStamp(value__);
+      }
+
+      start_actions.setTimeStamp(value__);
+
+      end_actions.setTimeStamp(value__);
+    }
+
+    void
+    PlanManeuver::setSourceNested(uint16_t value__)
+    {
+      if (!data.isNull())
+      {
+        data.get()->setSource(value__);
+      }
+
+      start_actions.setSource(value__);
+
+      end_actions.setSource(value__);
+    }
+
+    void
+    PlanManeuver::setSourceEntityNested(uint8_t value__)
+    {
+      if (!data.isNull())
+      {
+        data.get()->setSourceEntity(value__);
+      }
+
+      start_actions.setSourceEntity(value__);
+
+      end_actions.setSourceEntity(value__);
+    }
+
+    void
+    PlanManeuver::setDestinationNested(uint16_t value__)
+    {
+      if (!data.isNull())
+      {
+        data.get()->setDestination(value__);
+      }
+
+      start_actions.setDestination(value__);
+
+      end_actions.setDestination(value__);
+    }
+
+    void
+    PlanManeuver::setDestinationEntityNested(uint8_t value__)
+    {
+      if (!data.isNull())
+      {
+        data.get()->setDestinationEntity(value__);
+      }
+
+      start_actions.setDestinationEntity(value__);
+
+      end_actions.setDestinationEntity(value__);
+    }
+
+    PeekManeuver::PeekManeuver(void)
+    {
+      m_header.mgid = 497;
+      clear();
+      man.setParent(this);
+    }
+
+    void
+    PeekManeuver::clear(void)
+    {
+      man.clear();
+    }
+
+    bool
+    PeekManeuver::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::PeekManeuver& other__ = static_cast<const PeekManeuver&>(msg__);
+      if (man != other__.man) return false;
+      return true;
+    }
+
+    int
+    PeekManeuver::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    PeekManeuver::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += man.serialize(ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    PeekManeuver::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += man.deserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    PeekManeuver::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += man.reverseDeserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    PeekManeuver::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      man.toJSON(os__, "man", nindent__);
+    }
+
+    void
+    PeekManeuver::setTimeStampNested(double value__)
+    {
+      if (!man.isNull())
+      {
+        man.get()->setTimeStamp(value__);
+      }
+    }
+
+    void
+    PeekManeuver::setSourceNested(uint16_t value__)
+    {
+      if (!man.isNull())
+      {
+        man.get()->setSource(value__);
+      }
+    }
+
+    void
+    PeekManeuver::setSourceEntityNested(uint8_t value__)
+    {
+      if (!man.isNull())
+      {
+        man.get()->setSourceEntity(value__);
+      }
+    }
+
+    void
+    PeekManeuver::setDestinationNested(uint16_t value__)
+    {
+      if (!man.isNull())
+      {
+        man.get()->setDestination(value__);
+      }
+    }
+
+    void
+    PeekManeuver::setDestinationEntityNested(uint8_t value__)
+    {
+      if (!man.isNull())
+      {
+        man.get()->setDestinationEntity(value__);
+      }
+    }
+
     Magnetometer::Magnetometer(void)
     {
       m_header.mgid = 499;
@@ -20207,148 +20553,6 @@ namespace DUNE
       IMC::toJSON(os__, "value", value, nindent__);
       IMC::toJSON(os__, "type", type, nindent__);
       IMC::toJSON(os__, "access", access, nindent__);
-    }
-
-    PlanManeuver::PlanManeuver(void)
-    {
-      m_header.mgid = 552;
-      clear();
-      data.setParent(this);
-      start_actions.setParent(this);
-      end_actions.setParent(this);
-    }
-
-    void
-    PlanManeuver::clear(void)
-    {
-      maneuver_id.clear();
-      data.clear();
-      start_actions.clear();
-      end_actions.clear();
-    }
-
-    bool
-    PlanManeuver::fieldsEqual(const Message& msg__) const
-    {
-      const IMC::PlanManeuver& other__ = static_cast<const PlanManeuver&>(msg__);
-      if (maneuver_id != other__.maneuver_id) return false;
-      if (data != other__.data) return false;
-      if (start_actions != other__.start_actions) return false;
-      if (end_actions != other__.end_actions) return false;
-      return true;
-    }
-
-    int
-    PlanManeuver::validate(void) const
-    {
-      return true;
-    }
-
-    uint8_t*
-    PlanManeuver::serializeFields(uint8_t* bfr__) const
-    {
-      uint8_t* ptr__ = bfr__;
-      ptr__ += IMC::serialize(maneuver_id, ptr__);
-      ptr__ += data.serialize(ptr__);
-      ptr__ += start_actions.serialize(ptr__);
-      ptr__ += end_actions.serialize(ptr__);
-      return ptr__;
-    }
-
-    uint16_t
-    PlanManeuver::deserializeFields(const uint8_t* bfr__, uint16_t size__)
-    {
-      const uint8_t* start__ = bfr__;
-      bfr__ += IMC::deserialize(maneuver_id, bfr__, size__);
-      bfr__ += data.deserialize(bfr__, size__);
-      bfr__ += start_actions.deserialize(bfr__, size__);
-      bfr__ += end_actions.deserialize(bfr__, size__);
-      return bfr__ - start__;
-    }
-
-    uint16_t
-    PlanManeuver::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
-    {
-      const uint8_t* start__ = bfr__;
-      bfr__ += IMC::reverseDeserialize(maneuver_id, bfr__, size__);
-      bfr__ += data.reverseDeserialize(bfr__, size__);
-      bfr__ += start_actions.reverseDeserialize(bfr__, size__);
-      bfr__ += end_actions.reverseDeserialize(bfr__, size__);
-      return bfr__ - start__;
-    }
-
-    void
-    PlanManeuver::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
-    {
-      IMC::toJSON(os__, "maneuver_id", maneuver_id, nindent__);
-      data.toJSON(os__, "data", nindent__);
-      start_actions.toJSON(os__, "start_actions", nindent__);
-      end_actions.toJSON(os__, "end_actions", nindent__);
-    }
-
-    void
-    PlanManeuver::setTimeStampNested(double value__)
-    {
-      if (!data.isNull())
-      {
-        data.get()->setTimeStamp(value__);
-      }
-
-      start_actions.setTimeStamp(value__);
-
-      end_actions.setTimeStamp(value__);
-    }
-
-    void
-    PlanManeuver::setSourceNested(uint16_t value__)
-    {
-      if (!data.isNull())
-      {
-        data.get()->setSource(value__);
-      }
-
-      start_actions.setSource(value__);
-
-      end_actions.setSource(value__);
-    }
-
-    void
-    PlanManeuver::setSourceEntityNested(uint8_t value__)
-    {
-      if (!data.isNull())
-      {
-        data.get()->setSourceEntity(value__);
-      }
-
-      start_actions.setSourceEntity(value__);
-
-      end_actions.setSourceEntity(value__);
-    }
-
-    void
-    PlanManeuver::setDestinationNested(uint16_t value__)
-    {
-      if (!data.isNull())
-      {
-        data.get()->setDestination(value__);
-      }
-
-      start_actions.setDestination(value__);
-
-      end_actions.setDestination(value__);
-    }
-
-    void
-    PlanManeuver::setDestinationEntityNested(uint8_t value__)
-    {
-      if (!data.isNull())
-      {
-        data.get()->setDestinationEntity(value__);
-      }
-
-      start_actions.setDestinationEntity(value__);
-
-      end_actions.setDestinationEntity(value__);
     }
 
     PlanTransition::PlanTransition(void)

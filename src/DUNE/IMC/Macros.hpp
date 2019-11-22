@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: bd256527da3a36707af54bca6d01ac1d                            *
+// IMC XML MD5: 901f6dd4f601ffa92241429227590b0b                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -360,6 +360,8 @@
 #define DUNE_IMC_DESIREDLINEARSTATE 414
 //! DesiredThrottle identification number.
 #define DUNE_IMC_DESIREDTHROTTLE 415
+//! PeekDesiredPath identification number.
+#define DUNE_IMC_PEEKDESIREDPATH 420
 //! Goto identification number.
 #define DUNE_IMC_GOTO 450
 //! PopUp identification number.
@@ -454,6 +456,8 @@
 #define DUNE_IMC_ALIGNMENT 495
 //! StationKeepingExtended identification number.
 #define DUNE_IMC_STATIONKEEPINGEXTENDED 496
+//! PeekManeuver identification number.
+#define DUNE_IMC_PEEKMANEUVER 497
 //! Magnetometer identification number.
 #define DUNE_IMC_MAGNETOMETER 499
 //! VehicleState identification number.
