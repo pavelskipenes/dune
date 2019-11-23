@@ -24,7 +24,7 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: renalberto                                                       *
+// Author: Renan Maidana, Alberto Dallolio                                  *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -87,18 +87,17 @@ namespace Sensors
       std::string cmd;
       //! Name of device's power channel.
       std::string power_channel;
-      //! True to enable automatic activation/deactivation based on medium.
-      bool auto_activation;
       //! Temperature entity label.
       std::string elabel_temp;
     };
 
     struct Task: public DUNE::Tasks::Task
     {
+      //! GPIO state handle
       Hardware::GPIO* m_gpio;
       //! Sensor SSR state
       bool m_gpio_state;
-      //! Flag for activation
+      //! Flag for GPIO activation
       bool m_activate;
       //! Last compensated depth.
       double m_depth;
@@ -112,6 +111,12 @@ namespace Sensors
       Counter<double> m_wdog;
       //! Save device raw data.
       IMC::DevDataText m_dev_data;
+      //! Measured temperature
+      IMC::Temperature m_temperature_msg;
+      //! Measured Air saturation
+      IMC::AirSaturation m_air_saturation;
+      //! Measured dissolved oxygen
+      IMC::DissolvedOxygen m_dissolved_oxygen;
       //! Received data line.
       std::string m_line;
       //! Temperature entity id.
@@ -164,19 +169,12 @@ namespace Sensors
         .defaultValue("Oxygen Sensor")
         .description("Name of device's power channel");
 
-        param(DTR_RT("Automatic Activation"), m_args.auto_activation)
-        .defaultValue("false")
-        .visibility(Tasks::Parameter::VISIBILITY_USER)
-        // .scope(Tasks::Parameter::SCOPE_IDLE)
-        .description("Operator is able to control device");
-
         param("Entity Label - Temperature", m_args.elabel_temp)
         .defaultValue("Depth Sensor")
         .description("Entity label of the IMU");
 
         bind<IMC::Salinity>(this);
         bind<IMC::Temperature>(this);
-        bind<IMC::VehicleMedium>(this);
 
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
       }
@@ -212,6 +210,15 @@ namespace Sensors
             start();
           }
         }
+      }
+
+      void 
+      onEntityReservation(void)
+      {
+        m_dev_data.setSourceEntity(reserveEntity("Optode4385 Device Data"));
+        m_temperature_msg.setSourceEntity(reserveEntity("Optode4385 Temperature"));
+        m_air_saturation.setSourceEntity(reserveEntity("Optode4385 Air Saturation"));
+        m_dissolved_oxygen.setSourceEntity(reserveEntity("Optode4385 Dissolved Oxygen"));
       }
 
       void
@@ -311,25 +318,6 @@ namespace Sensors
         m_temperature = msg->value;
       }
 
-      void
-      consume(const IMC::VehicleMedium* msg)
-      {
-        if (!m_args.auto_activation)
-          return;
-
-        // Request deactivation.
-        if (msg->medium == IMC::VehicleMedium::VM_GROUND)
-        {
-          if (isActive())
-            requestDeactivation();
-        }
-        else
-        {
-          if (!isActive() && !isActivating())
-            requestActivation();
-        }
-      }
-
       //! Wake Up device.
       void
       wakeUp(void)
@@ -409,32 +397,28 @@ namespace Sensors
       void
       parse(const std::string& msg, double tstamp)
       {
-        IMC::Temperature temp;
-        IMC::AirSaturation air;
-        IMC::DissolvedOxygen oxy;
-
         std::sscanf(msg.c_str(),
                     "%*s\t%*u\t%f\t%f\t%f%*[^\n]\n",
-                    &oxy.value, &air.value, &temp.value);
+                    &m_dissolved_oxygen.value, &m_air_saturation.value, &m_temperature_msg.value);
 
         // correct for depth.
-        oxy.value *= (1 + c_depth_factor * m_depth);
+        m_dissolved_oxygen.value *= (1 + c_depth_factor * m_depth);
 
         // correct for salinity.
         double Ts = std::log((c_temp_0 - m_temperature) / (c_temp_1 + m_temperature));
         double f1 = m_salinity * (c_b0 + c_b1 * Ts + c_b2 * Ts * Ts + c_b3 * Ts * Ts * Ts);
-        oxy.value *= std::exp(f1 + c_c0 * m_salinity * m_salinity);
+        m_dissolved_oxygen.value *= std::exp(f1 + c_c0 * m_salinity * m_salinity);
 
-        temp.setTimeStamp(tstamp);
-        air.setTimeStamp(tstamp);
-        oxy.setTimeStamp(tstamp);
+        m_temperature_msg.setTimeStamp(tstamp);
+        m_air_saturation.setTimeStamp(tstamp);
+        m_dissolved_oxygen.setTimeStamp(tstamp);
 
-        dispatch(temp, DF_KEEP_TIME);
-        dispatch(air, DF_KEEP_TIME);
-        dispatch(oxy, DF_KEEP_TIME);
+        dispatch(m_temperature_msg, DF_KEEP_TIME);
+        dispatch(m_air_saturation, DF_KEEP_TIME);
+        dispatch(m_dissolved_oxygen, DF_KEEP_TIME);
 
         trace("temperature: %0.1f | saturation: %0.1f | oxygen: %0.2f",
-              temp.value, air.value, oxy.value);
+              m_temperature_msg.value, m_air_saturation.value, m_dissolved_oxygen.value);
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
         m_wdog.reset();
       }
