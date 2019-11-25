@@ -190,8 +190,8 @@ namespace Simulators
       void
       consume(const IMC::GpsFix* msg)
       {
-	      inf("Consumed GpsFix from %d",msg->getSourceEntity());
-	      inf("Consumed GpsFix from %s",resolveEntity(msg->getSourceEntity()).c_str());
+	      //trace("Consumed GpsFix from %d",msg->getSourceEntity());
+	      trace("Consumed GpsFix from %s",resolveEntity(msg->getSourceEntity()).c_str());
         if (msg->type != IMC::GpsFix::GFT_MANUAL_INPUT)
           return;
 
@@ -204,6 +204,7 @@ namespace Simulators
       void
       consume(const IMC::SimulatedState* msg)
       {
+        //trace("Consumed SimulatedState from %s",resolveEntity(msg->getSourceEntity()).c_str());
         if (getEntityState() != IMC::EntityState::ESTA_NORMAL)
         {
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);

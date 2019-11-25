@@ -145,6 +145,7 @@ namespace Simulators
       void
       consume(const IMC::GpsFix* msg)
       {
+        spew("Consumed GpsFix from %s",resolveEntity(msg->getSourceEntity()).c_str());
         if (msg->type != IMC::GpsFix::GFT_MANUAL_INPUT)
           return;
 

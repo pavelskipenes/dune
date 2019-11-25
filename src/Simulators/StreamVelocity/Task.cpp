@@ -215,6 +215,7 @@ namespace Simulators
       void
       consume(IMC::SimulatedState const* msg)
       {
+        spew("Consumed SimulatedState from %s",resolveEntity(msg->getSourceEntity()).c_str());
         if (msg->getSource() == getSystemId())
           m_state = *msg;
       }
