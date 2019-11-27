@@ -123,7 +123,6 @@ namespace DUNE
 		ang_range_ = ang_range;
 		granularity_ = granularity;
 
-		// THIS
 		int course_samples = 2*Math::round(ang_range/granularity)+1;
 		Chi_ca_.resize(course_samples);
 		Chi_ca_(0) = ang_range;
@@ -139,8 +138,8 @@ namespace DUNE
 		Chi_ca_ *= DEG2RAD; //Math::Angles::radians(Chi_ca);
 		// P_ca.resize(4);
 		// P_ca << 0.0, 0.25, 0.5, 1.0; // -1.0, 0.0, 0.5, 1.0;
-		P_ca_.resize(3);
-		P_ca_ << 0.0, 0.5, 1.0;
+		P_ca_.resize(1);
+		P_ca_ << 1.0;//, 0.5, 1.0;
 
 		asv = new autonaut(T,DT);
 

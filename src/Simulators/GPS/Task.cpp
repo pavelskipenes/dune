@@ -144,16 +144,14 @@ namespace Simulators
 
         param("Initial COG", m_args.course)
         .units(Units::Degree)
-        .minimumValue("-180")
-        .maximumValue("180")
-        .defaultValue("1")
-        .size(1)
+        .minimumValue("0.0")
+        .maximumValue("360.0")
+        .defaultValue("0.0")
         .description("Initial COG of the vehicle in deg");
 
         param("Initial SOG", m_args.speed_o_g)
         .units(Units::MeterPerSecond)
-        .defaultValue("0.4")
-        .size(1)
+        .defaultValue("0.0")
         .description("Initial SOG of the vehicle in m/s");
 
         m_fix.clear();
@@ -190,8 +188,6 @@ namespace Simulators
       void
       consume(const IMC::GpsFix* msg)
       {
-	      //trace("Consumed GpsFix from %d",msg->getSourceEntity());
-	      trace("Consumed GpsFix from %s",resolveEntity(msg->getSourceEntity()).c_str());
         if (msg->type != IMC::GpsFix::GFT_MANUAL_INPUT)
           return;
 
@@ -204,7 +200,6 @@ namespace Simulators
       void
       consume(const IMC::SimulatedState* msg)
       {
-        //trace("Consumed SimulatedState from %s",resolveEntity(msg->getSourceEntity()).c_str());
         if (getEntityState() != IMC::EntityState::ESTA_NORMAL)
         {
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);

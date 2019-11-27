@@ -173,7 +173,7 @@ namespace Simulators
 		    rsi.heading = msg->cog;
 
         // AIS Static Info.
-        rsi.id = id_; // putting an integer in here.
+        rsi.id = id_;
 
         // String for tuple: rsi.data
         std::ostringstream ais_data;
@@ -185,7 +185,8 @@ namespace Simulators
                      rsi.id.c_str(), c_degrees_per_radian*rsi.lon, c_degrees_per_radian*rsi.lat, Angles::degrees(rsi.heading), msg->sog);
         spew("AIS TUPLE = %s",rsi.data.c_str());
 
-        dispatch(rsi);
+        if(msg->lat != 0.0 && msg->lon != 0.0)
+          dispatch(rsi);
       }
 
 

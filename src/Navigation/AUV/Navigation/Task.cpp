@@ -366,7 +366,7 @@ namespace Navigation
             m_imu_eid = std::numeric_limits<unsigned>::max();
           }
         }
-
+ 
         void
         onReportEntityState(void)
         {

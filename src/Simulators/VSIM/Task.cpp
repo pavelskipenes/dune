@@ -145,7 +145,6 @@ namespace Simulators
       void
       consume(const IMC::GpsFix* msg)
       {
-        spew("Consumed GpsFix from %s",resolveEntity(msg->getSourceEntity()).c_str());
         if (msg->type != IMC::GpsFix::GFT_MANUAL_INPUT)
           return;
 
@@ -161,17 +160,17 @@ namespace Simulators
         requestActivation();
 
         // Save message to cache.
-        IMC::CacheControl cop;
-        cop.op = IMC::CacheControl::COP_STORE;
-        cop.message.set(*msg);
-        dispatch(cop);
+        //IMC::CacheControl cop;
+        //cop.op = IMC::CacheControl::COP_STORE;
+        //cop.message.set(*msg);
+        //dispatch(cop);
       }
 
       void
       consume(const IMC::ServoPosition* msg)
       {
         UUV* v = static_cast<UUV*>(m_vehicle);
-        v->updateFin(msg->id, msg->value);
+        v->updateFin(msg->id, -msg->value);
       }
 
       void

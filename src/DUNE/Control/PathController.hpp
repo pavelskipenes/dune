@@ -174,6 +174,14 @@ namespace DUNE
         double speed;
         //! course error in relation to track bearing.
         double course_error;
+        //! Start lat.
+        double lat_st;
+        //! Start lon.
+        double lon_st;
+        //! End lat.
+        double lat_en;
+        //! End lon.
+        double lon_en;
 
         //! Track position & velocity.
         struct TrackCoord

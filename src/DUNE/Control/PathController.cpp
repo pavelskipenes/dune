@@ -510,6 +510,11 @@ namespace DUNE
             m_ts.track_pos.x, m_ts.track_pos.y, m_ts.track_pos.z,
             Angles::degrees(m_ts.course_error));
 
+      m_ts.lat_st = m_pcs.start_lat;
+      m_ts.lat_en = m_pcs.end_lat;
+      m_ts.lon_st = m_pcs.start_lon;
+      m_ts.lon_en = m_pcs.end_lon;
+
       if (m_atm.enabled)
       {
         // Initialize along-track monitoring data.
