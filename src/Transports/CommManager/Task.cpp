@@ -97,11 +97,11 @@ namespace Transports
         m_router(this)
       {
         param("Iridium - Entity Label", m_args.iridium_label)
-            .defaultValue("GSM")
+            .defaultValue("Iridium Modem")
             .description("Entity label of Iridium modem");
 
         param("GSM - Entity Label", m_args.gsm_label)
-            .defaultValue("Iridium Modem")
+            .defaultValue("GSM")
             .description("Entity label of GSM modem");
 
         param("GSM Address Section", m_args.gsm_addr_section)

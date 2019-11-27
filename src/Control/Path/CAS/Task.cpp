@@ -86,7 +86,7 @@ namespace Control
         //! Vector of obstacles
         std::vector<IMC::RemoteSensorInfo> obst_vec;
         // Create matrix with past, current and next waypoint.
-        Eigen::Matrix<double,-1,2> waypoints;
+        Eigen::Matrix<double,3,2> waypoints;
         
         //! Speed offset <Output from CAS>
         double u_os;
@@ -423,9 +423,6 @@ namespace Control
         {
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
 
-          spew("TIMESTAMP VECTOR SIZE %lu",
-                 m_last_update.size());
-
           // Check if AutoNaut is Simulator is booting before you compute displacement.
           if(m_lat_asv == 0.0 && m_lon_asv == 0.0)
             return;
@@ -464,12 +461,12 @@ namespace Control
                 obst_vec[i].data = msg->data; //callsign,name,type_and_cargo,a,b,c,d,sog.
                 m_last_update[i] = m_timestamp_obst;
 
-                spew("Obstacle with MMSI %s EXISTS and is UPDATED - OBST VECT SIZE %lu", obst_vec[i].id.c_str(), obst_vec.size());
+                trace("Obstacle with MMSI %s is CLOSER than %0.1f m and is UPDATED - OBST VECT SIZE %lu", obst_vec[i].id.c_str(), m_args.out_of_range, obst_vec.size());
               }
               else
               {
                 // Obstacle Outside range - Remove Obstacle
-                spew("Obstacle with MMSI %s REMOVED - Outside range, obstacle vector size is now: %lu",
+                trace("Obstacle with MMSI %s REMOVED - Outside range, obstacle vector size is now: %lu",
                      obst_vec[i].id.c_str(), obst_vec.size()-1);
                 obst_vec.erase(obst_vec.begin() + i);
                 m_last_update.erase(m_last_update.begin() + i);
@@ -479,7 +476,7 @@ namespace Control
             {
               obs_exists = true; // but now is going to be killed!
               // Obstacle disappeared - Remove Obstacle
-              spew("Obstacle with MMSI %s is DISAPPEARED and REMOVED - obstacle vector size is now: %lu",
+              trace("Obstacle with MMSI %s is DISAPPEARED and REMOVED - obstacle vector size is now: %lu",
                    obst_vec[i].id.c_str(), obst_vec.size()-1);
               obst_vec.erase(obst_vec.begin() + i);
               m_last_update.erase(m_last_update.begin() + i);
@@ -500,7 +497,7 @@ namespace Control
             obst_temp.data = msg->data; //callsign,name,tyoe_and_cargo,a,b,c,d,sog.
 
             obst_vec.push_back(obst_temp);
-            spew("New Obstacle Added: MMSI %s, NAME %s, obstacle vector size: %lu",
+            trace("New Obstacle Added: MMSI %s, NAME %s, obstacle vector size: %lu",
                  obst_temp.id.c_str(), system_name.c_str(), obst_vec.size());
           }
           //obs_exists = false;
@@ -514,7 +511,6 @@ namespace Control
           m_speed.value = dpath->speed; //Maneuver speed reference.
           m_speed.speed_units = dpath->speed_units; //Maneuver speed reference units.
           spew("Speed from Desired path: %0.2f", m_speed.value);
-          //spew("END lat: %f long: %f",c_degrees_per_radian*dpath->end_lat, c_degrees_per_radian*dpath->end_lon);
         }
 
         void
@@ -522,8 +518,7 @@ namespace Control
         {
           m_nextpath_lat = ppath->dpath->end_lat;
           m_nextpath_lon = ppath->dpath->end_lon;
-          //spew("NEXT start lat: %f long: %f",c_degrees_per_radian*ppath->dpath->start_lat, c_degrees_per_radian*ppath->dpath->start_lon);
-          spew("NEXT end lat: %f long: %f",c_degrees_per_radian*m_nextpath_lat, c_degrees_per_radian*m_nextpath_lon);
+          trace("NEXT NEXT WAYPOINT: lat %f - long %f",c_degrees_per_radian*m_nextpath_lat, c_degrees_per_radian*m_nextpath_lon);
 
           m_more_than_one = true;
         }
@@ -547,26 +542,28 @@ namespace Control
         void
         step(const IMC::EstimatedState& state, const TrackingState& ts)
         {
-          spew("start lat: %f long: %f",c_degrees_per_radian*ts.lat_st, c_degrees_per_radian*ts.lon_st);
-          spew("end lat: %f long: %f",c_degrees_per_radian*ts.lat_en, c_degrees_per_radian*ts.lon_en);
+          trace("LAST WAYPOINT: lat %f - long %f",c_degrees_per_radian*ts.lat_st, c_degrees_per_radian*ts.lon_st);
+          trace("NEXT WAYPOINT: lat %f - long %f",c_degrees_per_radian*ts.lat_en, c_degrees_per_radian*ts.lon_en);
           
           //! LOS Navigation Law (called Pure Pursuit in Dune)
           m_heading.value = ts.los_angle;
           if (ts.cc)
             m_heading.value = Math::Angles::normalizeRadian(m_heading.value + state.psi - ts.course);
 
-          //! CAS: Running every 3 seconds when obstacles are nearby
-          if (obst_vec.size() > 0) //&& (m_timestamp_new - m_timestamp_prev) > 3.0
+          //! CAS: Running every 5 seconds when obstacles are nearby
+          if (obst_vec.size() > 0 && (m_timestamp_new - m_timestamp_prev) > 5.0)
           {
             m_timestamp_prev = m_timestamp_new;
+            
             Eigen::Matrix<double, -1, 10> obst_state;
+            obst_state.resize(obst_vec.size(), 10);
 
             m_timestamp_prev = m_timestamp_new;
             
             //! Update asv_states to fit CAS (sb_mpc) inputs
             //asv_state(3) = sqrt(std::pow(asv_state(3), 2) + std::pow(asv_state(4), 2)); // u = Speed in BODY
 
-            for (unsigned i = 0; i < obst_vec.size(); i++)
+            for (unsigned int i = 0; i < obst_vec.size(); i++)
             {
               // Get data from RemoteSensorInfo tuple.
               TupleList tuples(obst_vec[i].data);
@@ -576,14 +573,18 @@ namespace Control
               double c = tuples.get("C", 0);
               double d = tuples.get("D", 0);
 
+              //trace("sog= %0.1f, a= %0.1f, b= %0.1f, c= %0.1f, d= %0.1f", sog, a, b, c, d);
+
               // Distance between ASV - Obstacle
               double dist_x = 0.0;
               double dist_y = 0.0;
               WGS84::displacement(m_lat_asv, m_lon_asv, 0, obst_vec[i].lat, obst_vec[i].lon, 0, &dist_x, &dist_y);
 
+              //trace("dist_x= %0.1f, dist_y= %0.1f", dist_x, dist_y);
+
               //! Update Obstacle states to fit input of CAS (sb_mpc)
-              obst_state(i, 0) = dist_x;
-              obst_state(i, 1) = dist_y;
+              obst_state(i, 0) = dist_x; // north
+              obst_state(i, 1) = dist_y; // east
               obst_state(i, 2) = obst_vec[i].heading; // course actually.
               obst_state(i, 3) = sog; //sqrt(std::pow(obst_vec[i].u, 2) + std::pow(obst_vec[i].v, 2));
               obst_state(i, 4) = 0.0;
@@ -596,9 +597,8 @@ namespace Control
               std::stringstream geek(obst_vec[i].id); //contains int MMSI.
               int mmsi = 0; 
               geek >> mmsi;
-
               obst_state(i, 9) = mmsi;
-
+              
               spew("Autonaut (lon,lat,cog,sog) %0.1f %0.1f %0.1f %0.1f | %d-th obstacle (dist_x,dist_y,cog,sog) %0.1f %0.1f %0.1f %0.1f", m_lat_asv, m_lon_asv, c_degrees_per_radian*asv_state(2), asv_state(3), i, obst_state(i,0), obst_state(i,1), c_degrees_per_radian*obst_state(i,2), obst_state(i,3));
             }
 
@@ -610,21 +610,28 @@ namespace Control
             double wp2_dx = 0.0; // displ between asv and wp2
             double wp2_dy = 0.0;
 
+            // Compute displacement between AutoNaut and waypoints.
             WGS84::displacement(m_lat_asv, m_lon_asv, 0, ts.lat_st, ts.lon_st, 0, &wp0_dx, &wp0_dy);
             WGS84::displacement(m_lat_asv, m_lon_asv, 0, ts.lat_en, ts.lon_en, 0, &wp1_dx, &wp1_dy);
-            WGS84::displacement(m_lat_asv, m_lon_asv, 0, m_nextpath_lat, m_nextpath_lon, 0, &wp2_dx, &wp2_dy);
-
+            
             if(m_more_than_one)
             {
+              WGS84::displacement(m_lat_asv, m_lon_asv, 0, m_nextpath_lat, m_nextpath_lon, 0, &wp2_dx, &wp2_dy);
               waypoints << wp0_dx, wp0_dy, // starting waypoint
                            wp1_dx, wp1_dy, // waypoint we are heading too
                            wp2_dx, wp2_dy; // next waypoint
+              
+              trace("Displacements: wp0 (%0.1f,%0.1f) - wp1 (%0.1f,%0.1f) - wp2 (%0.1f,%0.1f)", wp0_dx, wp0_dy, wp1_dx, wp1_dy, wp2_dx, wp2_dy);
             } else
-            {
+            { // otherwise send wp1 twice.
               waypoints << wp0_dx, wp0_dy, // starting waypoint
                            wp1_dx, wp1_dy, // waypoint we are heading too
                            wp1_dx, wp1_dy; // repeat 2nd wp for sb_mpc
+
+              trace("Displacements: wp0 (%0.1f,%0.1f) - wp1 (%0.1f,%0.1f)", wp0_dx, wp0_dy, wp1_dx, wp1_dy);
             }
+
+            trace("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
 
             // Create static obstacle matrix.
             Eigen::Matrix<double,0,4> static_obst;
@@ -638,166 +645,20 @@ namespace Control
             //! Normalize angle
             m_heading.value = Angles::normalizeRadian(m_heading.value);
 
-            //! Send to IMC bus
             dispatch(m_heading);
 
-            //spew("AutoNaut(x,y,psi,u,v): %0.1f %0.1f %0.3f %0.3f %0.1f | Heading: %0.3f Heading offset: %0.1f | Desired Speed %0.3f n_obst: %lu", asv_state(0), asv_state(1), c_degrees_per_radian*asv_state(2), asv_state(3), asv_state(4), c_degrees_per_radian*m_heading.value, c_degrees_per_radian*psi_os, m_speed.value, obst_vec.size());
+            trace("COLLISION AVOIDANCE - Heading offset: %f - Number of Obstacles: %lu", c_degrees_per_radian*psi_os, obst_vec.size());
           }
-
-          //! Send to IMC bus
-          dispatch(m_speed);
 
           // No obstacle in range	- proceed as normal
-          if (obst_vec.size() == 0)
+          if (obst_vec.size() == 0 && (m_timestamp_new - m_timestamp_prev > 1.0))
           {
-            if ((m_timestamp_new - m_timestamp_prev > 1.0))
-            {
-              m_timestamp_prev = m_timestamp_new;
-              spew("AutoNaut(x,y,psi,u,v): %0.1f %0.1f %0.3f %0.3f %0.1f | Heading: %0.3f Heading offset: %0.1f | Desired Speed %0.3f n_obst: %lu", asv_state(0), asv_state(1), c_degrees_per_radian*asv_state(2), asv_state(3), asv_state(4), c_degrees_per_radian*m_heading.value, c_degrees_per_radian*psi_os, m_speed.value, obst_vec.size());
-            }
+            m_timestamp_prev = m_timestamp_new;
             dispatch(m_heading);
           }
+
+          dispatch(m_speed);
         }
-
-/*        //                                    HARDWARE STUFF
-
-        //! From AIS Task - Receive Dynamic vessel AIS information [Hardware mode]
-        void
-        consume(const IMC::RemoteSensorInfo* ais_msg)
-        {
-          uint32_t source_mmsi = atoi(ais_msg->id.c_str());
-
-          //! Temporary storage for AIS-Obstacles
-          IMC::ObstacleState obst_ais;
-          obst_ais.setSource(ais_msg->getSource());
-          obst_ais.mmsi = source_mmsi;
-          obst_ais.lat = ais_msg->lat;
-          obst_ais.lon = ais_msg->lon;
-          obst_ais.psi = ais_msg->heading;
-          obst_ais.u = (0.51444) * ais_msg->alt; // NB ! ais_msg->alt (altitude) is acutally speed: See Sensor/AIS/Task. Converting from knots --> m/s
-          obst_ais.v = 0;
-          obst_ais.a = 150; //Assumed size (L,W): 300, 50 meter. Oil Tanker
-          obst_ais.b = 150;
-          obst_ais.c = 25;
-          obst_ais.d = 25;
-
-          //Update Obstacle-vector
-          updateObstacles(&obst_ais);
-        }*/
-
-/*        //! Updates the Obstacle-vector [Hardware mode]
-        void
-        updateObstacles(const IMC::ObstacleState* o_msg)
-        {
-          double dist_x = 0.0;
-          double dist_y = 0.0;
-          WGS84::displacement(m_lat_asv, m_lon_asv, 0, o_msg->lat, o_msg->lon, 0, &dist_x, &dist_y);
-          double distance = sqrt(dist_x * dist_x + dist_y * dist_y);
-          //spew("AIS: MMSI: %d (lon,lat,psi,u): %f %f %0.1f %0.1f | Dist: %0.1f, dx: %0.1f dy: %0.1f ", o_msg->mmsi, c_degrees_per_radian*o_msg->lon, c_degrees_per_radian*o_msg->lat, c_degrees_per_radian*o_msg->psi, o_msg->u, distance, dist_x, dist_y);
-
-          bool obs_exists = false;
-
-          // Obstacle vector (Add/Update/Remove)
-          for (unsigned i = 0; i < obst_vec.size(); i++)
-          {
-            //spew("%d.ObstVec: MMSI: %d (lat,lon,psi,u): %f %f %0.1f %0.1f ",i, obst_vec[i].mmsi, obst_vec[i].lat, obst_vec[i].lon, c_degrees_per_radian*obst_vec[i].psi, obst_vec[i].u);
-            if (obst_vec[i].mmsi == o_msg->mmsi)
-            {
-              if (m_args.print_ais)
-                spew("%u/%lu.ObstVec: MMSI: %d | (lon,lat,psi,u): %f %f %0.1f %0.1f | size: (a,b,c,d) %0.1f %0.1f %0.1f %0.1f | Dist: %0.1f",
-                     i, obst_vec.size(), obst_vec[i].mmsi,
-                     obst_vec[i].lon, obst_vec[i].lat, Angles::degrees(obst_vec[i].psi), obst_vec[i].u,
-                     obst_vec[i].a, obst_vec[i].b, obst_vec[i].c, obst_vec[i].d, distance);
-
-              obs_exists = true;
-              if (obs_exists)
-              {
-                if (distance < m_args.out_of_range) //! Ensure current range is large enough to receive AIS info
-                {
-                  // Obstacle exists & inside range - Update
-                  obst_vec[i].lon = dist_x; //! Lon expressed in dx [m]. According to NED: dx = North
-                  obst_vec[i].lat = dist_y; //! Lat expressed in dy [m]. According to NED: dy = East
-                  obst_vec[i].psi = o_msg->psi;
-                  obst_vec[i].u = o_msg->u;
-                  obst_vec[i].v = o_msg->v;
-                  if ((obst_vec[i].a == 150.0 && obst_vec[i].b == 150.0) || (obst_vec[i].c == 25.0 && obst_vec[i].d == 25.0))
-                  {
-                    //spew("UPDATE Obstacle + size: MMSI %d (lon,lat,psi,u): %0.1f %0.1f %0.1f %0.1f (a,b,c,d) %0.1f %0.1f %0.1f %0.1f | Vector size: %d",o_msg->mmsi, obst_vec[i].lon, obst_vec[i].lat, c_degrees_per_radian*obst_vec[i].psi, obst_vec[i].u, obst_vec[i].a, obst_vec[i].b, obst_vec[i].c, obst_vec[i].d, obst_vec.size());
-                    break;
-                  }
-                  else
-                  {
-                    obst_vec[i].a = o_msg->a;
-                    obst_vec[i].b = o_msg->b;
-                    obst_vec[i].c = o_msg->c;
-                    obst_vec[i].d = o_msg->d;
-                    //spew("UPDATE Obstacle: MMSI %d (lon,lat,psi,u): %0.1f %0.1f %0.1f %0.1f (a,b,c,d) %0.1f %0.1f %0.1f %0.1f  | Vector size: %d",o_msg->mmsi, obst_vec[i].lon, obst_vec[i].lat, c_degrees_per_radian*obst_vec[i].psi, obst_vec[i].u, obst_vec[i].a, obst_vec[i].b, obst_vec[i].c, obst_vec[i].d, obst_vec.size());
-                  }
-                  break;
-                }
-                else
-                { // Outside range - Remove Obstacle
-                  obst_vec.erase(obst_vec.begin() + i);
-                  spew("REMOVE - Outside Range: Obstacle(mmsi): %d , new vector size: %lu",
-                       o_msg->mmsi, obst_vec.size());
-                  break;
-                }
-              }
-            }
-          }
-
-          // New Obstacle - Add to vector
-          if (obs_exists == false && (distance < m_args.out_of_range))
-          {
-            // Temp obstacle for storage
-            obst_temp.setSource(o_msg->getSource());
-            obst_temp.mmsi = o_msg->mmsi;
-            obst_temp.lon = dist_x;
-            obst_temp.lat = dist_y;
-            obst_temp.psi = o_msg->psi;
-            obst_temp.u = o_msg->u;
-            obst_temp.v = o_msg->v;
-            obst_temp.a = o_msg->a;
-            obst_temp.b = o_msg->b;
-            obst_temp.c = o_msg->c;
-            obst_temp.d = o_msg->d;
-
-            obst_vec.push_back(obst_temp);
-
-            spew("ADD - Obstacle(mmsi): %d  | Distance: %0.1f obst_vec.size: %lu",
-                 o_msg->mmsi, distance, obst_vec.size());
-          }
-          obs_exists = false;
-        }*/
-
-/*        //! From AIS Task - Static vessel information [Hardware mode]
-        void
-        consume(const IMC::AisStaticInfo* ais_static)
-        {
-          uint32_t source_mmsi = atoi(ais_static->id.c_str());
-
-          //! Obstacle vector - Check if AIS static info needs to be updated.
-          for (unsigned i = 0; i < obst_vec.size(); i++)
-          {
-            if (obst_vec[i].mmsi == source_mmsi)
-            {
-              // If
-              if (obst_vec[i].a > 1 || obst_vec[i].b > 1 || obst_vec[i].c > 1 || obst_vec[i].d > 1)
-                break;
-
-              obst_vec[i].a = ais_static->a;
-              obst_vec[i].b = ais_static->b;
-              obst_vec[i].c = ais_static->c;
-              obst_vec[i].d = ais_static->d;
-
-              spew("** STATIC AIS MSG - Update obstacle sizes - Name: %s MMSI %d | (a,b,c,d) %0.1f %0.1f %0.1f %0.1f",
-                   ais_static->name.c_str(), source_mmsi, obst_vec[i].a, obst_vec[i].b, obst_vec[i].c, obst_vec[i].d);
-
-              break;
-            }
-          }
-        }*/
-
       };
     }
   }

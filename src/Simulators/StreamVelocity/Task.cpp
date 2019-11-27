@@ -150,6 +150,8 @@ namespace Simulators
       void
       onResourceInitialization(void)
       {
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+        
         debug(DTR("Setting default stream velocity: %f m/s N : %f m/s E : "
                   "%f m/s D"),
               m_args.default_wx,
