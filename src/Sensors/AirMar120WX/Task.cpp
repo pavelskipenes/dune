@@ -107,12 +107,8 @@ namespace Sensors
       void
       onUpdateParameters(void)
       {
-        if(getEntityState() == IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.uart_dev))
-        {
-          onResourceRelease();
-          onResourceAcquisition();
-        }
-        if(getEntityState() == IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.uart_baud))
+        if(getEntityState() == IMC::EntityState::ESTA_NORMAL && 
+          (paramChanged(m_args.uart_dev) || paramChanged(m_args.uart_baud)))
         {
           onResourceRelease();
           onResourceAcquisition();
@@ -246,7 +242,7 @@ namespace Sensors
             dispatch(m_temperature);
             spew("Metereological data - Pressure: %.3f bar | Temperature: %.1f degC", pressure, temp);
           }
-          // Relative wind direction and speed
+          // Vessel wind direction and speed
           if(sentenceID.compare("$WIMWV") == 0)
           {
             double angle = std::atof(getToken(m_line, ",", 2).c_str());
@@ -264,7 +260,8 @@ namespace Sensors
             double angle = std::atof(getToken(m_line, ",", 2).c_str());
             std::string dir = getToken(m_line, ",", 3);
             double speed = std::atof(getToken(m_line, ",", 6).c_str());
-            m_relative_wind.direction = angle;
+            m_relative_wind.angle = angle;
+            m_relative_wind.direction = dir;
             m_relative_wind.speed = speed;
             dispatch(m_relative_wind);
             spew("Relative wind dir. and speed - Angle: %.1f deg | Direction: %s | Speed: %.1f m/s", angle, dir.c_str(), speed);
