@@ -231,7 +231,7 @@ namespace DUNE
 	private:
 
 	// bool AH_0, bool OBS_PASSED unused?
-	double costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, Eigen::Matrix<double,1,4> static_obst, int &ik_return_to_path); 
+	double costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, int &ik_return_to_path); //Eigen::Matrix<double,1,4> static_obst 
 	double deltaP(double P_ca);
 	double deltaChi(double Chi_ca, double k_dchi_p, double k_dchi_sb); 
 	double sqrChi(double Chi_ca, double k_chi_p, double k_chi_sb); 

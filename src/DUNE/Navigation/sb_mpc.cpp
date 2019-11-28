@@ -421,6 +421,7 @@ namespace DUNE
 			// progress along path: s_total - s(t) < R or s(t) < R? depends on s(t)
 			along_track_dist < R;
 
+		std::cout << "SWITCH WAYPOINT??   " << switch_wp << std::endl;
 
 		//std::cout << "asv-wp radius :  " << sqrt(asv_wp_radius_sqrd) << " <? " << R << std::endl;
 
@@ -622,7 +623,6 @@ namespace DUNE
 
 				asv->linearPrediction(asv_state, u_d*P_ca_[j], psi_d + Chi_ca_i, waypoints, Chi_ca_i, cp, guidance_strategy, WP_R_, LOS_LA_DIST_, LOS_KI_);
 
-
 		        // Compute worst cost associated with the current control behavior and the corresponding scenarios for each obsbtacle
 				cost_i = -1;
 				cost_o = 0;
@@ -632,8 +632,22 @@ namespace DUNE
 
 					for (int l = 0; l < n_obst_branches; l++){
 
+						/*std::cout << "P_ca_[j] : " << P_ca_[j] << std::endl;
+						std::cout << "Chi_ca_[i] : " << Chi_ca_[i] << std::endl;
+						std::cout << "k : " << k << std::endl;
+						std::cout << "(bool)SB_0(k) : " << (bool)SB_0(k) << std::endl;
+						std::cout << "(bool)CRG_0(k) : " << (bool)CRG_0(k) << std::endl;
+						std::cout << "(bool)OTG_0(k) : " << (bool)OTG_0(k) << std::endl;
+						std::cout << "(bool)OT_0(k) : " << (bool)OT_0(k) << std::endl;
+						std::cout << "(bool)HOT_0(k) : " << (bool)HOT_0(k) << std::endl;
+						std::cout << "DIST_0(k) : " << SB_0(k) << std::endl;
+						std::cout << "u_d : " << u_d << std::endl;
+						std::cout << "l : " << l << std::endl;
+						std::cout << "static_obst : " << static_obst << std::endl;
+						std::cout << "ik_return_to_path : " << ik_return_to_path << std::endl;*/
+						
 						// (bool)AH_0(k) and (bool)OBS_PASSED_0(k) unused?
-						cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, (bool)SB_0(k), (bool)CRG_0(k), (bool)OTG_0(k), (bool)OT_0(k), (bool)HOT_0(k), DIST_0(k), u_d, l, static_obst, ik_return_to_path);
+						cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, (bool)SB_0(k), (bool)CRG_0(k), (bool)OTG_0(k), (bool)OT_0(k), (bool)HOT_0(k), DIST_0(k), u_d, l, ik_return_to_path); //static_obst
 
 						if(guidance_strategy >= 2 && cp == 0 && Chi_ca_[i] != 0)
 							cost_k = cost_k + 0.1*n_cp; // (a small) path deviation penalty
@@ -656,7 +670,6 @@ namespace DUNE
 					// accumulate cost for all obstacles
 					cost_o =  cost_o + HL_(k);
 				}
-
 
 		        // Save current scenario if cost is lower than that of previously checked controls
 				if (cost_i < cost){
@@ -798,7 +811,7 @@ namespace DUNE
 }
 
 
-double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, Eigen::Matrix<double,1,4> static_obst, int &ik_return_to_path){
+double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, int &ik_return_to_path){ //Eigen::Matrix<double,1,4> static_obst
 	// bool AH_0, bool OBS_PASSED_0 unused?
 	double dist, phi, phi_o, psi_o, psi_rel, R, C, C1, C2, k_coll, d_safe_i, R_c, s_0; // dist_min;
 	Eigen::Vector2d d, los, los_inv, v_o, v_s;
@@ -826,7 +839,9 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
 
 	ik_return_to_path = n_samp;
 
-
+	
+	isGeoConstr = false;
+	/*
     if (static_obst.rows() == 0){
         isGeoConstr = false;
     }else{
@@ -841,7 +856,7 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
         // When obstacles are implemented as polygons, isBehind condition can be removed
         d_geo = distPoint2line(p1, v0, v1);
         isGeoConstr = (doIntersect(p0, p1, v0, v1) || isBehind(p1, v0, v1, d_geo));
-    }
+    }*/
 
 
 	//for (int i = 0; i < n_samp-1; i++){
@@ -926,7 +941,6 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
 			if (v_s.dot(v_o) > cos(PHI_OT_*DEG2RAD)*v_s.norm()*v_o.norm() && v_s.norm() > v_o.norm()){
 				d_safe_i = d_safe + asv->getL()/2 + obst_vect[k]->getL()/2;
 			}
-
 
 			// Overtaken by obstacle
 			OT = v_s.dot(v_o) > cos(PHI_OT_*DEG2RAD)*v_s.norm()*v_o.norm()
@@ -1013,7 +1027,6 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
 		}else{
 			H0 = C*R + KAPPA_*mu + R_c*mu_0 + G_*gCost;
 		}
-
 
 		if (H0 > H1){
 			H1 = H0;  // Maximizing the cost with regards to time

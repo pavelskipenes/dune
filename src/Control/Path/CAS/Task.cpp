@@ -440,6 +440,7 @@ namespace Control
           TupleList tuples(msg->data);
           std::string system_name = tuples.get("NAME");
 
+          trace("Distance from obstacle %s is %0.1f",msg->id.c_str(), distance);
           spew("Received Obstacle from AIS with MMSI: %s, NAME: %s; longitude %f and latitude %f, distance: %0.1f", msg->id.c_str(), system_name.c_str(), c_degrees_per_radian*m_lon_obst, c_degrees_per_radian*m_lat_obst, distance);
 
           bool obs_exists = false;
@@ -542,8 +543,8 @@ namespace Control
         void
         step(const IMC::EstimatedState& state, const TrackingState& ts)
         {
-          trace("LAST WAYPOINT: lat %f - long %f",c_degrees_per_radian*ts.lat_st, c_degrees_per_radian*ts.lon_st);
-          trace("NEXT WAYPOINT: lat %f - long %f",c_degrees_per_radian*ts.lat_en, c_degrees_per_radian*ts.lon_en);
+          trace("LAST WAYPOINT COORD: lat %f - long %f",c_degrees_per_radian*ts.lat_st, c_degrees_per_radian*ts.lon_st);
+          trace("NEXT WAYPOINT COORD: lat %f - long %f",c_degrees_per_radian*ts.lat_en, c_degrees_per_radian*ts.lon_en);
           
           //! LOS Navigation Law (called Pure Pursuit in Dune)
           m_heading.value = ts.los_angle;
@@ -631,10 +632,8 @@ namespace Control
               trace("Displacements: wp0 (%0.1f,%0.1f) - wp1 (%0.1f,%0.1f)", wp0_dx, wp0_dy, wp1_dx, wp1_dy);
             }
 
-            trace("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
-
             // Create static obstacle matrix.
-            Eigen::Matrix<double,0,4> static_obst;
+            const Eigen::Matrix<double,-1,4> static_obst;
 
             //! Collision Avoidance Algorithm - Compute heading offset/(speed offset)
             sb_mpc.getBestControlOffset(u_os, psi_os, m_speed.value, m_heading.value, asv_state, obst_state, static_obst, waypoints);
