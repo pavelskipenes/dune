@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 8276afd2231790a289b4b93413c38162                            *
+// IMC XML MD5: a566b378b2df7546a7b7f9546a2b3f83                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -162,6 +162,10 @@
 #define DUNE_IMC_ACOUSTICSYSTEMS 213
 //! AcousticLink identification number.
 #define DUNE_IMC_ACOUSTICLINK 214
+//! AcousticRequest identification number.
+#define DUNE_IMC_ACOUSTICREQUEST 215
+//! AcousticStatus identification number.
+#define DUNE_IMC_ACOUSTICSTATUS 216
 //! Rpm identification number.
 #define DUNE_IMC_RPM 250
 //! Voltage identification number.
@@ -356,6 +360,8 @@
 #define DUNE_IMC_DESIREDLINEARSTATE 414
 //! DesiredThrottle identification number.
 #define DUNE_IMC_DESIREDTHROTTLE 415
+//! PeekDesiredPath identification number.
+#define DUNE_IMC_PEEKDESIREDPATH 420
 //! Goto identification number.
 #define DUNE_IMC_GOTO 450
 //! PopUp identification number.
@@ -450,6 +456,8 @@
 #define DUNE_IMC_ALIGNMENT 495
 //! StationKeepingExtended identification number.
 #define DUNE_IMC_STATIONKEEPINGEXTENDED 496
+//! PeekManeuver identification number.
+#define DUNE_IMC_PEEKMANEUVER 497
 //! Magnetometer identification number.
 #define DUNE_IMC_MAGNETOMETER 499
 //! VehicleState identification number.
@@ -494,6 +502,10 @@
 #define DUNE_IMC_VTOLSTATE 519
 //! ArmingState identification number.
 #define DUNE_IMC_ARMINGSTATE 520
+//! TCPRequest identification number.
+#define DUNE_IMC_TCPREQUEST 521
+//! TCPStatus identification number.
+#define DUNE_IMC_TCPSTATUS 522
 //! Abort identification number.
 #define DUNE_IMC_ABORT 550
 //! PlanSpecification identification number.
@@ -666,5 +678,19 @@
 #define DUNE_IMC_ESTIMATEDFREQ 911
 //! PowerSettings identification number.
 #define DUNE_IMC_POWERSETTINGS 912
+//! VesselWind identification number.
+#define DUNE_IMC_VESSELWIND 913
+//! RelativeWind identification number.
+#define DUNE_IMC_RELATIVEWIND 914
+//! CurrentVelocity identification number.
+#define DUNE_IMC_CURRENTVELOCITY 910
+//! AcousticBackscatter identification number.
+#define DUNE_IMC_ACOUSTICBACKSCATTER 1011
+//! Correlation identification number.
+#define DUNE_IMC_CORRELATION 1012
+//! CurrentProfileCell identification number.
+#define DUNE_IMC_CURRENTPROFILECELL 1014
+//! CurrentProfile identification number.
+#define DUNE_IMC_CURRENTPROFILE 1015
 
 #endif
