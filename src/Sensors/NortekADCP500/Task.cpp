@@ -49,7 +49,7 @@ namespace Sensors
     struct Arguments
     {
       //! GPIO toggle.
-      bool state;
+      bool activate;
       //! IO device.
       std::string io_dev;
       //! UART baud rate.
@@ -87,7 +87,6 @@ namespace Sensors
     {
       Hardware::GPIO* m_gpio;
       bool m_gpio_state;           // Set to turn GPIO on/off
-      bool m_activate;             // Flag to indicate task activation
       //! IO device handle.
       IO::Handle* m_handle;
       //! IO device Handle for TCP data socket.
@@ -117,7 +116,6 @@ namespace Sensors
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx), 
         m_gpio(NULL),
-        m_activate(false),
         m_handle(NULL),
         m_data_h(NULL),
         m_driver(NULL),
@@ -125,15 +123,17 @@ namespace Sensors
         m_triggered(false),
         m_serial(false)
       {
-        paramActive(Tasks::Parameter::SCOPE_IDLE,
-                    Tasks::Parameter::VISIBILITY_USER);
+        // paramActive(Tasks::Parameter::SCOPE_IDLE,
+        //             Tasks::Parameter::VISIBILITY_USER);
 
         // Define configuration parameters.
-        param("GPIO - State", m_args.state)
+        param("Activate Sensor", m_args.activate)
+        .scope(Tasks::Parameter::SCOPE_GLOBAL)
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
         .defaultValue("1")
         .minimumValue("0")
         .maximumValue("1")
-        .description("Set GPIO state");
+        .description("Controls sensor activation/deactivation");
         
         param("IO Port - Device", m_args.io_dev)
         .defaultValue("")
@@ -273,30 +273,24 @@ namespace Sensors
       void
       onUpdateParameters(void)
       {
-        if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.state))
+        if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.activate))
         {
-          m_gpio_state = m_args.state;
-
           // If sensor has been turned on, activate the task
           // If sensor has been turned off, deactivate the task
           // SSRs are normally-closed (NC), so deactivation means GPIO state = 1
-          if(m_args.state)
-          {
-            m_activate = false;
+          // We invert the logic here so on Neptus it is direct
+          m_gpio_state = !m_args.activate;
+          if(m_gpio_state)
             requestDeactivation();
-          }
           else
-          {
-            m_activate = true;
             requestActivation();
-          }
-
-          if (isActive())
-          {
-            if (paramChanged(m_args.ncells) || paramChanged(m_args.cellsize) ||
-                paramChanged(m_args.nping) || paramChanged(m_args.blank))
-              onResourceInitialization();
-          } 
+        }
+        
+        if (isActive())
+        {
+          if (paramChanged(m_args.ncells) || paramChanged(m_args.cellsize) ||
+              paramChanged(m_args.nping) || paramChanged(m_args.blank))
+            onResourceInitialization();
         }
       }
 
@@ -315,8 +309,6 @@ namespace Sensors
       void
       onResourceAcquisition(void)
       {
-        m_gpio = new Hardware::GPIO(65);
-        
         consumeMessages();
 
         try
@@ -329,6 +321,11 @@ namespace Sensors
             m_serial = true;
             setup();
           }
+
+          // GPIO init
+          m_gpio = new Hardware::GPIO(65);
+          m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
+          m_gpio->setValue(0);
         }
         catch (...)
         {
@@ -341,9 +338,7 @@ namespace Sensors
       void
       onResourceInitialization(void)
       {
-        // GPIO init
-        m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
-        m_gpio->setValue(0);
+        
 
         // Driver init
         if (isConnected())
@@ -505,18 +500,8 @@ namespace Sensors
 
         while (!stopping())
         {
-          // if(m_activate)
-          // {
-          //   spew("Activating sensor and task");
-          //   m_gpio->setValue(0);
-          //   Delay::wait(2.0);
-          // } 
-          // else
-          // {
-          //   spew("Deactivating sensor and task");
-          //   m_gpio->setValue(1);
-          //   Delay::wait(2.0);
-          // }
+          // Activate or deactivate GPIO
+          m_gpio->setValue(m_gpio_state);
 
           // Get data from ADCP
           if (!isParserOn())
