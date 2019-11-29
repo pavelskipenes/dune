@@ -140,11 +140,11 @@ namespace Sensors
                     Tasks::Parameter::VISIBILITY_USER);
 
         // Define configuration parameters.
-        param("GPIO - State", m_args.state)
-        .defaultValue("1")
-        .minimumValue("0")
-        .maximumValue("1")
-        .description("Set GPIO state");
+        param("Activate Sensor", m_args.activate)
+        .scope(Tasks::Parameter::SCOPE_GLOBAL)
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .defaultValue("false")
+        .description("Controls sensor activation/deactivation");
         
         param("Serial Port - Device", m_args.uart_dev)
         .defaultValue("")
