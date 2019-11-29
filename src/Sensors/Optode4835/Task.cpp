@@ -136,8 +136,8 @@ namespace Sensors
         m_temperature(0.0),
         m_uart(NULL)
       {
-        // paramActive(Tasks::Parameter::SCOPE_IDLE,
-        //             Tasks::Parameter::VISIBILITY_USER);
+        paramActive(Tasks::Parameter::SCOPE_IDLE,
+                    Tasks::Parameter::VISIBILITY_USER);
 
         // Define configuration parameters.
         param("GPIO - State", m_args.state)

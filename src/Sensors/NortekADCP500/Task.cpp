@@ -125,6 +125,9 @@ namespace Sensors
         m_triggered(false),
         m_serial(false)
       {
+        paramActive(Tasks::Parameter::SCOPE_IDLE,
+                    Tasks::Parameter::VISIBILITY_USER);
+
         // Define configuration parameters.
         param("GPIO - State", m_args.state)
         .defaultValue("1")
