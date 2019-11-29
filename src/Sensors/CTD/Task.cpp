@@ -52,8 +52,8 @@ namespace Sensors
 
     struct Arguments
     {
-      //! GPIO toggle.
-      bool state;
+      //! Sensor activation.
+      bool activate;
       //! Serial port device.
       std::string uart_dev;
       //! Serial port baud rate.
@@ -123,11 +123,14 @@ namespace Sensors
         // paramActive(Tasks::Parameter::SCOPE_IDLE,
         //             Tasks::Parameter::VISIBILITY_USER);
 
-        param("GPIO - State", m_args.state)
+        // Define configuration parameters.
+        param("Activate Sensor", m_args.activate)
+        .scope(Tasks::Parameter::SCOPE_GLOBAL)
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
         .defaultValue("1")
         .minimumValue("0")
         .maximumValue("1")
-        .description("Set GPIO state");
+        .description("Controls sensor activation/deactivation");
 
         param("Serial Port - Device", m_args.uart_dev)
         .defaultValue("")
@@ -222,14 +225,14 @@ namespace Sensors
       void
       onUpdateParameters(void)
       {
-        if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.state))
+        if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.activate))
         {
-          m_gpio_state = m_args.state;
+          m_gpio_state = m_args.activate;
 
           // If sensor has been turned on, activate the task
           // If sensor has been turned off, deactivate the task
           // SSRs are normally-closed (NC), so deactivation means GPIO state = 1
-          if(m_args.state)
+          if(m_args.activate)
           {
             m_activate = false;
             requestDeactivation();
@@ -538,25 +541,25 @@ namespace Sensors
         // Run while task is active
         while(!stopping())
         {
-          if(m_activate)
-          {
-            trace("Activating sensor");
-            m_gpio->setValue(0);
-          } else
-          {
-            trace("Deactivating sensor");
-            m_gpio->setValue(1);
-          }
+          // if(m_activate)
+          // {
+          //   trace("Activating sensor");
+          //   m_gpio->setValue(0);
+          // } else
+          // {
+          //   trace("Deactivating sensor");
+          //   m_gpio->setValue(1);
+          // }
         
           // Get data from sensor
           listen();
 
-          trace("CTD Temperature: %.2f deg C", m_temp.value);
-          trace("CTD Conductivity: %.2f S/m", m_cond.value);
-          trace("CTD Pressure: %.2f hPa", m_press.value);
-          trace("CTD Depth: %.2f m", m_depth.value);
-          trace("CTD Salinity: %.2f PSU", m_salinity.value);
-          trace("CTD Sound Speed: %.2f m/s", m_sspeed.value);
+          spew("CTD Temperature: %.2f deg C", m_temp.value);
+          spew("CTD Conductivity: %.2f S/m", m_cond.value);
+          spew("CTD Pressure: %.2f hPa", m_press.value);
+          spew("CTD Depth: %.2f m", m_depth.value);
+          spew("CTD Salinity: %.2f PSU", m_salinity.value);
+          spew("CTD Sound Speed: %.2f m/s", m_sspeed.value);
 
           // Not received communication for a while
           if (m_wdog.overflow())
