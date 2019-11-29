@@ -75,8 +75,8 @@ namespace Sensors
     //! Task arguments.
     struct Arguments
     {
-      //! GPIO toggle.
-      bool state;
+      //! Sensor activation.
+      bool activate;
       //! Serial port device.
       std::string uart_dev;
       //! Serial port baud rate.
@@ -95,7 +95,7 @@ namespace Sensors
     {
       //! GPIO state handle
       Hardware::GPIO* m_gpio;
-      //! Sensor SSR state
+      //! GPIO state
       bool m_gpio_state;
       //! Flag for GPIO activation
       bool m_activate;
@@ -130,14 +130,13 @@ namespace Sensors
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx), 
         m_gpio(NULL),
-        m_activate(false),
         m_depth(0.0),
         m_salinity(0.0),
         m_temperature(0.0),
         m_uart(NULL)
       {
-        paramActive(Tasks::Parameter::SCOPE_IDLE,
-                    Tasks::Parameter::VISIBILITY_USER);
+        // paramActive(Tasks::Parameter::SCOPE_IDLE,
+        //             Tasks::Parameter::VISIBILITY_USER);
 
         // Define configuration parameters.
         param("Activate Sensor", m_args.activate)
@@ -183,23 +182,17 @@ namespace Sensors
       void
       onUpdateParameters(void)
       {
-        if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.state))
+        if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.activate))
         {
-          m_gpio_state = m_args.state;
-
           // If sensor has been turned on, activate the task
           // If sensor has been turned off, deactivate the task
           // SSRs are normally-closed (NC), so deactivation means GPIO state = 1
-          if(m_args.state)
-          {
-            m_activate = false;
+          // We invert the logic here so on Neptus it is direct
+          m_gpio_state = !m_args.activate;
+          if(m_gpio_state)
             requestDeactivation();
-          }
           else
-          {
-            m_activate = true;
             requestActivation();
-          }
         }
 
         if (isActive() && paramChanged(m_args.period))
@@ -515,18 +508,6 @@ namespace Sensors
         // Run while task is active
         while(!stopping())
         {
-          if(m_activate)
-          {
-            spew("Activating sensor and task");
-            m_gpio->setValue(0);
-            Delay::wait(2.0);
-          } else
-          {
-            spew("Deactivating sensor and task");
-            m_gpio->setValue(1);
-            Delay::wait(2.0);
-          }
-
           // Get data from sensor
           listen();
 
@@ -536,6 +517,13 @@ namespace Sensors
             setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
             throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
           }
+
+          // If no instruction arrived from neptus, reset timer to avoid task from restarting
+          if(!m_args.activate)
+            m_wdog.reset();
+            
+          // Sleep for 1s
+          Delay::wait(1.0);
         }
 
         // When stopping task, turn sensor off
