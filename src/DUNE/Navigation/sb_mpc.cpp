@@ -131,6 +131,8 @@ namespace DUNE
 			Chi_ca_(i) = Chi_ca_(i-1) - granularity;
 		}
 
+		//std::cout << "COURSE OFFSETS" << Chi_ca_ << std::endl;
+
 		// OR
 		//Chi_ca_.resize(13);
 		//Chi_ca_ << -90.0,-75.0,-60.0,-45.0,-30.0,-15.0,0.0,15.0,30.0,45.0,60.0,75.0,90.0;
@@ -148,7 +150,7 @@ namespace DUNE
 	    // NB! swap +/- and left/right values in the following for NED (MR) version!
 	    chi_obst_os_.resize(3,1);
 	    //chi_obst_os_ << -15.0, 0.0, 5.0;  //-15.0, 0.0, 5.0; asymemtric, branches and zero offset
-        chi_obst_os_ << -5.0, 0.0, 0.1;  // ENU: -5.0, 0.0, 0.1; NED: 5.0, 0.0, -0.1; uncertainty adjusted in obstacle.cpp
+        chi_obst_os_ << 5.0, 0.0, -0.1;  // ENU: -5.0, 0.0, 0.1; NED: 5.0, 0.0, -0.1; uncertainty adjusted in obstacle.cpp
 	    chi_obst_os_ *= DEG2RAD;
 
 	    //u_obst_os_.resize(2,1);
@@ -463,10 +465,14 @@ namespace DUNE
 
 		d(0) = obst_vect[k]->x_[0] - asv_state(0);
 		d(1) = obst_vect[k]->y_[0] - asv_state(1);
+
+		std::cout << "dist X : " << d(0) << std::endl;
+		std::cout << "dist Y : " << d(1) << std::endl;
+
 		dist_0 = d.norm(); DIST_0(k)=dist_0;
 
 		los_0 = d/dist_0;
-		//std::cout << "dist_0 : " << DIST_0(k) << std::endl;
+		std::cout << "dist_0 : " << DIST_0(k) << std::endl;
 
 		PHI_0(k) = atan2(d(1),d(0));	// bearing
 		//std::cout << "PHI_0/bearing : " << PHI_0(k)*RAD2DEG << std::endl;
@@ -486,7 +492,7 @@ namespace DUNE
 			 ){
 			SB_0(k) = obst_vect[k]->SB_0;
 		}else{
-			SB_0(k) = phi_0 < 0;  // ENU: < 0, NED (MR): >= 0
+			SB_0(k) = phi_0 >= 0;  // ENU: < 0, NED (MR): >= 0
 		}
 		obst_vect[k]->SB_0 = (int) SB_0(k);
 		//std::cout << "SB_0 : " << SB_0(k) << std::endl;
@@ -580,14 +586,16 @@ namespace DUNE
 	double Chi_ca_i = 0.0;
 	int i_return_to_path = 0, ik_return_to_path = 0, i_return_to_path_best=n_samp; // iter at which ASV can return to path
 	int cp = 0, n_cp = 3; // course-offset iterator and change points
-
 	for (int j = 0; j < P_ca_.size(); j++){
 		for (int i = 0; i < Chi_ca_.size(); i++){
+
+			//std::cout << "CHI_CA SIZE= " << Chi_ca_.size() << std::endl;
+			//std::cout << "P_CA= " << P_ca_[j] << std::endl;
 
 		    for (int cp_ = 0; cp_ < n_cp; cp_++){
 
 				// setup for guidance behavior simulation
-				if ( cp_ > 0 && (0.0 == Chi_ca_[i] || (guidance_strategy < 2 && fabs(Chi_ca_[i]) >= 90.0*DEG2RAD) ) )
+				if ( cp_ > 0 && (0.0 == Chi_ca_[i] || (guidance_strategy < 2 && std::fabs(Chi_ca_[i]) >= 90.0*DEG2RAD) ) )
 					break;
 
 				Chi_ca_i = Chi_ca_[i]; // offset for cp=0
@@ -609,7 +617,7 @@ namespace DUNE
 						Chi_ca_i = 0.0; // no offset => return to original ref.
 				}
 
-				if (fabs(Chi_ca_i*RAD2DEG) > 90.0)
+				if (std::fabs(Chi_ca_i*RAD2DEG) > 90.0)
 					break;
 
 
@@ -621,7 +629,21 @@ namespace DUNE
 						break;
 				}*/
 
+				/*for (int i = 0; i < n_wps; i++){
+					std::cout << "waypoint " << i << " " << waypoints.row(i) << std::endl;
+				}*/
+
 				asv->linearPrediction(asv_state, u_d*P_ca_[j], psi_d + Chi_ca_i, waypoints, Chi_ca_i, cp, guidance_strategy, WP_R_, LOS_LA_DIST_, LOS_KI_);
+
+				/*if(Chi_ca_i == 45.0*DEG2RAD)
+				{
+					std::cout << "X POS= " << asv->m_x[n_samp] << std::endl;
+					std::cout << "Y POS= " << asv->m_y[n_samp] << std::endl;			
+					std::cout << "PSI= " << asv->m_psi[n_samp] << std::endl;
+					std::cout << "U= " << asv->m_u[n_samp] << std::endl;
+					std::cout << "V= " << asv->m_v[n_samp] << std::endl;
+					std::cout << "R= " << asv->m_y[n_samp] << std::endl;
+				}*/
 
 		        // Compute worst cost associated with the current control behavior and the corresponding scenarios for each obsbtacle
 				cost_i = -1;
@@ -631,20 +653,6 @@ namespace DUNE
 					HL_(k) = 0;
 
 					for (int l = 0; l < n_obst_branches; l++){
-
-						/*std::cout << "P_ca_[j] : " << P_ca_[j] << std::endl;
-						std::cout << "Chi_ca_[i] : " << Chi_ca_[i] << std::endl;
-						std::cout << "k : " << k << std::endl;
-						std::cout << "(bool)SB_0(k) : " << (bool)SB_0(k) << std::endl;
-						std::cout << "(bool)CRG_0(k) : " << (bool)CRG_0(k) << std::endl;
-						std::cout << "(bool)OTG_0(k) : " << (bool)OTG_0(k) << std::endl;
-						std::cout << "(bool)OT_0(k) : " << (bool)OT_0(k) << std::endl;
-						std::cout << "(bool)HOT_0(k) : " << (bool)HOT_0(k) << std::endl;
-						std::cout << "DIST_0(k) : " << SB_0(k) << std::endl;
-						std::cout << "u_d : " << u_d << std::endl;
-						std::cout << "l : " << l << std::endl;
-						std::cout << "static_obst : " << static_obst << std::endl;
-						std::cout << "ik_return_to_path : " << ik_return_to_path << std::endl;*/
 						
 						// (bool)AH_0(k) and (bool)OBS_PASSED_0(k) unused?
 						cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, (bool)SB_0(k), (bool)CRG_0(k), (bool)OTG_0(k), (bool)OT_0(k), (bool)HOT_0(k), DIST_0(k), u_d, l, ik_return_to_path); //static_obst
@@ -771,7 +779,7 @@ namespace DUNE
 
 	P_ca_last_ = u_os_best;
 	Chi_ca_last_ = psi_os_best;
-	CF_0 = u_os_best * (1 - (fabs(RAD2DEG*psi_os_best)/15.0)/8.0); // 6 course offsets possible towards SB/P, 2 factors possible speed reduction
+	CF_0 = u_os_best * (1 - (std::fabs(RAD2DEG*psi_os_best)/15.0)/8.0); // 6 course offsets possible towards SB/P, 2 factors possible speed reduction
 
 	//colav_status.resize(2,1);
 	//colav_status << CF_0, cost; ///cost_ac;
@@ -947,7 +955,7 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
 					&& v_s.norm() < v_o.norm();
 
 			// Obstacle on starboard side
-			SB = phi < 0; // ENU: < 0, NED (MR): >= 0
+			SB = phi >= 0; // ENU: < 0, NED (MR): >= 0
 
 			// Obstacle Head-on
 			HO = v_o.norm() > 0.25 //0.05?
@@ -960,11 +968,11 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
 				&& v_s.dot(los) > cos(112.5*DEG2RAD)*v_s.norm();
 			  	//&& ( psi_rel > 0 ); // (ENU: > 0, NED: < 0) CR off when asv has right of way + fix for SB/P switches
 
-			// Cost for voilating no-go zone
+			// Cost for violating no-go zone
  			if (isGeoConstr && (t<T_stat_)){
 			     p0 << asv->m_y[i], asv->m_x[i];
 			     d_geo = dist2staticObst(p0, v0, v1);
-			     gCost = (1/pow(fabs(t-t0),P_))*pow(D_SAFE_/d_geo,Q_);
+			     gCost = (1/pow(std::fabs(t-t0),P_))*pow(D_SAFE_/d_geo,Q_);
 		        }
 
 
@@ -983,7 +991,7 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
 
 			// Transition - crossing obstacle
 			CRG = CRG_0 && SB_0 && SB
-				&& Chi_ca - Chi_ca_last_ > 0; // a move to port (ENU: > 0, NED (MR): < 0 )
+				&& Chi_ca - Chi_ca_last_ < 0; // a move to port (ENU: > 0, NED (MR): < 0 )
 
 
 			// Transition - head-on maneuver in progress
@@ -1001,7 +1009,7 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
 
 			if (dist <= d_safe_i){ // changed from < to <=
 				if (dist < 1) dist=1; // safe numerics!
-				R = (1/pow(fabs(t-t0),P_))*pow(d_safe_i/dist,Q_);
+				R = (1/pow(std::fabs(t-t0),P_))*pow(d_safe_i/dist,Q_);
 				k_coll = K_COLL_*asv->getL()*obst_vect[k]->getL(); // L-influence!
 				//k_coll = K_COLL_; // test: fixed penalty!
 				C = k_coll*pow((v_s-v_o).norm(),2);  // relative velocity
@@ -1071,9 +1079,9 @@ double simulationBasedMpc::deltaP(double P_ca){
 
 double simulationBasedMpc::deltaChi(double Chi_ca, double k_dchi_p, double k_dchi_sb){
 	double dChi = Chi_ca - Chi_ca_last_;
-	if (dChi > 0){ 		// ENU: > 0, NED (MR): < 0
+	if (dChi < 0){ 		// ENU: > 0, NED (MR): < 0
 		return k_dchi_p*pow(dChi,2); // K_DCHI_P_
-	}else if (dChi < 0){ 	// ENU: < 0, NED (MR): > 0
+	}else if (dChi > 0){ 	// ENU: < 0, NED (MR): > 0
 		return k_dchi_sb*pow(dChi,2); // _SB_
 	}else{
 		return 0;
@@ -1082,7 +1090,7 @@ double simulationBasedMpc::deltaChi(double Chi_ca, double k_dchi_p, double k_dch
 
 double simulationBasedMpc::sqrChi(double Chi_ca, double k_chi_p, double k_chi_sb){
 	double dChi = Chi_ca - Chi_ca_last_;
-	if ( dChi > 0 ){  	// ENU: > 0, NED (MR): < 0
+	if ( dChi < 0 ){  	// ENU: > 0, NED (MR): < 0
 		return k_chi_p*pow(Chi_ca,2); 	// _P_
 	}else{
 		return k_chi_sb*pow(Chi_ca,2);	// _SB_

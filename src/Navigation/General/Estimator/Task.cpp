@@ -124,8 +124,6 @@ namespace
           double m_wave_avg_last;
           // Estimated Wave Frequency.
           double m_wave;
-          //! Current consumed by thruster.
-          IMC::PowerSettings m_pwr_settings;
 
           Task(const std::string& name, Tasks::Context& ctx):
             DUNE::Tasks::Task(name, ctx),
@@ -332,18 +330,7 @@ namespace
               //m_avg=0;
               // Free allocated filters memory.
               //lowpass_ampl.freeMem();
-              //lowpass_est.freeMem();
-
-              //! Fake power settings.
-              
-              m_pwr_settings.l2=0;
-              m_pwr_settings.l3=0;
-              m_pwr_settings.iridium=0;
-              m_pwr_settings.modem=0;
-              m_pwr_settings.pumps=0;
-              m_pwr_settings.vhf=1;
-              dispatch(m_pwr_settings);
-              
+              //lowpass_est.freeMem();              
             }
 
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);

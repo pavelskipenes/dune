@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 14884693e4e0aba1e21d150de3a768be                            *
+// IMC XML MD5: a566b378b2df7546a7b7f9546a2b3f83                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -26199,6 +26199,375 @@ namespace DUNE
 
       void
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Current Velocity.
+    class CurrentVelocity: public Message
+    {
+    public:
+      //! X.
+      fp32_t x;
+      //! Y.
+      fp32_t y;
+      //! Z1.
+      fp32_t z1;
+      //! Z2.
+      fp32_t z2;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 910;
+      }
+
+      CurrentVelocity(void);
+
+      CurrentVelocity*
+      clone(void) const
+      {
+        return new CurrentVelocity(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return CurrentVelocity::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "CurrentVelocity";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 16;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Acoustic Backscatter.
+    class AcousticBackscatter: public Message
+    {
+    public:
+      //! Beam 1.
+      fp32_t beam1;
+      //! Beam 2.
+      fp32_t beam2;
+      //! Beam 3.
+      fp32_t beam3;
+      //! Beam 4.
+      fp32_t beam4;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 1011;
+      }
+
+      AcousticBackscatter(void);
+
+      AcousticBackscatter*
+      clone(void) const
+      {
+        return new AcousticBackscatter(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return AcousticBackscatter::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "AcousticBackscatter";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 16;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Correlation.
+    class Correlation: public Message
+    {
+    public:
+      //! Beam 1.
+      uint8_t beam1;
+      //! Beam 2.
+      uint8_t beam2;
+      //! Beam 3.
+      uint8_t beam3;
+      //! Beam 4.
+      uint8_t beam4;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 1012;
+      }
+
+      Correlation(void);
+
+      Correlation*
+      clone(void) const
+      {
+        return new Correlation(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return Correlation::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "Correlation";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 4;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Current Profile Cell.
+    class CurrentProfileCell: public Message
+    {
+    public:
+      //! Cell Position.
+      uint8_t cellposition;
+      //! Vel X.
+      fp32_t x;
+      //! Vel Y.
+      fp32_t y;
+      //! Vel Z1.
+      fp32_t z1;
+      //! Vel Z2.
+      fp32_t z2;
+      //! Amp 0.
+      fp32_t amp0;
+      //! Amp 1.
+      fp32_t amp1;
+      //! Amp 2.
+      fp32_t amp2;
+      //! Amp 3.
+      fp32_t amp3;
+      //! Cor 0.
+      uint8_t cor0;
+      //! Cor 1.
+      uint8_t cor1;
+      //! Cor 2.
+      uint8_t cor2;
+      //! Cor 3.
+      uint8_t cor3;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 1014;
+      }
+
+      CurrentProfileCell(void);
+
+      CurrentProfileCell*
+      clone(void) const
+      {
+        return new CurrentProfileCell(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return CurrentProfileCell::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "CurrentProfileCell";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 37;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Current Profile.
+    class CurrentProfile: public Message
+    {
+    public:
+      //! Current Profile.
+      MessageList<CurrentProfileCell> currentprofile;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 1015;
+      }
+
+      CurrentProfile(void);
+
+      CurrentProfile*
+      clone(void) const
+      {
+        return new CurrentProfile(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return CurrentProfile::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "CurrentProfile";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 0;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return currentprofile.getSerializationSize();
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+
+    protected:
+      void
+      setTimeStampNested(double value__);
+
+      void
+      setSourceNested(uint16_t value__);
+
+      void
+      setSourceEntityNested(uint8_t value__);
+
+      void
+      setDestinationNested(uint16_t value__);
+
+      void
+      setDestinationEntityNested(uint8_t value__);
     };
   }
 }

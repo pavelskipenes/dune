@@ -203,21 +203,18 @@ namespace Control
           .description("Minimal distance which is considered as safe [m].");
 
           param("Cost of Collisions", m_args.K_COLL)
-          .units(Units::Meter)
           .minimumValue("0.0")
           .maximumValue("1.0")
           .defaultValue("0.5")
           .description("Cost of Collision.");
 
           param("Cost of not complying COLREGS", m_args.KAPPA)
-          .units(Units::Meter)
           .minimumValue("0.0")
           .maximumValue("10.0")
           .defaultValue("3.0")
           .description("Cost of not Complying with the COLREGS.");
 
           param("Cost of changing COLREGS", m_args.KAPPA_TC)
-          .units(Units::Meter)
           .minimumValue("0.0")
           .maximumValue("100.0")
           .defaultValue("3.0")
@@ -289,7 +286,7 @@ namespace Control
 
           param("Cost of Selecting Turn to Port", m_args.K_CHI_P)
           .minimumValue("0.0")
-          .maximumValue("80.0")
+          .maximumValue("11.0")
           .defaultValue("10.0")
           .description("Cost of Selecting Turn to Port.");
 
@@ -341,51 +338,70 @@ namespace Control
         void
         onUpdateParameters(void)
         {
-          if(paramChanged(m_args.T) || paramChanged(m_args.DT) || paramChanged(m_args.T_STAT) || paramChanged(m_args.P) || paramChanged(m_args.Q) ||
-             paramChanged(m_args.D_CLOSE) || paramChanged(m_args.D_SAFE) || paramChanged(m_args.K_COLL) || paramChanged(m_args.KAPPA) ||
-             paramChanged(m_args.KAPPA_TC) || paramChanged(m_args.PHI_AH) || paramChanged(m_args.PHI_OT) || paramChanged(m_args.PHI_HO) ||
-             paramChanged(m_args.PHI_CR) || paramChanged(m_args.K_P) || paramChanged(m_args.K_DP) || paramChanged(m_args.K_CHI) ||
-             paramChanged(m_args.K_DCHI_SB) || paramChanged(m_args.K_DCHI_P) || paramChanged(m_args.K_CHI_SB) || paramChanged(m_args.K_CHI_P) ||
-             paramChanged(m_args.D_INIT) || paramChanged(m_args.GUIDANCE_STRATEGY) || paramChanged(m_args.WP_R) || paramChanged(m_args.LOS_LA_DIST) ||
-             paramChanged(m_args.LOS_KI) || paramChanged(m_args.COURSE_RANGE) || paramChanged(m_args.GRANULARITY) )
-          {
-            updateAll();
-          }
+          // T and DT cannot be changed online. If changed, re-create the object.
+          if(paramChanged(m_args.T) || paramChanged(m_args.DT))
+              sb_mpc.create(m_args.T, m_args.DT, m_args.T_STAT, m_args.P, m_args.Q, m_args.D_CLOSE,
+                        m_args.D_SAFE, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
+                        m_args.KAPPA, m_args.KAPPA_TC, m_args.K_P, m_args.K_CHI, m_args.K_DP, m_args.K_DCHI_SB,
+						            m_args.K_DCHI_P, m_args.K_CHI_SB, m_args.K_CHI_P, m_args.D_INIT, m_args.COURSE_RANGE, m_args.GRANULARITY,
+                        m_args.WP_R, m_args.LOS_LA_DIST, m_args.LOS_KI, m_args.GUIDANCE_STRATEGY);
+          if(paramChanged(m_args.T_STAT))
+              sb_mpc.setT_stat(m_args.T_STAT);
+          if(paramChanged(m_args.P))
+              sb_mpc.setP(m_args.P);
+          if(paramChanged(m_args.Q))
+              sb_mpc.setQ(m_args.Q);
+          if(paramChanged(m_args.D_CLOSE))
+              sb_mpc.setDClose(m_args.D_CLOSE);
+          if(paramChanged(m_args.D_SAFE))
+              sb_mpc.setDSafe(m_args.D_SAFE);
+          if(paramChanged(m_args.K_COLL))
+              sb_mpc.setKColl(m_args.K_COLL);
+          if(paramChanged(m_args.KAPPA))
+              sb_mpc.setKappa(m_args.KAPPA);
+          if(paramChanged(m_args.KAPPA_TC))
+              sb_mpc.setKappaTC(m_args.KAPPA_TC);
+          if(paramChanged(m_args.PHI_AH))
+              sb_mpc.setPhiAH(m_args.PHI_AH);
+          if(paramChanged(m_args.PHI_OT))
+              sb_mpc.setPhiOT(m_args.PHI_OT);
+          if(paramChanged(m_args.PHI_HO))
+              sb_mpc.setPhiHO(m_args.PHI_HO);
+          if(paramChanged(m_args.PHI_CR))
+              sb_mpc.setPhiCR(m_args.PHI_CR);
+          if(paramChanged(m_args.K_P))
+              sb_mpc.setKP(m_args.K_P);
+          if(paramChanged(m_args.K_DP))
+              sb_mpc.setKdP(m_args.K_DP);
+          if(paramChanged(m_args.K_CHI))
+              sb_mpc.setKChi(m_args.K_CHI);
+          if(paramChanged(m_args.K_DCHI_SB))
+              sb_mpc.setKdChiSB(m_args.K_DCHI_SB);
+          if(paramChanged(m_args.K_DCHI_P))
+              sb_mpc.setKdChiP(m_args.K_DCHI_P);
+          if(paramChanged(m_args.K_CHI_SB))
+              sb_mpc.setKChiSB(m_args.K_CHI_SB);
+          if(paramChanged(m_args.K_CHI_P))
+              sb_mpc.setKChiP(m_args.K_CHI_P);
+          if(paramChanged(m_args.D_INIT))
+              sb_mpc.setDInit(m_args.D_INIT);
+          if(paramChanged(m_args.GUIDANCE_STRATEGY))
+              sb_mpc.setGuidanceStrategy(m_args.GUIDANCE_STRATEGY);
+          if(paramChanged(m_args.WP_R))
+              sb_mpc.setWpR(m_args.WP_R);
+          if(paramChanged(m_args.LOS_LA_DIST))
+              sb_mpc.setLosLaDist(m_args.LOS_LA_DIST);
+          if(paramChanged(m_args.LOS_KI))
+              sb_mpc.setLosKi(m_args.LOS_KI);
+          if(paramChanged(m_args.COURSE_RANGE))
+              sb_mpc.setAngRange(m_args.COURSE_RANGE);
+          if(paramChanged(m_args.GRANULARITY))
+              sb_mpc.setGran(m_args.GRANULARITY);
 
           spew("sb_mpc object values: Surveillance Range: %0.1f T: %0.1f DT: %0.1f T_STAT:%0.1f P: %0.1f Q: %0.1f DCLOSE: %0.1f DSAFE: %0.1f KCOLL: %0.1f KAPPA: %0.1f KAPPA_TC: %0.1f PHI_AH: %0.1f PHI_OT: %0.1f PHI_HO: %0.1f PHI_CR: %0.1f K_P: %0.1f K_DP: %0.1f K_CHI: %0.1f K_DCHI_SB: %0.1f K_DCHI_P: %0.1f K_CHI_SB: %0.1f K_CHI_P: %0.1f D_INIT: %0.1f GUIDANCE_STRAT: %d ACC_RAD: %0.1f LOST_DIST: %0.1f LOS_KI: %0.1f COURSE_RANGE: %0.1f GRANULARITY: %0.1f",
                  m_args.out_of_range, m_args.T, m_args.DT, m_args.T_STAT, m_args.P, m_args.Q, m_args.D_CLOSE, m_args.D_SAFE, m_args.K_COLL, m_args.KAPPA, m_args.KAPPA_TC, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
                  m_args.K_P, m_args.K_DP, m_args.K_CHI, m_args.K_DCHI_SB, m_args.K_DCHI_P, m_args.K_CHI_SB, m_args.K_CHI_P, m_args.D_INIT, m_args.GUIDANCE_STRATEGY, m_args.WP_R, m_args.LOS_LA_DIST, m_args.LOS_KI,
                  m_args.COURSE_RANGE, m_args.GRANULARITY);
-        }
-
-        void updateAll()
-        {
-          sb_mpc.setT_stat(m_args.T_STAT); 
-          sb_mpc.setP(m_args.P);
-          sb_mpc.setQ(m_args.Q);
-          sb_mpc.setDClose(m_args.D_CLOSE);
-          sb_mpc.setDSafe(m_args.D_SAFE);
-          sb_mpc.setKColl(m_args.K_COLL);
-          sb_mpc.setPhiAH(m_args.PHI_AH);
-          sb_mpc.setPhiOT(m_args.PHI_OT);
-          sb_mpc.setPhiHO(m_args.PHI_HO);
-          sb_mpc.setPhiCR(m_args.PHI_CR);
-          sb_mpc.setKappa(m_args.KAPPA);
-          sb_mpc.setKappaTC(m_args.KAPPA_TC);
-          sb_mpc.setKP(m_args.K_P);
-          sb_mpc.setKdP(m_args.K_DP);
-          sb_mpc.setKChi(m_args.K_CHI);
-          sb_mpc.setKdChiSB(m_args.K_DCHI_SB);
-          sb_mpc.setKdChiP(m_args.K_DCHI_P);
-          sb_mpc.setKChiSB(m_args.K_CHI_SB);
-          sb_mpc.setKChiP(m_args.K_CHI_P);
-          sb_mpc.setDInit(m_args.D_INIT);
-          sb_mpc.setGuidanceStrategy(m_args.GUIDANCE_STRATEGY);
-          sb_mpc.setWpR(m_args.WP_R);
-          sb_mpc.setLosLaDist(m_args.LOS_LA_DIST);
-          sb_mpc.setLosKi(m_args.LOS_KI);
-          sb_mpc.setAngRange(m_args.COURSE_RANGE);
-          sb_mpc.setGran(m_args.GRANULARITY);
         }
 
         void
@@ -581,7 +597,7 @@ namespace Control
               double dist_y = 0.0;
               WGS84::displacement(m_lat_asv, m_lon_asv, 0, obst_vec[i].lat, obst_vec[i].lon, 0, &dist_x, &dist_y);
 
-              //trace("dist_x= %0.1f, dist_y= %0.1f", dist_x, dist_y);
+              trace("North offset x-coordinate in NED = %0.1f, East offset y-coordinate in NED = %0.1f", dist_x, dist_y);
 
               //! Update Obstacle states to fit input of CAS (sb_mpc)
               obst_state(i, 0) = dist_x; // north
@@ -636,7 +652,7 @@ namespace Control
             const Eigen::Matrix<double,-1,4> static_obst;
 
             //! Collision Avoidance Algorithm - Compute heading offset/(speed offset)
-            sb_mpc.getBestControlOffset(u_os, psi_os, m_speed.value, m_heading.value, asv_state, obst_state, static_obst, waypoints);
+            sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, static_obst, waypoints);
 
             //! New desired heading
             m_heading.value += psi_os;

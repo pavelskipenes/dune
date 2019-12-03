@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 14884693e4e0aba1e21d150de3a768be                            *
+// IMC XML MD5: a566b378b2df7546a7b7f9546a2b3f83                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -27811,6 +27811,451 @@ namespace DUNE
       IMC::toJSON(os__, "angle", angle, nindent__);
       IMC::toJSON(os__, "direction", direction, nindent__);
       IMC::toJSON(os__, "speed", speed, nindent__);
+    }
+
+    CurrentVelocity::CurrentVelocity(void)
+    {
+      m_header.mgid = 910;
+      clear();
+    }
+
+    void
+    CurrentVelocity::clear(void)
+    {
+      x = 0;
+      y = 0;
+      z1 = 0;
+      z2 = 0;
+    }
+
+    bool
+    CurrentVelocity::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::CurrentVelocity& other__ = static_cast<const CurrentVelocity&>(msg__);
+      if (x != other__.x) return false;
+      if (y != other__.y) return false;
+      if (z1 != other__.z1) return false;
+      if (z2 != other__.z2) return false;
+      return true;
+    }
+
+    int
+    CurrentVelocity::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    CurrentVelocity::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(x, ptr__);
+      ptr__ += IMC::serialize(y, ptr__);
+      ptr__ += IMC::serialize(z1, ptr__);
+      ptr__ += IMC::serialize(z2, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    CurrentVelocity::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(x, bfr__, size__);
+      bfr__ += IMC::deserialize(y, bfr__, size__);
+      bfr__ += IMC::deserialize(z1, bfr__, size__);
+      bfr__ += IMC::deserialize(z2, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    CurrentVelocity::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(z1, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(z2, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    CurrentVelocity::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "x", x, nindent__);
+      IMC::toJSON(os__, "y", y, nindent__);
+      IMC::toJSON(os__, "z1", z1, nindent__);
+      IMC::toJSON(os__, "z2", z2, nindent__);
+    }
+
+    AcousticBackscatter::AcousticBackscatter(void)
+    {
+      m_header.mgid = 1011;
+      clear();
+    }
+
+    void
+    AcousticBackscatter::clear(void)
+    {
+      beam1 = 0;
+      beam2 = 0;
+      beam3 = 0;
+      beam4 = 0;
+    }
+
+    bool
+    AcousticBackscatter::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::AcousticBackscatter& other__ = static_cast<const AcousticBackscatter&>(msg__);
+      if (beam1 != other__.beam1) return false;
+      if (beam2 != other__.beam2) return false;
+      if (beam3 != other__.beam3) return false;
+      if (beam4 != other__.beam4) return false;
+      return true;
+    }
+
+    int
+    AcousticBackscatter::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    AcousticBackscatter::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(beam1, ptr__);
+      ptr__ += IMC::serialize(beam2, ptr__);
+      ptr__ += IMC::serialize(beam3, ptr__);
+      ptr__ += IMC::serialize(beam4, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    AcousticBackscatter::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(beam1, bfr__, size__);
+      bfr__ += IMC::deserialize(beam2, bfr__, size__);
+      bfr__ += IMC::deserialize(beam3, bfr__, size__);
+      bfr__ += IMC::deserialize(beam4, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    AcousticBackscatter::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(beam1, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(beam2, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(beam3, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(beam4, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    AcousticBackscatter::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "beam1", beam1, nindent__);
+      IMC::toJSON(os__, "beam2", beam2, nindent__);
+      IMC::toJSON(os__, "beam3", beam3, nindent__);
+      IMC::toJSON(os__, "beam4", beam4, nindent__);
+    }
+
+    Correlation::Correlation(void)
+    {
+      m_header.mgid = 1012;
+      clear();
+    }
+
+    void
+    Correlation::clear(void)
+    {
+      beam1 = 0;
+      beam2 = 0;
+      beam3 = 0;
+      beam4 = 0;
+    }
+
+    bool
+    Correlation::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::Correlation& other__ = static_cast<const Correlation&>(msg__);
+      if (beam1 != other__.beam1) return false;
+      if (beam2 != other__.beam2) return false;
+      if (beam3 != other__.beam3) return false;
+      if (beam4 != other__.beam4) return false;
+      return true;
+    }
+
+    int
+    Correlation::validate(void) const
+    {
+      if (beam1 < 0 || beam1 > 100) return false;
+      if (beam2 < 0 || beam2 > 100) return false;
+      if (beam3 < 0 || beam3 > 100) return false;
+      if (beam4 < 0 || beam4 > 100) return false;
+      return true;
+    }
+
+    uint8_t*
+    Correlation::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(beam1, ptr__);
+      ptr__ += IMC::serialize(beam2, ptr__);
+      ptr__ += IMC::serialize(beam3, ptr__);
+      ptr__ += IMC::serialize(beam4, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    Correlation::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(beam1, bfr__, size__);
+      bfr__ += IMC::deserialize(beam2, bfr__, size__);
+      bfr__ += IMC::deserialize(beam3, bfr__, size__);
+      bfr__ += IMC::deserialize(beam4, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    Correlation::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(beam1, bfr__, size__);
+      bfr__ += IMC::deserialize(beam2, bfr__, size__);
+      bfr__ += IMC::deserialize(beam3, bfr__, size__);
+      bfr__ += IMC::deserialize(beam4, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    Correlation::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "beam1", beam1, nindent__);
+      IMC::toJSON(os__, "beam2", beam2, nindent__);
+      IMC::toJSON(os__, "beam3", beam3, nindent__);
+      IMC::toJSON(os__, "beam4", beam4, nindent__);
+    }
+
+    CurrentProfileCell::CurrentProfileCell(void)
+    {
+      m_header.mgid = 1014;
+      clear();
+    }
+
+    void
+    CurrentProfileCell::clear(void)
+    {
+      cellposition = 0;
+      x = 0;
+      y = 0;
+      z1 = 0;
+      z2 = 0;
+      amp0 = 0;
+      amp1 = 0;
+      amp2 = 0;
+      amp3 = 0;
+      cor0 = 0;
+      cor1 = 0;
+      cor2 = 0;
+      cor3 = 0;
+    }
+
+    bool
+    CurrentProfileCell::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::CurrentProfileCell& other__ = static_cast<const CurrentProfileCell&>(msg__);
+      if (cellposition != other__.cellposition) return false;
+      if (x != other__.x) return false;
+      if (y != other__.y) return false;
+      if (z1 != other__.z1) return false;
+      if (z2 != other__.z2) return false;
+      if (amp0 != other__.amp0) return false;
+      if (amp1 != other__.amp1) return false;
+      if (amp2 != other__.amp2) return false;
+      if (amp3 != other__.amp3) return false;
+      if (cor0 != other__.cor0) return false;
+      if (cor1 != other__.cor1) return false;
+      if (cor2 != other__.cor2) return false;
+      if (cor3 != other__.cor3) return false;
+      return true;
+    }
+
+    int
+    CurrentProfileCell::validate(void) const
+    {
+      if (cor0 < 0 || cor0 > 100) return false;
+      if (cor1 < 0 || cor1 > 100) return false;
+      if (cor2 < 0 || cor2 > 100) return false;
+      if (cor3 < 0 || cor3 > 100) return false;
+      return true;
+    }
+
+    uint8_t*
+    CurrentProfileCell::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(cellposition, ptr__);
+      ptr__ += IMC::serialize(x, ptr__);
+      ptr__ += IMC::serialize(y, ptr__);
+      ptr__ += IMC::serialize(z1, ptr__);
+      ptr__ += IMC::serialize(z2, ptr__);
+      ptr__ += IMC::serialize(amp0, ptr__);
+      ptr__ += IMC::serialize(amp1, ptr__);
+      ptr__ += IMC::serialize(amp2, ptr__);
+      ptr__ += IMC::serialize(amp3, ptr__);
+      ptr__ += IMC::serialize(cor0, ptr__);
+      ptr__ += IMC::serialize(cor1, ptr__);
+      ptr__ += IMC::serialize(cor2, ptr__);
+      ptr__ += IMC::serialize(cor3, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    CurrentProfileCell::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(cellposition, bfr__, size__);
+      bfr__ += IMC::deserialize(x, bfr__, size__);
+      bfr__ += IMC::deserialize(y, bfr__, size__);
+      bfr__ += IMC::deserialize(z1, bfr__, size__);
+      bfr__ += IMC::deserialize(z2, bfr__, size__);
+      bfr__ += IMC::deserialize(amp0, bfr__, size__);
+      bfr__ += IMC::deserialize(amp1, bfr__, size__);
+      bfr__ += IMC::deserialize(amp2, bfr__, size__);
+      bfr__ += IMC::deserialize(amp3, bfr__, size__);
+      bfr__ += IMC::deserialize(cor0, bfr__, size__);
+      bfr__ += IMC::deserialize(cor1, bfr__, size__);
+      bfr__ += IMC::deserialize(cor2, bfr__, size__);
+      bfr__ += IMC::deserialize(cor3, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    CurrentProfileCell::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(cellposition, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(z1, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(z2, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(amp0, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(amp1, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(amp2, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(amp3, bfr__, size__);
+      bfr__ += IMC::deserialize(cor0, bfr__, size__);
+      bfr__ += IMC::deserialize(cor1, bfr__, size__);
+      bfr__ += IMC::deserialize(cor2, bfr__, size__);
+      bfr__ += IMC::deserialize(cor3, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    CurrentProfileCell::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "cellposition", cellposition, nindent__);
+      IMC::toJSON(os__, "x", x, nindent__);
+      IMC::toJSON(os__, "y", y, nindent__);
+      IMC::toJSON(os__, "z1", z1, nindent__);
+      IMC::toJSON(os__, "z2", z2, nindent__);
+      IMC::toJSON(os__, "amp0", amp0, nindent__);
+      IMC::toJSON(os__, "amp1", amp1, nindent__);
+      IMC::toJSON(os__, "amp2", amp2, nindent__);
+      IMC::toJSON(os__, "amp3", amp3, nindent__);
+      IMC::toJSON(os__, "cor0", cor0, nindent__);
+      IMC::toJSON(os__, "cor1", cor1, nindent__);
+      IMC::toJSON(os__, "cor2", cor2, nindent__);
+      IMC::toJSON(os__, "cor3", cor3, nindent__);
+    }
+
+    CurrentProfile::CurrentProfile(void)
+    {
+      m_header.mgid = 1015;
+      clear();
+      currentprofile.setParent(this);
+    }
+
+    void
+    CurrentProfile::clear(void)
+    {
+      currentprofile.clear();
+    }
+
+    bool
+    CurrentProfile::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::CurrentProfile& other__ = static_cast<const CurrentProfile&>(msg__);
+      if (currentprofile != other__.currentprofile) return false;
+      return true;
+    }
+
+    int
+    CurrentProfile::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    CurrentProfile::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += currentprofile.serialize(ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    CurrentProfile::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += currentprofile.deserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    CurrentProfile::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += currentprofile.reverseDeserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    CurrentProfile::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      currentprofile.toJSON(os__, "currentprofile", nindent__);
+    }
+
+    void
+    CurrentProfile::setTimeStampNested(double value__)
+    {
+      currentprofile.setTimeStamp(value__);
+    }
+
+    void
+    CurrentProfile::setSourceNested(uint16_t value__)
+    {
+      currentprofile.setSource(value__);
+    }
+
+    void
+    CurrentProfile::setSourceEntityNested(uint8_t value__)
+    {
+      currentprofile.setSourceEntity(value__);
+    }
+
+    void
+    CurrentProfile::setDestinationNested(uint16_t value__)
+    {
+      currentprofile.setDestination(value__);
+    }
+
+    void
+    CurrentProfile::setDestinationEntityNested(uint8_t value__)
+    {
+      currentprofile.setDestinationEntity(value__);
     }
   }
 }

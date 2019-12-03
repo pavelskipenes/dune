@@ -31,6 +31,8 @@
 #include <DUNE/Navigation/autonaut.hpp>
 #include <DUNE/Math.hpp>
 
+static const double DEG2RAD = M_PI/180.0f;
+
 namespace DUNE
 {
   namespace Navigation
@@ -51,12 +53,14 @@ namespace DUNE
       m_DT = dt;
 
       // Model parameters
-      m_A = 2.5; // [m]  in reality the length is 14,5 m.
+      m_A = 2.5; // [m]
       m_B = 2.5; // [m]
       m_C = 0.4; // [m]
       m_D = 0.4; // [m]
       m_l = (m_A + m_B);
       m_w = (m_C + m_D); // this is the beam.
+
+      calculate_position_offsets();
     }
 
     autonaut::~autonaut(){
@@ -85,8 +89,7 @@ namespace DUNE
       // initial prediction state
       if (init_samp == 0)
       {
-
-        m_psi(0) = normalize_angle(state(2)); // bug fix: use normalized psi // MR interface output sign change
+        m_psi(0) = -normalize_angle(state(2)); // bug fix: use normalized psi // MR interface output sign change
         psi_d = normalize_angle(psi_d); // bug fix: use normalized psi_d
         m_x(0) = state(0) + m_os_x*std::cos(m_psi(0)) - m_os_y*std::sin(m_psi(0));
         m_y(0) = state(1) + m_os_x*std::sin(m_psi(0)) + m_os_y*std::cos(m_psi(0));
@@ -96,7 +99,8 @@ namespace DUNE
         y(0) = state(1) + os_x*std::sin(psi_d) + os_y*std::cos(psi_d);*/
         m_u(0) = state(3);
         m_v(0) = state(4);
-        m_r(0) = state(5);	
+        m_r(0) = state(5);
+
       }
       
       // detect whether waypoints have been switched when init_samp>0, and copy next waypoint	 
@@ -110,9 +114,9 @@ namespace DUNE
         d_wp0_wp1(1) = waypoints(1,1) - waypoints(0,1); 
         los_wp0_wp1 = d_wp0_wp1/d_wp0_wp1.norm();	
           
-        bool leg_passed = los_wp0_wp1.dot(-los_s_wp1) > std::cos(Math::Angles::radians(90));		
+        bool leg_passed = los_wp0_wp1.dot(-los_s_wp1) > cos(90*DEG2RAD);		
         
-        //std::cout << "leg_passed :  " << leg_passed << std::endl;
+        //std::cout << "leg_passed INSIDE:  " << leg_passed << std::endl;
           
         // update waypoints for the initial sample 
         if (leg_passed){
@@ -127,8 +131,9 @@ namespace DUNE
 
 
       // compute new course
-      double psi_path = atan2(waypoints(1,1) - waypoints(0,1), 
+      double psi_path = std::atan2(waypoints(1,1) - waypoints(0,1), 
             waypoints(1,0) - waypoints(0,0));
+      //std::cout << "PSI_PATH INSIDE:  " << psi_path*180.0f/M_PI << std::endl;
 
       // initial along-track error using Eq (10.58 or 10.10) in Fossen 2011
       // NB! the same as remaining track distance  
@@ -137,10 +142,12 @@ namespace DUNE
       // ASV dynamics prediction loop
       
       for (int i = init_samp; i < m_n_samp-1; i++)
-      {	
+      {
                   
           // distance of track from wp0 to wp1
         double track_dist = sqrt(pow(waypoints(1,0) - waypoints(0,0),2) + pow(waypoints(1,1) - waypoints(0,1),2));
+
+        //std::cout << "track_dist INSIDE:  " << track_dist << std::endl;
         
         
         if (track_dist > R + m_A + m_B)
@@ -163,7 +170,7 @@ namespace DUNE
                 
             los_s_wp1 = d_s_wp1/d_s_wp1.norm();
         
-            psi_d = atan2(d_s_wp1(1),d_s_wp1(0));
+            psi_d = std::atan2(d_s_wp1(1),d_s_wp1(0));
           
             // apply offset
             psi_d = psi_d + Chi_ca;	// approx behavior as input psi_d	
@@ -174,8 +181,7 @@ namespace DUNE
                 
           //if (0==guidance_strategy && i > n_Hd && (std::fabs(angle_diff(psi_path, psi_d0)) > 0*DEG2RAD || along_track_dist0 < track_dist*0.9) ){ // 15 deg is the grid size for course offsets 
           if (0==guidance_strategy && i > n_Hd)
-          {	
-        
+          {
             // compute cross-track error Eq (10.59 or 10.10) in Fossen 2011
             e = -(m_x(i) - waypoints(1,0)) * std::sin(psi_path) 
                 +(m_y(i) - waypoints(1,1)) * std::cos(psi_path);
@@ -185,14 +191,15 @@ namespace DUNE
               e_integral -= e * m_DT;
             }
               
-            psi_r = atan2( -(e + Ki * e_integral) , de);
+            psi_r = std::atan2( -(e + Ki * e_integral) , de);
             psi_d = psi_path + psi_r;
           
             // apply offset
-            psi_d = psi_d + Chi_ca;	// approx same behavior as input psi_d		
+            psi_d = psi_d + Chi_ca;	// approx same behavior as input psi_d
+            //if(i<=m_n_samp-2 && i>= m_n_samp-100)
+            //    std::cout << "PSI_DESIRED INSIDE:  " << psi_d*180.0f/M_PI << std::endl;
           }
-          
-                
+
           // compute values for handling waypoint switching events
                   
           // asv-wp radius
@@ -210,7 +217,7 @@ namespace DUNE
             ||	
             // progress along path: s_total - s(t) < R or s(t) < R? depends on s(t)
             along_track_dist < R; // track_dist - ?
-        
+       
           if (switch_wp)
           {
             // use next waypoints as current waypoints 
@@ -222,7 +229,7 @@ namespace DUNE
             e_integral = 0; 
           
             // compute new course
-            psi_path = atan2(waypoints(1,1) - waypoints(0,1), 
+            psi_path = std::atan2(waypoints(1,1) - waypoints(0,1), 
                 waypoints(1,0) - waypoints(0,0));	
           }
 		    }
@@ -239,6 +246,13 @@ namespace DUNE
         m_psi(i+1) = psi_d;
         m_u(i+1) = u_d;
         m_v(i+1) = 0;
+
+        /*if(i<=m_n_samp-2 && i>= m_n_samp-100)
+        {
+          std::cout << "X INSIDE= " << m_x(i) << std::endl;
+				  std::cout << "Y INSIDE= " << m_y(i) << std::endl;
+          std::cout << "PSI INSIDE= " << m_psi(i)*180.0f/M_PI << std::endl;
+        }*/
 
 	    }
     }
