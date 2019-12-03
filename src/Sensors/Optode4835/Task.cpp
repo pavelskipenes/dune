@@ -135,8 +135,8 @@ namespace Sensors
         m_temperature(0.0),
         m_uart(NULL)
       {
-        // paramActive(Tasks::Parameter::SCOPE_IDLE,
-        //             Tasks::Parameter::VISIBILITY_USER);
+        paramActive(Tasks::Parameter::SCOPE_IDLE,
+                    Tasks::Parameter::VISIBILITY_USER);
 
         // Define configuration parameters.
         param("Activate Sensor", m_args.activate)
@@ -182,18 +182,32 @@ namespace Sensors
       void
       onUpdateParameters(void)
       {
-        if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.activate))
+        if(getEntityState() == IMC::EntityState::ESTA_NORMAL)
         {
-          // If sensor has been turned on, activate the task
-          // If sensor has been turned off, deactivate the task
-          // SSRs are normally-closed (NC), so deactivation means GPIO state = 1
-          // We invert the logic here so on Neptus it is direct
-          m_gpio_state = !m_args.activate;
-          if(m_gpio_state)
-            requestDeactivation();
+          if(isActive())
+          {
+            spew("Activating task");
+            m_gpio->setValue(0);
+          }
           else
-            requestActivation();
+          {
+            spew("Deactivating task");
+            m_gpio->setValue(1);
+          }
         }
+
+        // if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.activate))
+        // {
+        //   // If sensor has been turned on, activate the task
+        //   // If sensor has been turned off, deactivate the task
+        //   // SSRs are normally-closed (NC), so deactivation means GPIO state = 1
+        //   // We invert the logic here so on Neptus it is direct
+        //   m_gpio_state = !m_args.activate;
+        //   if(m_gpio_state)
+        //     requestDeactivation();
+        //   else
+        //     requestActivation();
+        // }
 
         if (isActive() && paramChanged(m_args.period))
         {
