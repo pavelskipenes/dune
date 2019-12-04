@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: a566b378b2df7546a7b7f9546a2b3f83                            *
+// IMC XML MD5: 4b5324d23968d4e510251a7a76b86ffb                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -26217,7 +26217,7 @@ namespace DUNE
       static uint16_t
       getIdStatic(void)
       {
-        return 910;
+        return 915;
       }
 
       CurrentVelocity(void);
@@ -26407,7 +26407,7 @@ namespace DUNE
     {
     public:
       //! Cell Position.
-      uint8_t cellposition;
+      fp32_t cellposition;
       //! Vel X.
       fp32_t x;
       //! Vel Y.
@@ -26480,7 +26480,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 37;
+        return 40;
       }
 
       void
@@ -26491,8 +26491,8 @@ namespace DUNE
     class CurrentProfile: public Message
     {
     public:
-      //! Current Profile.
-      MessageList<CurrentProfileCell> currentprofile;
+      //! Profile.
+      MessageList<CurrentProfileCell> prof;
 
       static uint16_t
       getIdStatic(void)
@@ -26547,7 +26547,7 @@ namespace DUNE
       unsigned
       getVariableSerializationSize(void) const
       {
-        return currentprofile.getSerializationSize();
+        return prof.getSerializationSize();
       }
 
       void

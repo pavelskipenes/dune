@@ -53,6 +53,7 @@ namespace DUNE
       ~autonaut();
 
       void linearPrediction(const Eigen::Matrix<double,6,1>& state, double u_d, double psi_d, const Eigen::Matrix<double,-1,2>&waypoints, double Chi_ca, int course_change_point, int guidance_strategy, double R, double de, double Ki);
+      void linearPredictionInger(const Eigen::Matrix<double,6,1>& state, double u_d, double psi_d);
 
       Eigen::VectorXd getX();
       Eigen::VectorXd getY();

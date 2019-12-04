@@ -66,6 +66,39 @@ namespace DUNE
     autonaut::~autonaut(){
     }
 
+    void autonaut::linearPredictionInger(const Eigen::Matrix<double,6,1>& state, double u_d, double psi_d)
+    {
+      m_psi(0) = normalize_angle(psi_d);
+	    m_x(0) = state(0) + m_os_x*cos(state(2)) - m_os_y*sin(state(2));
+	    m_y(0) = state(1) + m_os_x*sin(state(2)) + m_os_y*cos(state(2));
+	    m_u(0) = state(3);
+	    m_v(0) = state(4);
+	    m_r(0) = state(5);
+
+      double r11, r12, r21, r22;
+
+      r11 = cos(psi_d);
+      r12 = -sin(psi_d);
+      r21 = sin(psi_d);
+      r22 = cos(psi_d);
+
+      for (int i = 0; i < m_n_samp-1; i++){
+
+        m_x(i+1) = m_x(i) + m_DT*(r11*m_u(i) + r12*m_v(i));
+        m_y(i+1) = m_y(i) + m_DT*(r21*m_u(i) + r22*m_v(i));
+        m_psi(i+1) = psi_d;
+        m_u(i+1) = u_d;
+        m_v(i+1) = 0;
+
+        /*if(i<=m_n_samp-2 && i>= m_n_samp-20)
+        {
+          std::cout << "X INSIDE= " << m_x(i) << std::endl;
+				  std::cout << "Y INSIDE= " << m_y(i) << std::endl;
+          std::cout << "PSI INSIDE= " << m_psi(i)*180.0f/M_PI << std::endl;
+        }*/
+	    }
+    }
+
     void autonaut::linearPrediction(const Eigen::Matrix<double,6,1>& state, double u_d, double psi_d, const Eigen::Matrix<double,-1,2>& waypoints_, double Chi_ca, int course_change_point, int guidance_strategy, double R, double de, double Ki)
     {
       Eigen::Vector2d d_s_wp1, los_s_wp1, d_wp0_wp1, los_wp0_wp1;

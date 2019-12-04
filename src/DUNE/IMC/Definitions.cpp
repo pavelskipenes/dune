@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: a566b378b2df7546a7b7f9546a2b3f83                            *
+// IMC XML MD5: 4b5324d23968d4e510251a7a76b86ffb                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -27815,7 +27815,7 @@ namespace DUNE
 
     CurrentVelocity::CurrentVelocity(void)
     {
-      m_header.mgid = 910;
+      m_header.mgid = 915;
       clear();
     }
 
@@ -28137,7 +28137,7 @@ namespace DUNE
     CurrentProfileCell::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
-      bfr__ += IMC::deserialize(cellposition, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(cellposition, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(x, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(y, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(z1, bfr__, size__);
@@ -28175,20 +28175,20 @@ namespace DUNE
     {
       m_header.mgid = 1015;
       clear();
-      currentprofile.setParent(this);
+      prof.setParent(this);
     }
 
     void
     CurrentProfile::clear(void)
     {
-      currentprofile.clear();
+      prof.clear();
     }
 
     bool
     CurrentProfile::fieldsEqual(const Message& msg__) const
     {
       const IMC::CurrentProfile& other__ = static_cast<const CurrentProfile&>(msg__);
-      if (currentprofile != other__.currentprofile) return false;
+      if (prof != other__.prof) return false;
       return true;
     }
 
@@ -28202,7 +28202,7 @@ namespace DUNE
     CurrentProfile::serializeFields(uint8_t* bfr__) const
     {
       uint8_t* ptr__ = bfr__;
-      ptr__ += currentprofile.serialize(ptr__);
+      ptr__ += prof.serialize(ptr__);
       return ptr__;
     }
 
@@ -28210,7 +28210,7 @@ namespace DUNE
     CurrentProfile::deserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
-      bfr__ += currentprofile.deserialize(bfr__, size__);
+      bfr__ += prof.deserialize(bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -28218,44 +28218,44 @@ namespace DUNE
     CurrentProfile::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
-      bfr__ += currentprofile.reverseDeserialize(bfr__, size__);
+      bfr__ += prof.reverseDeserialize(bfr__, size__);
       return bfr__ - start__;
     }
 
     void
     CurrentProfile::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
     {
-      currentprofile.toJSON(os__, "currentprofile", nindent__);
+      prof.toJSON(os__, "prof", nindent__);
     }
 
     void
     CurrentProfile::setTimeStampNested(double value__)
     {
-      currentprofile.setTimeStamp(value__);
+      prof.setTimeStamp(value__);
     }
 
     void
     CurrentProfile::setSourceNested(uint16_t value__)
     {
-      currentprofile.setSource(value__);
+      prof.setSource(value__);
     }
 
     void
     CurrentProfile::setSourceEntityNested(uint8_t value__)
     {
-      currentprofile.setSourceEntity(value__);
+      prof.setSourceEntity(value__);
     }
 
     void
     CurrentProfile::setDestinationNested(uint16_t value__)
     {
-      currentprofile.setDestination(value__);
+      prof.setDestination(value__);
     }
 
     void
     CurrentProfile::setDestinationEntityNested(uint8_t value__)
     {
-      currentprofile.setDestinationEntity(value__);
+      prof.setDestinationEntity(value__);
     }
   }
 }

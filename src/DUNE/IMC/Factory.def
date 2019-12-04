@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: a566b378b2df7546a7b7f9546a2b3f83                            *
+// IMC XML MD5: 4b5324d23968d4e510251a7a76b86ffb                            *
 //***************************************************************************
 
 MESSAGE(1, EntityState)
@@ -355,7 +355,7 @@ MESSAGE(911, EstimatedFreq)
 MESSAGE(912, PowerSettings)
 MESSAGE(913, VesselWind)
 MESSAGE(914, RelativeWind)
-MESSAGE(910, CurrentVelocity)
+MESSAGE(915, CurrentVelocity)
 MESSAGE(1011, AcousticBackscatter)
 MESSAGE(1012, Correlation)
 MESSAGE(1014, CurrentProfileCell)

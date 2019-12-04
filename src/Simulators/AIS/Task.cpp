@@ -27,6 +27,7 @@
 // Author: Alberto Dallolio                                                 *
 //***************************************************************************
 
+#include<sstream>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
@@ -41,15 +42,9 @@ namespace Simulators
 
     struct Arguments
     {
-        std::string mmsi;
-        std::string name;
-        std::string callsign;
-        int type_and_cargo;
+        std::string mmsi, name, callsign, type_and_cargo;
         // length = A + B, width = C + D
-        double size_a;
-        double size_b;
-        double size_c;
-        double size_d;
+        double size_a, size_b, size_c, size_d;
         
     };
 
@@ -65,7 +60,7 @@ namespace Simulators
       //! Vessel callsign.
       std::string callsign_;
       //! Vessel type and cargo.
-      int type_and_cargo_;
+      std::string type_and_cargo_;
       //! Size.
       double a_,b_,c_,d_;
 
@@ -77,11 +72,11 @@ namespace Simulators
         id_(),
         name_(),
         callsign_(),
-        type_and_cargo_(0),
-        a_(0.0),
-        b_(0.0),
-        c_(0.0),
-        d_(0.0)
+        type_and_cargo_(),
+        a_(),
+        b_(),
+        c_(),
+        d_()
       {
         param("MMSI", m_args.mmsi)
         .description("Vessel MMSI");
@@ -96,32 +91,16 @@ namespace Simulators
         .description("Vessel Type and Cargo");
 
         param("Size A", m_args.size_a)
-        .units(Units::Meter)
-        .minimumValue("0")
-        .maximumValue("50")
-        .defaultValue("10")
-        .description("Length to stern from the located AIS ");
+        .description("Length to stern from the located AIS [m]");
      
 		    param("Size B", m_args.size_b)
-        .units(Units::Meter)
-        .minimumValue("0")
-        .maximumValue("500")
-        .defaultValue("10")
-        .description("Length to bow from the located AIS ");
+        .description("Length to bow from the located AIS [m]");
         
         param("Size C", m_args.size_c)
-        .units(Units::Meter)
-        .minimumValue("0")
-        .maximumValue("20")
-        .defaultValue("5")
-        .description("Length to port from the located AIS ");
+        .description("Length to port from the located AIS [m]");
         
         param("Size D", m_args.size_d)
-        .units(Units::Meter)
-        .minimumValue("0")
-        .maximumValue("20")
-        .defaultValue("5")
-        .description("Length to starboard from the located AIS ");
+        .description("Length to starboard from the located AIS [m]");
 
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
 
@@ -175,14 +154,39 @@ namespace Simulators
         // AIS Static Info.
         rsi.id = id_;
 
+        // Trim sog from obstacles when standing still: avoid integration.
+        double sog = msg->sog;
+        if(sog < 0.01)
+          sog = 0.0;
+
+        std::ostringstream a;
+        a << a_*1000;
+        std::string a_send = a.str();
+
+        std::ostringstream b;
+        b << b_*1000;
+        std::string b_send = b.str();
+
+        std::ostringstream c;
+        c << c_*1000;
+        std::string c_send = c.str();
+
+        std::ostringstream d;
+        d << d_*1000;
+        std::string d_send = d.str();
+
+        std::ostringstream rsi_sog;
+        rsi_sog << sog*1000;
+        std::string rsi_sog_send = rsi_sog.str();
+
         // String for tuple: rsi.data
         std::ostringstream ais_data;
         // SOG added here.
-        ais_data << "CALLSIGN=" << callsign_ << ";" << "NAME=" << name_ << ";" << "TYPE_AND_CARGO=" << type_and_cargo_ << ";" << "A=" << a_ << ";" << "B=" << b_ << ";" << "C=" << c_ << ";" << "D=" << d_ << ";" << "SOG=" << msg->sog; //<< "MMSI=" << msg.mmsi << ";"
+        ais_data << "CALLSIGN=" << callsign_ << ";" << "NAME=" << name_ << ";" << "TYPE_AND_CARGO=" << type_and_cargo_ << ";" << "A=" << a_send << ";" << "B=" << b_send << ";" << "C=" << c_send << ";" << "D=" << d_send << ";" << "SOG=" << rsi_sog_send; //<< "MMSI=" << msg.mmsi << ";"
         rsi.data = ais_data.str();
 
-        spew("Obstacle %s info: (lon,lat,cog,sog) %f %f %f %f",
-                     rsi.id.c_str(), c_degrees_per_radian*rsi.lon, c_degrees_per_radian*rsi.lat, Angles::degrees(rsi.heading), msg->sog);
+        spew("Obstacle %s info: (lon,lat,cog,sog) %f %f %f %s",
+                     rsi.id.c_str(), c_degrees_per_radian*rsi.lon, c_degrees_per_radian*rsi.lat, Angles::degrees(rsi.heading), rsi_sog_send.c_str());
         spew("AIS TUPLE = %s",rsi.data.c_str());
 
         if(msg->lat != 0.0 && msg->lon != 0.0)

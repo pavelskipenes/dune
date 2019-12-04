@@ -304,8 +304,8 @@ namespace Control
 
           param("LOS lookahead distance", m_args.LOS_LA_DIST)
           .minimumValue("50.0")
-          .maximumValue("200.0")
-          .defaultValue("100.0")
+          .maximumValue("1000.0")
+          .defaultValue("200.0")
           .description("LOS lookahead distance.");
 
           param("LOS integral gain", m_args.LOS_KI)
@@ -330,7 +330,7 @@ namespace Control
 
           // Register handler routines.
           bind<IMC::DesiredPath>(this);
-          bind<IMC::PeekDesiredPath>(this);
+          //bind<IMC::PeekDesiredPath>(this);
           bind<IMC::RemoteSensorInfo>(this);
           bind<IMC::GpsFix>(this);
         }
@@ -530,7 +530,7 @@ namespace Control
           spew("Speed from Desired path: %0.2f", m_speed.value);
         }
 
-        void
+/*        void
         consume(const IMC::PeekDesiredPath* ppath)
         {
           m_nextpath_lat = ppath->dpath->end_lat;
@@ -538,7 +538,7 @@ namespace Control
           trace("NEXT NEXT WAYPOINT: lat %f - long %f",c_degrees_per_radian*m_nextpath_lat, c_degrees_per_radian*m_nextpath_lon);
 
           m_more_than_one = true;
-        }
+        }*/
 
         //! From GPS Task
         void
@@ -584,13 +584,20 @@ namespace Control
             {
               // Get data from RemoteSensorInfo tuple.
               TupleList tuples(obst_vec[i].data);
-              double sog = tuples.get("SOG", 0);
-              double a = tuples.get("A", 0);
-              double b = tuples.get("B", 0);
-              double c = tuples.get("C", 0);
-              double d = tuples.get("D", 0);
 
-              //trace("sog= %0.1f, a= %0.1f, b= %0.1f, c= %0.1f, d= %0.1f", sog, a, b, c, d);
+              int sog = tuples.get("SOG", 0);
+              int a = tuples.get("A", 0);
+              int b = tuples.get("B", 0);
+              int c = tuples.get("C", 0);
+              int d = tuples.get("D", 0);
+
+              double sog_d = (double) sog/1000;
+              double a_d = (double) a/1000;
+              double b_d = (double) b/1000;
+              double c_d = (double) c/1000;
+              double d_d = (double) d/1000;
+
+              trace("OBSTACLE: sog= %f, a= %0.1f, b= %0.1f, c= %0.1f, d= %0.1f", sog_d, a_d, b_d, c_d, d_d);
 
               // Distance between ASV - Obstacle
               double dist_x = 0.0;
@@ -603,12 +610,12 @@ namespace Control
               obst_state(i, 0) = dist_x; // north
               obst_state(i, 1) = dist_y; // east
               obst_state(i, 2) = obst_vec[i].heading; // course actually.
-              obst_state(i, 3) = sog; //sqrt(std::pow(obst_vec[i].u, 2) + std::pow(obst_vec[i].v, 2));
+              obst_state(i, 3) = sog_d; //sqrt(std::pow(obst_vec[i].u, 2) + std::pow(obst_vec[i].v, 2));
               obst_state(i, 4) = 0.0;
-              obst_state(i, 5) = a;
-              obst_state(i, 6) = b;
-              obst_state(i, 7) = c;
-              obst_state(i, 8) = d;
+              obst_state(i, 5) = a_d;
+              obst_state(i, 6) = b_d;
+              obst_state(i, 7) = c_d;
+              obst_state(i, 8) = d_d;
               
               // Convert MMSI from string to int for CAS.
               std::stringstream geek(obst_vec[i].id); //contains int MMSI.
@@ -616,7 +623,7 @@ namespace Control
               geek >> mmsi;
               obst_state(i, 9) = mmsi;
               
-              spew("Autonaut (lon,lat,cog,sog) %0.1f %0.1f %0.1f %0.1f | %d-th obstacle (dist_x,dist_y,cog,sog) %0.1f %0.1f %0.1f %0.1f", m_lat_asv, m_lon_asv, c_degrees_per_radian*asv_state(2), asv_state(3), i, obst_state(i,0), obst_state(i,1), c_degrees_per_radian*obst_state(i,2), obst_state(i,3));
+              trace("AUTONAUT (lon,lat,cog,sog) %0.1f %0.1f %0.1f %0.1f | %d-th OBSTACLE (dist_x,dist_y,cog,sog) %0.1f %0.1f %0.1f %f", m_lat_asv, m_lon_asv, c_degrees_per_radian*asv_state(2), asv_state(3), i+1, obst_state(i,0), obst_state(i,1), c_degrees_per_radian*obst_state(i,2), obst_state(i,3));
             }
 
             // Create and fill waypoints matrix.
@@ -662,7 +669,7 @@ namespace Control
 
             dispatch(m_heading);
 
-            trace("COLLISION AVOIDANCE - Heading offset: %f - Number of Obstacles: %lu", c_degrees_per_radian*psi_os, obst_vec.size());
+            trace("COLLISION AVOIDANCE - Course offset: %0.1f - DESIRED COURSE:%0.1f  - Number of Obstacles: %lu", c_degrees_per_radian*psi_os, c_degrees_per_radian*m_heading.value, obst_vec.size());
           }
 
           // No obstacle in range	- proceed as normal

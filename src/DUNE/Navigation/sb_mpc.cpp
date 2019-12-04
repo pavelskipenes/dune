@@ -465,14 +465,10 @@ namespace DUNE
 
 		d(0) = obst_vect[k]->x_[0] - asv_state(0);
 		d(1) = obst_vect[k]->y_[0] - asv_state(1);
-
-		std::cout << "dist X : " << d(0) << std::endl;
-		std::cout << "dist Y : " << d(1) << std::endl;
-
 		dist_0 = d.norm(); DIST_0(k)=dist_0;
 
 		los_0 = d/dist_0;
-		std::cout << "dist_0 : " << DIST_0(k) << std::endl;
+		//std::cout << "dist_0 : " << DIST_0(k) << std::endl;
 
 		PHI_0(k) = atan2(d(1),d(0));	// bearing
 		//std::cout << "PHI_0/bearing : " << PHI_0(k)*RAD2DEG << std::endl;
@@ -634,6 +630,7 @@ namespace DUNE
 				}*/
 
 				asv->linearPrediction(asv_state, u_d*P_ca_[j], psi_d + Chi_ca_i, waypoints, Chi_ca_i, cp, guidance_strategy, WP_R_, LOS_LA_DIST_, LOS_KI_);
+				//asv->linearPredictionInger(asv_state, u_d*P_ca_[j], psi_d + Chi_ca_i);
 
 				/*if(Chi_ca_i == 45.0*DEG2RAD)
 				{
@@ -697,6 +694,7 @@ namespace DUNE
 						}*/
 
 						asv->linearPrediction(asv_state, u_d*P_ca_[j], psi_d, waypoints, 0, i_return_to_path, guidance_strategy, WP_R_, LOS_LA_DIST_, LOS_KI_);
+						//asv->linearPredictionInger(asv_state, u_d*P_ca_[j], psi_d);
 					}
 
 					// save the entire optimal trajectory
