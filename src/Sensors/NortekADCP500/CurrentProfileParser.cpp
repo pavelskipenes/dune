@@ -164,7 +164,7 @@ namespace Sensors
         std::copy( itr_bfr + ind_cor, itr_bfr + ind_cor + m_ncells, m_cp_cor[b].begin() );
       }
       //! Insert into IMC message
-      msg_cp.currentprofile.clear();
+      msg_cp.prof.clear();
       IMC::CurrentProfileCell cp_cell;
       for ( size_t c = 0; c < m_ncells; ++c )
       {
@@ -182,7 +182,7 @@ namespace Sensors
         cp_cell.amp2 = m_cp_amp[2][c] * c_amp_scale;
         cp_cell.amp3 = m_cp_amp[3][c] * c_amp_scale;
 
-        msg_cp.currentprofile.push_back( cp_cell ); // push_back makes copy
+        msg_cp.prof.push_back( cp_cell ); // push_back makes copy
 
         m_task->spew( "||Vel(Depth: %f m)|| = %f m/s",
                       m_blank + m_csize * c,

@@ -356,7 +356,7 @@ namespace Sensors
 
           // Debug: Trace the obtained data
           int i = 0;
-          for (auto const& it : m_cp.currentprofile) {
+          for (auto const& it : m_cp.prof) {
             m_task->trace("Amplitudes for cell %d: amp0: %.2f | amp1: %.2f | amp2: %.2f | amp3: %.2f", 
                           i, it->amp0, it->amp1, it->amp2,
                           it->amp3);
