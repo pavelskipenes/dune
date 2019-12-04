@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: a566b378b2df7546a7b7f9546a2b3f83                            *
+// IMC XML MD5: 4b5324d23968d4e510251a7a76b86ffb                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -683,7 +683,7 @@
 //! RelativeWind identification number.
 #define DUNE_IMC_RELATIVEWIND 914
 //! CurrentVelocity identification number.
-#define DUNE_IMC_CURRENTVELOCITY 910
+#define DUNE_IMC_CURRENTVELOCITY 915
 //! AcousticBackscatter identification number.
 #define DUNE_IMC_ACOUSTICBACKSCATTER 1011
 //! Correlation identification number.

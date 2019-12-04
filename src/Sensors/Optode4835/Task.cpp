@@ -85,8 +85,6 @@ namespace Sensors
       double period;
       //! Measurement command string identifier.
       std::string cmd;
-      //! Name of device's power channel.
-      std::string power_channel;
       //! Temperature entity label.
       std::string elabel_temp;
     };
@@ -99,7 +97,7 @@ namespace Sensors
       bool m_gpio_state;
       //! Flag for GPIO activation
       bool m_activate;
-      //! Last compensated depth.
+      //! Last compensated depth: fixed to 1m.
       double m_depth;
       //! Last defined salinity.
       double m_salinity;
@@ -130,20 +128,13 @@ namespace Sensors
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx), 
         m_gpio(NULL),
-        m_depth(0.0),
+        m_depth(1.0),
         m_salinity(0.0),
         m_temperature(0.0),
         m_uart(NULL)
       {
-        // paramActive(Tasks::Parameter::SCOPE_IDLE,
-        //             Tasks::Parameter::VISIBILITY_USER);
-
-        // Define configuration parameters.
-        param("Activate Sensor", m_args.activate)
-        .scope(Tasks::Parameter::SCOPE_GLOBAL)
-        .visibility(Tasks::Parameter::VISIBILITY_USER)
-        .defaultValue("false")
-        .description("Controls sensor activation/deactivation");
+        paramActive(Tasks::Parameter::SCOPE_GLOBAL,
+                     Tasks::Parameter::VISIBILITY_USER);
         
         param("Serial Port - Device", m_args.uart_dev)
         .defaultValue("")
@@ -164,13 +155,9 @@ namespace Sensors
         .defaultValue("4835")
         .description("Measurement command string identifier");
 
-        param("Power Channel", m_args.power_channel)
-        .defaultValue("Oxygen Sensor")
-        .description("Name of device's power channel");
-
         param("Entity Label - Temperature", m_args.elabel_temp)
         .defaultValue("Depth Sensor")
-        .description("Entity label of the IMU");
+        .description("Entity label of the Depth Sensor");
 
         bind<IMC::Salinity>(this);
         bind<IMC::Temperature>(this);
@@ -182,19 +169,6 @@ namespace Sensors
       void
       onUpdateParameters(void)
       {
-        if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.activate))
-        {
-          // If sensor has been turned on, activate the task
-          // If sensor has been turned off, deactivate the task
-          // SSRs are normally-closed (NC), so deactivation means GPIO state = 1
-          // We invert the logic here so on Neptus it is direct
-          m_gpio_state = !m_args.activate;
-          if(m_gpio_state)
-            requestDeactivation();
-          else
-            requestActivation();
-        }
-
         if (isActive() && paramChanged(m_args.period))
         {
           if (stop())
@@ -276,15 +250,6 @@ namespace Sensors
         stop();
         Memory::clear(m_uart);
         Memory::clear(m_gpio);
-      }
-
-      void
-      onEstimatedState(const IMC::EstimatedState& msg)
-      {
-        if (msg.getSource() != getSystemId())
-          return;
-
-        m_depth = msg.depth;
       }
 
       void
@@ -498,6 +463,20 @@ namespace Sensors
         return false;
       }
 
+      void
+      onActivation(void)
+      {
+        // Turn on sensor.
+        m_gpio->setValue(0);
+      }
+
+      void
+      onDeactivation(void)
+      {
+        // Turn off sensor.
+        m_gpio->setValue(1);
+      }
+
       //! Main loop.
       void
       onMain(void)
@@ -505,30 +484,16 @@ namespace Sensors
         // Wait for resource acquisition and initialization
         while(getEntityState() != IMC::EntityState::ESTA_NORMAL);
 
-        // Run while task is active
-        while(!stopping())
+        // Get data from sensor
+        listen();
+
+        // Not received communication for a while
+        if (m_wdog.overflow())
         {
-          // Get data from sensor
-          listen();
-
-          // Not received communication for a while
-          if (m_wdog.overflow())
-          {
-            setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
-            throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
-          }
-
-          // If no instruction arrived from neptus, reset timer to avoid task from restarting
-          if(!m_args.activate)
-            m_wdog.reset();
-            
-          // Sleep for 1s
-          Delay::wait(1.0);
+          setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
+          throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
         }
-
-        // When stopping task, turn sensor off
-        m_gpio->setValue(1);
-      }      
+      }
     };
   }
 }
