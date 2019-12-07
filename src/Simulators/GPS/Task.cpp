@@ -76,7 +76,11 @@ namespace Simulators
       double hdop;
       //! Horizontal Accuracy.
       double hacc;
-      //! Number of sattelites.
+      //! COG.
+      double course;
+      //! SOG.
+      double speed_o_g;
+      //! Number of satelites.
       uint16_t n_sat;
       //! Initial position (degrees)
       std::vector<double> position;
@@ -138,6 +142,18 @@ namespace Simulators
         .size(2)
         .description("Initial position of the vehicle");
 
+        param("Initial COG", m_args.course)
+        .units(Units::Degree)
+        .minimumValue("0.0")
+        .maximumValue("360.0")
+        .defaultValue("0.0")
+        .description("Initial COG of the vehicle in deg");
+
+        param("Initial SOG", m_args.speed_o_g)
+        .units(Units::MeterPerSecond)
+        .defaultValue("0.0")
+        .description("Initial SOG of the vehicle in m/s");
+
         m_fix.clear();
         m_euler.clear();
         m_gv.clear();
@@ -156,6 +172,8 @@ namespace Simulators
       {
         m_origin.lat = Math::Angles::radians(m_args.position[0]);
         m_origin.lon = Math::Angles::radians(m_args.position[1]);
+        m_origin.cog = Math::Angles::radians(m_args.course);
+        m_origin.sog = m_args.speed_o_g;
         m_origin.type = IMC::GpsFix::GFT_MANUAL_INPUT;
         m_origin.validity = 0xffff;
       }

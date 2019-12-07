@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2019 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2017 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -24,8 +24,7 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Ricardo Gomes                                                    *
-// Author: José Braga                                                       *
+// Author: Sølve Dahlin                                                     *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -38,21 +37,17 @@ namespace Control
 {
   namespace ASV
   {
-    namespace HeadingAndSpeed
+    namespace SpeedController
     {
+      using DUNE_NAMESPACES;
+
       //! Tolerance for very low meters per second speed.
       static const float c_mps_tol = 0.1;
-      //! Tolerance for heading error.
-      static const float c_yaw_tol = 0.2;
-
-      using DUNE_NAMESPACES;
 
       struct Arguments
       {
         //! Maximum Motor thrust.
-        float act_max;
-        //! Maximum Motor differential thrust.
-        float act_diff_max;
+        float max_thrust;
         //! Ramp actuation limit when the value is rising in actuation per second
         float act_ramp;
         //! End of scale value for RPM's at 100% of thurst
@@ -63,66 +58,46 @@ namespace Control
         int16_t min_rpm;
         //! Maximum value admissible for desired RPMs for the MPS controller
         int16_t max_rpm;
-        //! PID gains for RPM controller.
-        std::vector<float> rpm_gains;
-        //! RPM controller feedforward gain
-        float rpm_ffgain;
-        //! PID gains for MPS controller.
-        std::vector<float> mps_gains;
-        //! MPS controller feedforward gain
-        float mps_ffgain;
-        //! Limit for the integral term
-        float mps_max_int;
         //! Maximum acceleration step to smooth speed ramp in mps control
         int16_t max_accel;
-        //! Maximum heading error to thrust.
-        float yaw_max;
-        //! PID gains for heading controller.
-        std::vector<float> yaw_gains;
-        //! Control logic for saturation.
-        bool share;
-        //! Port Motor entity id.
-        std::string eid_port;
-        //! Starboard Motor entity id.
-        std::string eid_starboard;
-        //! Log the size of each PID parcel
+		    //! MPS controller feedforward gain
+        float mps_ffgain;
+        //! RPM controller feedforward gain
+        float rpm_ffgain;
+        //! PID gains for RPM controller.
+        std::vector<float> rpm_gains;
+        //! PID gains for MPS controller.
+        std::vector<float> mps_gains;
+        //! Limit for the integral term
+        float mps_max_int;
+		    //! Log the size of each PID parcel
         bool log_parcels;
       };
 
       struct Task: public Tasks::Task
       {
-        //! RPM PID controller
-        DiscretePID m_rpm_pid;
-        //! MPS PID controller
-        DiscretePID m_mps_pid;
-        //! YAW PID controller
-        DiscretePID m_yaw_pid;
-        //! Control Parcels for meters per second controller
-        IMC::ControlParcel m_parcel_mps;
-        //! Control Parcels for rpm controller
-        IMC::ControlParcel m_parcel_rpm;
-        //! Control Parcels for yaw controller
-        IMC::ControlParcel m_parcel_yaw;
-        //! Desired heading.
-        float m_desired_yaw;
         //! Desired speed.
         float m_desired_speed;
         //! Desired speed units.
         uint8_t m_speed_units;
         //! Time of last estimated state message.
         Delta m_delta;
+        //! RPM PID controller
+        DiscretePID m_rpm_pid;
+        //! MPS PID controller
+        DiscretePID m_mps_pid;
         //! Current motor actuation.
-        IMC::SetThrusterActuation m_act[2];
+        IMC::SetThrusterActuation m_act;
         //! Last motor actuation.
-        IMC::SetThrusterActuation m_last_act[2];
+        IMC::SetThrusterActuation m_last_act;
+        //! Control Parcels for mps controller
+        IMC::ControlParcel m_parcel_mps;
+        //! Control Parcels for rpm controller
+        IMC::ControlParcel m_parcel_rpm;
         //! Motor rpm.
-        IMC::Rpm m_rpm[2];
+        IMC::Rpm m_rpm;
         //! previous value of the desired rpm speed
         float m_previous_rpm;
-        //! Apply common actuation.
-        bool m_common;
-        //! Motor rpm entity id.
-        uint16_t m_rpm_eid[2];
         //! Control loops last reference
         uint32_t m_scope_ref;
         //! Task arguments.
@@ -131,21 +106,16 @@ namespace Control
         Task(const std::string& name, Tasks::Context& ctx):
           Tasks::Task(name, ctx),
           m_previous_rpm(0.0),
-          m_common(false),
           m_scope_ref(0)
         {
-          param("Maximum Thrust Actuation", m_args.act_max)
+          param("Maximum Thrust Actuation", m_args.max_thrust)
           .defaultValue("1.0")
           .description("Maximum Motor Command");
-
-          param("Maximum Thrust Differential Actuation", m_args.act_diff_max)
-          .defaultValue("0.2")
-          .description("Maximum Motor Differential Command");
-
+         
           param("RPMs at Maximum Thrust", m_args.rpm_eos)
           .defaultValue("2500")
           .units(Units::RPM)
-          .description("End of scale value for RPM's at 100% of thurst");
+          .description("End of scale value for RPM's at 100% of thurst");		
 
           param("Hardware RPMs Control", m_args.rpm_hardware)
           .defaultValue("true")
@@ -173,32 +143,6 @@ namespace Control
           .defaultValue("-1.0")
           .description("Limit for the integral term");
 
-          param("Maximum RPM Acceleration", m_args.max_accel)
-          .defaultValue("70")
-          .units(Units::RPM)
-          .description("Maximum acceleration step to smooth speed ramp in mps control");
-
-          param("Yaw PID Gains", m_args.yaw_gains)
-          .defaultValue("")
-          .size(3)
-          .description("PID gains for YAW controller");
-
-          param("Maximum Heading Error to Thrust", m_args.yaw_max)
-          .defaultValue("30.0")
-          .description("Maximum admissable heading error to thrust");
-
-          param("Share Saturation", m_args.share)
-          .defaultValue("false")
-          .description("Share saturation");
-
-          param("Entity Label - Port Motor", m_args.eid_port)
-          .defaultValue("Motor - Port")
-          .description("Entity label of port motor rpm");
-
-          param("Entity Label - Starboard Motor", m_args.eid_starboard)
-          .defaultValue("Motor - Starboard")
-          .description("Entity label of starboard motor rpm");
-
           param("Minimum RPM Limit", m_args.min_rpm)
           .defaultValue("200")
           .units(Units::RPM)
@@ -208,14 +152,19 @@ namespace Control
           .defaultValue("2000")
           .units(Units::RPM)
           .description("Maximum value admissible for desired RPMs");
-
+          
+          param("Maximum RPM Acceleration", m_args.max_accel)
+          .defaultValue("70")
+          .units(Units::RPM)
+          .description("Maximum acceleration step to smooth speed ramp in mps control");
+          
           param("Ramp Actuation Limit", m_args.act_ramp)
           .defaultValue("0.0")
           .description("Ramp actuation limit when the value is rising in actuation per second");
 
           param("Log PID Parcels", m_args.log_parcels)
           .defaultValue("false")
-          .description("Log the size of each PID parcel");
+          .description("Log the size of each PID parcel");       
 
           m_desired_speed = 0.0;
           m_speed_units = IMC::SUNITS_PERCENTAGE;
@@ -225,22 +174,17 @@ namespace Control
 
           // Register handler routines.
           bind<IMC::Abort>(this);
-          bind<IMC::EstimatedState>(this);
-          bind<IMC::DesiredHeading>(this);
+          bind<IMC::Rpm>(this);
           bind<IMC::DesiredSpeed>(this);
           bind<IMC::ControlLoops>(this);
-          bind<IMC::Rpm>(this);
+          bind<IMC::EstimatedState>(this);
         }
 
         void
         onUpdateParameters(void)
         {
-          if (paramChanged(m_args.yaw_max))
-            m_args.yaw_max = Angles::radians(m_args.yaw_max);
-
           if (paramChanged(m_args.rpm_gains) ||
               paramChanged(m_args.mps_gains) ||
-              paramChanged(m_args.yaw_gains) ||
               paramChanged(m_args.rpm_ffgain) ||
               paramChanged(m_args.mps_ffgain) ||
               paramChanged(m_args.mps_max_int) ||
@@ -248,42 +192,6 @@ namespace Control
           {
             reset();
             setup();
-          }
-        }
-
-        //! Reserve entities.
-        void
-        onEntityReservation(void)
-        {
-          if (m_args.log_parcels)
-          {
-            std::string label = getEntityLabel();
-            m_parcel_rpm.setSourceEntity(reserveEntity(label + " - RPM Parcel"));
-            m_parcel_mps.setSourceEntity(reserveEntity(label + " - MPS Parcel"));
-            m_parcel_yaw.setSourceEntity(reserveEntity(label + " - Yaw Parcel"));
-          }
-        }
-
-        //! Resolve entities.
-        void
-        onEntityResolution(void)
-        {
-          try
-          {
-            m_rpm_eid[0] = resolveEntity(m_args.eid_port);
-          }
-          catch (...)
-          {
-            m_rpm_eid[0] = 0xffff;
-          }
-
-          try
-          {
-            m_rpm_eid[1] = resolveEntity(m_args.eid_starboard);
-          }
-          catch (...)
-          {
-            m_rpm_eid[1] = 0xffff;
           }
         }
 
@@ -301,45 +209,15 @@ namespace Control
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
         }
 
-        //! Reset PIDs and actuation references.
+        //! Reserve entities.
         void
-        reset(void)
+        onEntityReservation(void)
         {
-          m_rpm_pid.reset();
-          m_mps_pid.reset();
-          m_yaw_pid.reset();
-
-          m_previous_rpm = 0;
-
-          for (uint8_t i = 0; i < 2; i++)
-          {
-            m_act[i].id = i;
-            m_act[i].value = 0.0;
-            m_last_act[i].id = i;
-            m_last_act[i].value = 0.0;
-            dispatch(m_act[i]);
-          }
-        }
-
-        //! Setup PIDs.
-        void
-        setup(void)
-        {
-          m_rpm_pid.setGains(m_args.rpm_gains);
-          m_rpm_pid.setOutputLimits(-m_args.act_max, m_args.act_max);
-
-          // Do not set MPS PID output limits since we use a feedforward gain.
-          m_mps_pid.setGains(m_args.mps_gains);
-          m_mps_pid.setIntegralLimits(m_args.mps_max_int);
-
-          m_yaw_pid.setGains(m_args.yaw_gains);
-
-          // Log parcels.
           if (m_args.log_parcels)
           {
-            m_rpm_pid.enableParcels(this, &m_parcel_rpm);
-            m_mps_pid.enableParcels(this, &m_parcel_mps);
-            m_yaw_pid.enableParcels(this, &m_parcel_yaw);
+            std::string label = getEntityLabel();
+            m_parcel_rpm.setSourceEntity(reserveEntity(label + " - RPM Parcel"));
+            m_parcel_mps.setSourceEntity(reserveEntity(label + " - MPS Parcel"));
           }
         }
 
@@ -347,6 +225,44 @@ namespace Control
         onResourceInitialization(void)
         {
           reset();
+        }
+
+        //! Reset PIDs and actuation references.
+        void
+        reset(void)
+        {
+          m_rpm_pid.reset();
+          m_mps_pid.reset();
+
+          m_desired_speed = 0;
+          m_speed_units = IMC::SUNITS_PERCENTAGE;
+
+          m_previous_rpm = 0;
+
+          m_act.id = 0;
+          m_act.value = 0.0;
+          m_last_act.id = 0;
+          m_last_act.value = 0.0;
+          dispatch(m_act);
+        }
+
+        //! Setup PIDs.
+        void
+        setup(void)
+        {
+          m_rpm_pid.setGains(m_args.rpm_gains);
+          m_rpm_pid.setOutputLimits(-m_args.max_thrust, m_args.max_thrust); //Anti-windup: Incremental algorithm
+
+          // Do not set MPS PID output limits since we use a feedforward gain.
+          m_mps_pid.setGains(m_args.mps_gains);
+          m_mps_pid.setIntegralLimits(m_args.mps_max_int);
+
+          // Log parcels.
+          if (m_args.log_parcels)
+          {
+            m_rpm_pid.enableParcels(this, &m_parcel_rpm);
+            m_mps_pid.enableParcels(this, &m_parcel_mps);
+          }
         }
 
         void
@@ -361,14 +277,24 @@ namespace Control
         }
 
         void
+        consume(const IMC::DesiredSpeed* msg)
+        {
+          if (!isActive())
+            return;
+
+          m_desired_speed = msg->value;
+          m_speed_units = msg->speed_units;
+        }
+
+        void
         consume(const IMC::EstimatedState* msg)
         {
           if (msg->getSource() != getSystemId())
             return;
 
+          // Controller not active - Use current speed as desired
           if (!isActive())
           {
-            m_desired_yaw = msg->psi;
             m_desired_speed = msg->u;
             return;
           }
@@ -380,69 +306,33 @@ namespace Control
             return;
 
           float thrust_com = 0;
-          float err_yaw = Angles::normalizeRadian(m_desired_yaw - msg->psi);
-          float rpm = (m_rpm[0].value + m_rpm[1].value) / 2;
+          float rpm = m_rpm.value;
 
-          // Yaw controller.
-          float thrust_diff = m_yaw_pid.step(tstep, err_yaw);
-
-          // Thrust forward.
-          if (thrustForward(err_yaw))
+          // Speed Controller - (PID Controller).
+          switch (m_speed_units)
           {
-            // Velocity controller.
-            switch (m_speed_units)
-            {
-              case IMC::SUNITS_PERCENTAGE:
-                thrust_com = (m_desired_speed / 100.0);
-                break;
-              case IMC::SUNITS_METERS_PS:
-                thrust_com = rpmToThrust(rpm, mpsToRpm(msg->u, tstep), tstep);
-                break;
-              case IMC::SUNITS_RPM:
-                thrust_com = rpmToThrust(rpm, m_desired_speed, tstep);
-                m_previous_rpm = m_desired_speed;
-              default:
-                break;
-            }
-
-            // Limit differential when thrusting forward.
-            thrust_diff = Math::trimValue(thrust_diff,
-                                          - m_args.act_diff_max,
-                                          m_args.act_diff_max);
+          case IMC::SUNITS_PERCENTAGE:
+            thrust_com = (m_desired_speed / 100.0);
+            break;
+          case IMC::SUNITS_METERS_PS:
+            thrust_com = rpmToThrust(rpm, mpsToRpm(msg->u, tstep), tstep);
+            break;
+          case IMC::SUNITS_RPM:
+            thrust_com = rpmToThrust(rpm, m_desired_speed, tstep);
+            m_previous_rpm = m_desired_speed;
+          default:
+            break;
           }
 
-          m_act[0].value = thrust_com + thrust_diff;
-          m_act[1].value = thrust_com - thrust_diff;
+          m_act.value = thrust_com;
 
-          shareSaturation();
-
-          dispatchThrust(m_act[0].value, tstep, 0);
-          dispatchThrust(m_act[1].value, tstep, 1);
-        }
-
-        void
-        consume(const IMC::DesiredHeading* msg)
-        {
-          if (!isActive())
-            return;
-
-          m_desired_yaw = msg->value;
-        }
-
-        void
-        consume(const IMC::DesiredSpeed* msg)
-        {
-          if (!isActive())
-            return;
-
-          m_desired_speed = msg->value;
-          m_speed_units = msg->speed_units;
+          dispatchThrust(m_act.value, tstep);
         }
 
         void
         consume(const IMC::ControlLoops* msg)
         {
-          if (!(msg->mask & (IMC::CL_YAW | IMC::CL_SPEED)))
+          if (!(msg->mask & (IMC::CL_SPEED)))
             return;
 
           if (msg->scope_ref < m_scope_ref)
@@ -467,17 +357,14 @@ namespace Control
         void
         consume(const IMC::Rpm* msg)
         {
-          if (msg->getSourceEntity() == m_rpm_eid[0])
-            m_rpm[0].value = msg->value;
-          if (msg->getSourceEntity() == m_rpm_eid[1])
-            m_rpm[1].value = msg->value;
+          m_rpm.value = msg->value;
         }
 
         //! Convert rpm value to thrust actuation
         //! @param[in] rpm value of rpms currently in the motor
         //! @param[in] desired_rpm desired rpms for the motor
         //! @param[in] timestep amount of time since last control step
-        //! @return common thrust actuation.
+        //! @return thrust actuation.
         float
         rpmToThrust(float rpm, float desired_rpm, double timestep)
         {
@@ -487,11 +374,11 @@ namespace Control
           }
           else if (timestep > 0.0)
           {
+            // PID Controller call
             double value;
             value = m_rpm_pid.step(timestep, desired_rpm - rpm);
             m_parcel_rpm.a = desired_rpm * m_args.rpm_ffgain;
             value += m_parcel_rpm.a;
-
             return value;
           }
 
@@ -505,26 +392,28 @@ namespace Control
         float
         mpsToRpm(float vel, double timestep)
         {
-          // if desired speed is too low just turn off motor
+          // Desired speed - Too low, turn off motor
           if (m_desired_speed < c_mps_tol)
           {
             m_previous_rpm = 0.0;
             return 0.0;
           }
 
-          // cannot let the timestep be zero
+          // Cannot let the timestep be zero
           if (timestep <= 0.0)
             return 0.0;
 
+
+          // PID Controller call
           float rpm = m_mps_pid.step(timestep, m_desired_speed - vel);
           m_parcel_mps.a = m_desired_speed * m_args.mps_ffgain;
           rpm += m_parcel_mps.a;
 
-          // trim acceleration in rpms
+          // Trim acceleration in rpms
           rpm = Math::trimValue(rpm, m_previous_rpm - m_args.max_accel * timestep,
                                 m_previous_rpm + m_args.max_accel * timestep);
 
-          // trim rpm value
+          // Trim rpm value
           rpm = Math::trimValue(rpm, m_args.min_rpm, m_args.max_rpm);
           m_previous_rpm = rpm;
           return rpm;
@@ -534,65 +423,32 @@ namespace Control
         //! @param[in] value set thrust actuation value
         //! @param[in] timestep amount of time since last control step
         void
-        dispatchThrust(float value, double timestep, uint8_t id)
+        dispatchThrust(float value, double timestep)
         {
-          if ((value > m_last_act[id].value) && (m_args.act_ramp > 0.0))
+          if ((value > m_last_act.value) && (m_args.act_ramp > 0.0))
           {
-            value = m_last_act[id].value + trimValue((value - m_last_act[id].value) / timestep,
-                                                     0.0, m_args.act_ramp * timestep);
+            value = m_last_act.value + trimValue((value - m_last_act.value) / timestep,
+                                                 0.0, m_args.act_ramp * timestep);
           }
 
-          m_act[id].value = trimValue(value, -m_args.act_max, m_args.act_max);
-          dispatch(m_act[id]);
+          m_act.value = trimValue(value, -m_args.max_thrust, m_args.max_thrust);
 
-          m_last_act[id].value = m_act[id].value;
-        }
+          dispatch(m_act);
 
-        //! Check if we are facing our waypoint to thrust.
-        //! @param[in] yaw_err yaw error.
-        //! @return true to thrust forward, false otherwise.
-        bool
-        thrustForward(float yaw_err)
-        {
-          // Check if we can thrust.
-          if (m_common)
-          {
-            // Do not thrust forward if heading error is too large.
-            if (std::fabs(yaw_err) > m_args.yaw_max * (1 + c_yaw_tol))
-              m_common = false;
-          }
-          else
-          {
-            if (std::fabs(yaw_err) < m_args.yaw_max)
-              m_common = true;
-          }
+          ////////////////////////////////////////////////////// Print useful.
+          spew("SetThrusterActuation value: %f", m_act.value);
 
-          return m_common;
-        }
+          int16_t print_thruster;
 
-        //! Distribute actuation references if over-saturated.
-        void
-        shareSaturation(void)
-        {
-          // New control logic when saturation occurs
-          if (!m_args.share)
-            return;
+          // Ensure thruster acutation range [-max, max]
+          print_thruster = roundToInteger(m_act.value * 100);
+          print_thruster = trimValue(print_thruster, -100, 100);
 
-          for (uint8_t i = 0; i < 2; i++)
-          {
-            if (m_act[i].value > m_args.act_max)
-            {
-              float delta = m_act[i].value - m_args.act_max;
-              m_act[i].value = m_args.act_max;
-              m_act[(i + 1) % 2].value -= delta;
-            }
-            else if (m_act[i].value < -m_args.act_max)
-            {
-              float delta = m_act[i].value + m_args.act_max;
-              m_act[i].value = -m_args.act_max;
-              m_act[(i + 1) % 2].value -= delta;
-            }
-          }
+          spew("SetThrusterActuation sent: %d", print_thruster);
+
+          /////////////////////////////////////////////////////////
+
+          m_last_act.value = m_act.value;
         }
 
         void

@@ -164,7 +164,7 @@ namespace Simulators
       {
         using Simulators::VSIM::UUV;
         UUV* v = static_cast<UUV*>(m_vehicle);
-        v->updateFin(msg->id, msg->value);
+        v->updateFin(msg->id, -msg->value);
       }
 
       void
