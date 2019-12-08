@@ -75,7 +75,7 @@ namespace Sensors
     //! Task arguments.
     struct Arguments
     {
-      //! Sensor activation.
+      //! Triggers sensor on and off.
       bool activate;
       //! Serial port device.
       std::string uart_dev;
@@ -93,11 +93,9 @@ namespace Sensors
     {
       //! GPIO state handle
       Hardware::GPIO* m_gpio;
-      //! GPIO state
-      bool m_gpio_state;
-      //! Flag for GPIO activation
-      bool m_activate;
-      //! Last compensated depth: fixed to 1m.
+      //! Indicates sensor state.
+      bool m_active;
+      //! Last compensated depth.
       double m_depth;
       //! Last defined salinity.
       double m_salinity;
@@ -128,13 +126,21 @@ namespace Sensors
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx), 
         m_gpio(NULL),
-        m_depth(1.0),
+        m_active(false),
+        m_depth(0.0),
         m_salinity(0.0),
         m_temperature(0.0),
         m_uart(NULL)
       {
-        paramActive(Tasks::Parameter::SCOPE_GLOBAL,
-                     Tasks::Parameter::VISIBILITY_USER);
+        //paramActive(Tasks::Parameter::SCOPE_IDLE,
+        //            Tasks::Parameter::VISIBILITY_USER);
+
+        // Define configuration parameters.
+        param("Activate Sensor", m_args.activate)
+        .scope(Tasks::Parameter::SCOPE_IDLE)
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .defaultValue("false")
+        .description("Controls sensor activation/deactivation");
         
         param("Serial Port - Device", m_args.uart_dev)
         .defaultValue("")
@@ -157,19 +163,49 @@ namespace Sensors
 
         param("Entity Label - Temperature", m_args.elabel_temp)
         .defaultValue("Depth Sensor")
-        .description("Entity label of the Depth Sensor");
+        .description("Entity label of the IMU");
 
         bind<IMC::Salinity>(this);
         bind<IMC::Temperature>(this);
 
-        setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
+        setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_ACTIVATING);
       }
 
       //! Update internal state with new parameter values.
       void
       onUpdateParameters(void)
       {
-        if (isActive() && paramChanged(m_args.period))
+        // If sensor is on and Neptus wants to turn it off.
+        if(m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
+        {
+          // Stop communication.
+          stop();
+          // Wait 2 seconds and turn sensor off.
+          Delay::wait(2.0);
+          m_gpio->setValue(1);
+          // Sensor is not active.
+          m_active = false;
+        }
+
+        // If sensor is off and Neptus wants to turn it on.
+        if(!m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
+        {
+          // Turn sensor on.
+          m_gpio->setValue(0);
+          // Wait 2 seconds and initialize.
+          Delay::wait(2.0);
+          if(initializeSensor())
+          {
+            // Sensor is active.
+            m_active = true;
+          }
+          else
+          {
+            trace("Could not initialize optode sensor");
+          }
+        }
+
+        if (m_active && paramChanged(m_args.period))
         {
           if (stop())
           {
@@ -177,7 +213,7 @@ namespace Sensors
             start();
           }
         }
-      }
+      } 
 
       void 
       onEntityReservation(void)
@@ -213,34 +249,48 @@ namespace Sensors
 
           m_gpio = new Hardware::GPIO(67);
           m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
-          m_gpio->setValue(0);
+          if(m_active)
+          {
+            // turn on
+            m_gpio->setValue(0);
+          }
+          else
+          {
+            //turn off.
+            m_gpio->setValue(1);
+          }
+          
         }
         catch (std::runtime_error& e)
         {
           throw RestartNeeded(e.what(), 30);
         }
+
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
       }
 
-      //! Initialize resources.
-      void
-      onResourceInitialization(void)
+      //! Initialize sensor.
+      bool
+      initializeSensor(void)
       {
         stop();
         getVersion();
 
         for (unsigned i = 0; i < c_cmds_size; ++i)
         {
-          if (!sendCommand(c_cmds[i]))
-            return;
+          if(!sendCommand(c_cmds[i]))
+          {
+            return false;
+          }
         }
-
+          
         if (!setPeriod(m_args.period))
-          return;
+          return false;
 
         if (start())
           m_wdog.reset();
 
-        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+        return true;
       }
 
       //! Release resources.
@@ -250,6 +300,15 @@ namespace Sensors
         stop();
         Memory::clear(m_uart);
         Memory::clear(m_gpio);
+      }
+
+      void
+      onEstimatedState(const IMC::EstimatedState& msg)
+      {
+        if (msg.getSource() != getSystemId())
+          return;
+
+        m_depth = msg.depth;
       }
 
       void
@@ -377,7 +436,7 @@ namespace Sensors
 
         trace("temperature: %0.1f | saturation: %0.1f | oxygen: %0.2f",
               m_temperature_msg.value, m_air_saturation.value, m_dissolved_oxygen.value);
-        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+        //setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
         m_wdog.reset();
       }
 
@@ -407,7 +466,7 @@ namespace Sensors
 
         std::string bfr(cmd + "\r\n");
         m_uart->write(bfr.c_str(), bfr.size());
-        spew("sent: '%s'", sanitize(bfr).c_str());
+        trace("sent: '%s'", sanitize(bfr).c_str());
         return readUntil(c_ack, c_timeout);
       }
 
@@ -429,7 +488,7 @@ namespace Sensors
           // Detect line termination.
           if (bfr[i] == '\n')
           {
-            spew("recv: '%s'", sanitize(m_line).c_str());
+            trace("recv: '%s'", sanitize(m_line).c_str());
             process(m_line);
             m_line.clear();
           }
@@ -454,7 +513,7 @@ namespace Sensors
           char bfr[256] = {0};
           m_uart->read(bfr, sizeof(bfr));
 
-          spew("reply: '%s'", sanitize(bfr).c_str());
+          trace("reply: '%s'", sanitize(bfr).c_str());
 
           if (String::endsWith(bfr, reply))
             return true;
@@ -463,37 +522,39 @@ namespace Sensors
         return false;
       }
 
-      void
-      onActivation(void)
-      {
-        // Turn on sensor.
-        m_gpio->setValue(0);
-      }
-
-      void
-      onDeactivation(void)
-      {
-        // Turn off sensor.
-        m_gpio->setValue(1);
-      }
-
       //! Main loop.
       void
       onMain(void)
       {
         // Wait for resource acquisition and initialization
         while(getEntityState() != IMC::EntityState::ESTA_NORMAL);
-
-        // Get data from sensor
-        listen();
-
-        // Not received communication for a while
-        if (m_wdog.overflow())
+        
+        // Run while task is active
+        while(!stopping())
         {
-          setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
-          throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
+          if(m_active)
+          {
+            // Get data from sensor
+            listen();
+
+            // Not received communication for a while
+            if (m_wdog.overflow())
+            {
+              setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
+              throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
+            }
+          }
+
+          // If no instruction arrived from neptus, reset timer to avoid task from restarting
+          if(!m_active)
+            m_wdog.reset();
+            
+          waitForMessages(0.01);
         }
-      }
+
+        // When stopping task, turn sensor off
+        //m_gpio->setValue(1);
+      }      
     };
   }
 }
