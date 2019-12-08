@@ -132,9 +132,6 @@ namespace Sensors
         m_temperature(0.0),
         m_uart(NULL)
       {
-        //paramActive(Tasks::Parameter::SCOPE_IDLE,
-        //            Tasks::Parameter::VISIBILITY_USER);
-
         // Define configuration parameters.
         param("Activate Sensor", m_args.activate)
         .scope(Tasks::Parameter::SCOPE_IDLE)
@@ -551,9 +548,6 @@ namespace Sensors
             
           waitForMessages(0.01);
         }
-
-        // When stopping task, turn sensor off
-        //m_gpio->setValue(1);
       }      
     };
   }
