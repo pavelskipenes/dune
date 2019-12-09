@@ -86,8 +86,8 @@ namespace Sensors
       Hardware::GPIO* m_gpio;
       //! Sensor SSR state
       bool m_gpio_state;
-      //! Flag for GPIO activation
-      bool m_activate;
+      //! Indicates sensor state.
+      bool m_active;
       //! Serial port handle.
       SerialPort* m_uart;
       //! Watchdog.
@@ -117,12 +117,9 @@ namespace Sensors
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
         m_gpio(NULL),
-        m_activate(false),
+        m_active(false),
         m_uart(NULL)
       {
-        // paramActive(Tasks::Parameter::SCOPE_IDLE,
-        //             Tasks::Parameter::VISIBILITY_USER);
-
         // Define configuration parameters.
         param("Activate Sensor", m_args.activate)
         .scope(Tasks::Parameter::SCOPE_GLOBAL)
@@ -211,13 +208,6 @@ namespace Sensors
         .defaultValue("CTD")
         .description("Name of device's power channel");
 
-        // param(DTR_RT("Automatic Activation"), m_args.auto_activation)
-        // .defaultValue("true")
-        // .visibility(Tasks::Parameter::VISIBILITY_USER)
-        // .scope(Tasks::Parameter::SCOPE_IDLE)
-        // .description("Operator is able to control device");
-
-        // bind<IMC::VehicleMedium>(this);
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
       }
 
@@ -225,22 +215,35 @@ namespace Sensors
       void
       onUpdateParameters(void)
       {
-        if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.activate))
+        // If sensor is on and Neptus wants to turn it off.
+        if(m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
         {
-          m_gpio_state = m_args.activate;
+          // Stop communication.
+          stop();
+          // Wait 2 seconds and turn sensor off.
+          Delay::wait(2.0);
+          m_gpio->setValue(1);
+          // Sensor is not active.
+          m_active = false;
+          requestDeactivation();
+        }
 
-          // If sensor has been turned on, activate the task
-          // If sensor has been turned off, deactivate the task
-          // SSRs are normally-closed (NC), so deactivation means GPIO state = 1
-          if(m_args.activate)
+        // If sensor is off and Neptus wants to turn it on.
+        if(!m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
+        {
+          // Turn sensor on.
+          m_gpio->setValue(0);
+          // Wait 2 seconds and initialize.
+          Delay::wait(2.0);
+          if(setup())
           {
-            m_activate = false;
-            requestDeactivation();
+            // Sensor is active.
+            m_active = true;
+            requestActivation();
           }
           else
           {
-            m_activate = true;
-            requestActivation();
+            trace("Could not initialize CTD sensor");
           }
         }
 
@@ -283,7 +286,16 @@ namespace Sensors
 
           m_gpio = new Hardware::GPIO(64);
           m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
-          m_gpio->setValue(0);
+          if(m_active)
+          {
+            // turn on
+            m_gpio->setValue(0);
+          }
+          else
+          {
+            //turn off.
+            m_gpio->setValue(1);
+          }
         }
         catch (std::runtime_error& e)
         {
@@ -295,11 +307,13 @@ namespace Sensors
       void
       onResourceInitialization(void)
       {
-        if (setup())
-          start();
-        else
-          throw RestartNeeded(DTR("failed to configure device"), 5.0);
-
+        if (m_active)
+        {
+          if (setup())
+            start();
+          else
+            throw RestartNeeded(DTR("failed to configure device"), 5.0);
+        }
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);        
         m_wdog.setTop(30.0);
       }
@@ -312,25 +326,6 @@ namespace Sensors
         Memory::clear(m_uart);
         Memory::clear(m_gpio);
       }
-
-      // void
-      // consume(const IMC::VehicleMedium* msg)
-      // {
-      //   if (!m_args.auto_activation)
-      //     return;
-
-      //   // Request deactivation.
-      //   if (msg->medium == IMC::VehicleMedium::VM_GROUND)
-      //   {
-      //     if (isActive())
-      //       requestDeactivation();
-      //   }
-      //   else
-      //   {
-      //     if (!isActive() && !isActivating())
-      //       requestActivation();
-      //   }
-      // }
 
       bool
       setup(void)
@@ -541,39 +536,26 @@ namespace Sensors
         // Run while task is active
         while(!stopping())
         {
-          // if(m_activate)
-          // {
-          //   trace("Activating sensor");
-          //   m_gpio->setValue(0);
-          // } else
-          // {
-          //   trace("Deactivating sensor");
-          //   m_gpio->setValue(1);
-          // }
-        
-          // Get data from sensor
-          listen();
-
-          spew("CTD Temperature: %.2f deg C", m_temp.value);
-          spew("CTD Conductivity: %.2f S/m", m_cond.value);
-          spew("CTD Pressure: %.2f hPa", m_press.value);
-          spew("CTD Depth: %.2f m", m_depth.value);
-          spew("CTD Salinity: %.2f PSU", m_salinity.value);
-          spew("CTD Sound Speed: %.2f m/s", m_sspeed.value);
-
-          // Not received communication for a while
-          if (m_wdog.overflow())
+          if(m_active)
           {
-            setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
-            throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
+            // Get data from sensor
+            listen();
+
+            // Not received communication for a while
+            if (m_wdog.overflow())
+            {
+              setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
+              throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
+            }
+          }
+          else
+          {
+            // If no instruction arrived from neptus, reset timer to avoid task from restarting
+            m_wdog.reset();
           }
 
-          // Sleep for 1s
-          Delay::wait(1.0);
+          waitForMessages(0.01);
         }
-
-        // When stopping task, turn sensor off
-        m_gpio->setValue(1);
       }
     };
   }
