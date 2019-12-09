@@ -48,7 +48,7 @@ namespace Sensors
     //! Task arguments.
     struct Arguments
     {
-      //! GPIO toggle.
+      //! Triggers sensor on and off.
       bool activate;
       //! IO device.
       std::string io_dev;
@@ -86,7 +86,8 @@ namespace Sensors
     struct Task: public DUNE::Tasks::Task
     {
       Hardware::GPIO* m_gpio;
-      bool m_gpio_state;           // Set to turn GPIO on/off
+      //! Indicates sensor state.
+      bool m_active;
       //! IO device handle.
       IO::Handle* m_handle;
       //! IO device Handle for TCP data socket.
@@ -116,6 +117,7 @@ namespace Sensors
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx), 
         m_gpio(NULL),
+        m_active(false),
         m_handle(NULL),
         m_data_h(NULL),
         m_driver(NULL),
@@ -123,16 +125,11 @@ namespace Sensors
         m_triggered(false),
         m_serial(false)
       {
-        // paramActive(Tasks::Parameter::SCOPE_IDLE,
-        //             Tasks::Parameter::VISIBILITY_USER);
-
         // Define configuration parameters.
         param("Activate Sensor", m_args.activate)
-        .scope(Tasks::Parameter::SCOPE_GLOBAL)
+        .scope(Tasks::Parameter::SCOPE_IDLE)
         .visibility(Tasks::Parameter::VISIBILITY_USER)
-        .defaultValue("1")
-        .minimumValue("0")
-        .maximumValue("1")
+        .defaultValue("false")
         .description("Controls sensor activation/deactivation");
         
         param("IO Port - Device", m_args.io_dev)
@@ -273,20 +270,26 @@ namespace Sensors
       void
       onUpdateParameters(void)
       {
-        if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.activate))
+        // If sensor is on and Neptus wants to turn it off.
+        if(m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
         {
-          // If sensor has been turned on, activate the task
-          // If sensor has been turned off, deactivate the task
-          // SSRs are normally-closed (NC), so deactivation means GPIO state = 1
-          // We invert the logic here so on Neptus it is direct
-          m_gpio_state = !m_args.activate;
-          if(m_gpio_state)
-            requestDeactivation();
-          else
-            requestActivation();
+          m_gpio->setValue(1);
+          // Sensor is not active.
+          m_active = false;
+        }
+
+        // If sensor is off and Neptus wants to turn it on.
+        if(!m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
+        {
+          // Turn sensor on.
+          m_gpio->setValue(0);
+          // Wait 2 seconds and initialize.
+          Delay::wait(3.0);
+          onResourceInitialization();
+          m_active = true;
         }
         
-        if (isActive())
+        if (m_active)
         {
           if (paramChanged(m_args.ncells) || paramChanged(m_args.cellsize) ||
               paramChanged(m_args.nping) || paramChanged(m_args.blank))
@@ -325,7 +328,16 @@ namespace Sensors
           // GPIO init
           m_gpio = new Hardware::GPIO(65);
           m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
-          m_gpio->setValue(0);
+          if(m_active)
+          {
+            // turn on
+            m_gpio->setValue(0);
+          }
+          else
+          {
+            //turn off.
+            m_gpio->setValue(1);
+          }
         }
         catch (...)
         {
@@ -338,31 +350,32 @@ namespace Sensors
       void
       onResourceInitialization(void)
       {
-        
-
-        // Driver init
-        if (isConnected())
+        if(m_active)
         {
-          m_driver->reset(m_args.nping, m_args.ncells,
-                          m_args.cellsize, m_args.blank);
+          // Driver init
+          if (isConnected())
+          {
+            m_driver->reset(m_args.nping, m_args.ncells,
+                            m_args.cellsize, m_args.blank);
 
-          std::string error;
-          if (!m_driver->setup(error))
-            throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)) + error, 5);
+            std::string error;
+            if (!m_driver->setup(error))
+              throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)) + error, 5);
 
-          m_wdog.setTop(c_data_timeout);
+            m_wdog.setTop(c_data_timeout);
+          }
+          spew("ADCP driver connected");
+
+          if ( isParserOn() )
+          {
+            m_parser->set( m_args.ncells, m_args.cellsize, m_args.blank );
+          }
+
+          // Task is ready to begin
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+          // By default task begins deactivated
+          // requestDeactivation();
         }
-        spew("ADCP driver connected");
-
-        if ( isParserOn() )
-        {
-          m_parser->set( m_args.ncells, m_args.cellsize, m_args.blank );
-        }
-
-        // Task is ready to begin
-        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-        // By default task begins deactivated
-        // requestDeactivation(); 
       }
 
       //! Check if our IO device is a TCP socket.
@@ -500,22 +513,26 @@ namespace Sensors
 
         while (!stopping())
         {
-          // Activate or deactivate GPIO
-          m_gpio->setValue(m_gpio_state);
-
-          // Get data from ADCP
-          if (!isParserOn())
+          if(m_active)
           {
-            spew("Parser is not on");
-            return;
+            // Get data from ADCP
+            if (!isParserOn())
+            {
+              spew("Parser is not on");
+              return;
+            }
+
+            if (m_parser->readData())
+              m_wdog.reset();
+
+            if (m_wdog.overflow())
+              throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
           }
-
-          if (m_parser->readData())
+          else
+          {
             m_wdog.reset();
-
-          if (m_wdog.overflow())
-            throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
-
+          }
+          
           waitForMessages(0.01);
         }
       }
