@@ -84,8 +84,6 @@ namespace Sensors
     {
       //! GPIO state handle
       Hardware::GPIO* m_gpio;
-      //! Sensor SSR state
-      bool m_gpio_state;
       //! Indicates sensor state.
       bool m_active;
       //! Serial port handle.
