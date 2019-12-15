@@ -48,7 +48,7 @@ namespace Sensors
     //! Task arguments.
     struct Arguments
     {
-      //! GPIO toggle.
+      //! Triggers sensor on and off.
       bool activate;
       //! IO device.
       std::string io_dev;
@@ -86,7 +86,8 @@ namespace Sensors
     struct Task: public DUNE::Tasks::Task
     {
       Hardware::GPIO* m_gpio;
-      bool m_gpio_state;           // Set to turn GPIO on/off
+      //! Indicates sensor state.
+      bool m_active;
       //! IO device handle.
       IO::Handle* m_handle;
       //! IO device Handle for TCP data socket.
@@ -116,6 +117,7 @@ namespace Sensors
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx), 
         m_gpio(NULL),
+        m_active(false),
         m_handle(NULL),
         m_data_h(NULL),
         m_driver(NULL),
@@ -123,16 +125,11 @@ namespace Sensors
         m_triggered(false),
         m_serial(false)
       {
-        // paramActive(Tasks::Parameter::SCOPE_IDLE,
-        //             Tasks::Parameter::VISIBILITY_USER);
-
         // Define configuration parameters.
         param("Activate Sensor", m_args.activate)
-        .scope(Tasks::Parameter::SCOPE_GLOBAL)
+        .scope(Tasks::Parameter::SCOPE_IDLE)
         .visibility(Tasks::Parameter::VISIBILITY_USER)
-        .defaultValue("1")
-        .minimumValue("0")
-        .maximumValue("1")
+        .defaultValue("false")
         .description("Controls sensor activation/deactivation");
         
         param("IO Port - Device", m_args.io_dev)
@@ -273,24 +270,33 @@ namespace Sensors
       void
       onUpdateParameters(void)
       {
-        if (getEntityState() != IMC::EntityState::ESTA_NORMAL && paramChanged(m_args.activate))
+        // If sensor is on and Neptus wants to turn it off.
+        if(m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
         {
-          // If sensor has been turned on, activate the task
-          // If sensor has been turned off, deactivate the task
-          // SSRs are normally-closed (NC), so deactivation means GPIO state = 1
-          // We invert the logic here so on Neptus it is direct
-          m_gpio_state = !m_args.activate;
-          if(m_gpio_state)
-            requestDeactivation();
-          else
-            requestActivation();
+          Memory::clear(m_handle);
+          Memory::clear(m_data_h);
+          m_gpio->setValue(1);
+          // Sensor is not active.
+          m_active = false;
+        }
+
+        // If sensor is off and Neptus wants to turn it on.
+        if(!m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
+        {
+          // Turn sensor on.
+          m_gpio->setValue(0);
+          // Wait 2 seconds and initialize.
+          Delay::wait(2.0);
+          if(!initializeSensor())
+            throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
+          m_active = true;
         }
         
-        if (isActive())
+        if (m_active && getEntityState() == IMC::EntityState::ESTA_NORMAL)
         {
           if (paramChanged(m_args.ncells) || paramChanged(m_args.cellsize) ||
               paramChanged(m_args.nping) || paramChanged(m_args.blank))
-            onResourceInitialization();
+            initializeSensor();
         }
       }
 
@@ -310,36 +316,44 @@ namespace Sensors
       onResourceAcquisition(void)
       {
         consumeMessages();
-
+        
         try
         {
-          if (!openSocket())
-          {
-            // The serial port is used as command link and data.
-            m_handle = new SerialPort(m_args.io_dev, m_args.uart_baud);
-            m_data_h = m_handle;
-            m_serial = true;
-            setup();
-          }
-
           // GPIO init
           m_gpio = new Hardware::GPIO(65);
           m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
-          m_gpio->setValue(0);
-        }
-        catch (...)
+          
+          // Test if sensor is active
+          if(m_active)
+          {
+            // turn on
+            m_gpio->setValue(0);
+            Delay::wait(2.0);
+            if(!initializeSensor())
+              throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
+          }
+          else
+          {
+            //turn off.
+            m_gpio->setValue(1);
+          }
+        }        
+        catch (std::runtime_error& e)
         {
-          throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
+          throw RestartNeeded(e.what(), 30);
         }
+
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);  
       }
 
-
       //! Initialize resources.
-      void
-      onResourceInitialization(void)
+      bool
+      initializeSensor(void)
       {
-        
-
+        // Attempt to open socket
+        if(!openSocket())
+          throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
+      
         // Driver init
         if (isConnected())
         {
@@ -352,17 +366,23 @@ namespace Sensors
 
           m_wdog.setTop(c_data_timeout);
         }
-        spew("ADCP driver connected");
+        else
+        {
+          return false;
+        }
+        
+        trace("ADCP driver connected");
 
         if ( isParserOn() )
         {
           m_parser->set( m_args.ncells, m_args.cellsize, m_args.blank );
         }
+        else
+        {
+          return false;
+        }
 
-        // Task is ready to begin
-        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-        // By default task begins deactivated
-        // requestDeactivation(); 
+        return true;
       }
 
       //! Check if our IO device is a TCP socket.
@@ -379,22 +399,21 @@ namespace Sensors
         // Create two TCP sockets, the first for command link,
         // the second to parse the data coming from the device.
         TCPSocket* sock = new TCPSocket;
-        sock->setNoDelay(true);
-        sock->setSendTimeout(1.0);
-        sock->setReceiveTimeout(1.0);
+        sock->setNoDelay(false);
+        sock->setSendTimeout(10.0);
+        sock->setReceiveTimeout(10.0);      
         sock->connect(addr, port);
-        m_handle = sock;
+        m_handle = sock;       
 
         TCPSocket* data_sock = new TCPSocket;
-        data_sock->setNoDelay(true);
-        data_sock->setSendTimeout(1.0);
-        data_sock->setReceiveTimeout(1.0);
+        data_sock->setNoDelay(false);
+        data_sock->setSendTimeout(10.0);
+        data_sock->setReceiveTimeout(10.0);
         data_sock->connect(addr, port + c_data_port);
-        m_data_h = data_sock;
+        m_data_h = data_sock; 
         m_serial = false;
-
+      
         setup();
-
         if (!m_driver->login())
           throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
 
@@ -414,10 +433,10 @@ namespace Sensors
       onResourceRelease(void)
       {
         Memory::clear(m_gpio);
-        Memory::clear(m_parser);
         Memory::clear(m_driver);
+        Memory::clear(m_parser);
         Memory::clear(m_handle);
-
+        
         if (!m_serial)
           Memory::clear(m_data_h);
       }
@@ -500,22 +519,23 @@ namespace Sensors
 
         while (!stopping())
         {
-          // Activate or deactivate GPIO
-          m_gpio->setValue(m_gpio_state);
-
-          // Get data from ADCP
-          if (!isParserOn())
+          if(m_active)
           {
-            spew("Parser is not on");
-            return;
+            // Get data from ADCP
+            if (!isParserOn())
+              throw RestartNeeded(DTR("Failure to initialize ADCP parser"), 5);
+
+            if (m_parser->readData())
+              m_wdog.reset();
+
+            if (m_wdog.overflow())
+              throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
           }
-
-          if (m_parser->readData())
+          else
+          {
             m_wdog.reset();
-
-          if (m_wdog.overflow())
-            throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
-
+          }
+          
           waitForMessages(0.01);
         }
       }

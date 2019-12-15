@@ -36,6 +36,10 @@ Sensors.prototype = new BasicSection;
 
 Sensors.prototype.m_msgs =
     {
+        'AirSaturation': { },
+        'DissolvedOxygen': { },
+        'OpticalBackscatter': { },
+        'DissolvedOrganicMatter': { },
         'Chlorophyll': { },
         'Fluorescein': { },
         'Phycocyanin': { },
