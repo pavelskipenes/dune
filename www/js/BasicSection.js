@@ -105,6 +105,11 @@ BasicSection.prototype.getMessageValue = function(abbrev)
     return this.findMessage(abbrev).value;
 };
 
+BasicSection.prototype.getMessageUnit = function(abbrev)
+{
+    return this.findMessage(abbrev).unit;
+};
+
 BasicSection.prototype.getEntityStateIcon = function(state)
 {
     switch (Number(state))

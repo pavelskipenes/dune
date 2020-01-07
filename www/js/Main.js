@@ -264,6 +264,18 @@ function getMessageValue(data, abbrev, defval)
     }
 };
 
+function getMessageUnit(data, abbrev, defval)
+{
+    try
+    {
+        return findMessage(data, abbrev).unit;
+    }
+    catch (err)
+    {
+        return defval;
+    }
+};
+
 function convertRadiansToDM(value)
 {
     if (value < 0)

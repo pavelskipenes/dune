@@ -154,6 +154,10 @@ Sensors.prototype.createValue = function(msg)
     td_value.style.width = '50px';
     td_value.appendChild(document.createTextNode(''));
 
+    var td_unit = document.createElement('td');
+    td_unit.style.width = '50px';
+    td_unit.appendChild(document.createTextNode(''));
+
     var td_desc = document.createElement('td');
     td_desc.style.textAlign = 'left';
     td_desc.appendChild(document.createTextNode(''));
@@ -170,6 +174,7 @@ Sensors.prototype.createValue = function(msg)
     var tr = document.createElement('tr');
     tr.appendChild(td_label);
     tr.appendChild(td_value);
+    tr.appendChild(td_unit);
     tr.appendChild(td_desc);
     tr.appendChild(td_status);
 

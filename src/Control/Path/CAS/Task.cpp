@@ -330,7 +330,7 @@ namespace Control
 
           // Register handler routines.
           bind<IMC::DesiredPath>(this);
-          //bind<IMC::PeekDesiredPath>(this);
+          bind<IMC::PeekDesiredPath>(this);
           bind<IMC::RemoteSensorInfo>(this);
           bind<IMC::GpsFix>(this);
         }
@@ -456,8 +456,8 @@ namespace Control
           TupleList tuples(msg->data);
           std::string system_name = tuples.get("NAME");
 
-          trace("Distance from obstacle %s is %0.1f",msg->id.c_str(), distance);
-          spew("Received Obstacle from AIS with MMSI: %s, NAME: %s; longitude %f and latitude %f, distance: %0.1f", msg->id.c_str(), system_name.c_str(), c_degrees_per_radian*m_lon_obst, c_degrees_per_radian*m_lat_obst, distance);
+          spew("Distance from obstacle %s is %0.1f",msg->id.c_str(), distance);
+          trace("Received Obstacle from AIS with MMSI: %s, NAME: %s; longitude %f and latitude %f, distance: %0.1f", msg->id.c_str(), system_name.c_str(), c_degrees_per_radian*m_lon_obst, c_degrees_per_radian*m_lat_obst, distance);
 
           bool obs_exists = false;
           // Obstacle vector: UPDATE/REMOVE.
@@ -530,7 +530,7 @@ namespace Control
           spew("Speed from Desired path: %0.2f", m_speed.value);
         }
 
-/*        void
+        void
         consume(const IMC::PeekDesiredPath* ppath)
         {
           m_nextpath_lat = ppath->dpath->end_lat;
@@ -538,7 +538,7 @@ namespace Control
           trace("NEXT NEXT WAYPOINT: lat %f - long %f",c_degrees_per_radian*m_nextpath_lat, c_degrees_per_radian*m_nextpath_lon);
 
           m_more_than_one = true;
-        }*/
+        }
 
         //! From GPS Task
         void
@@ -582,6 +582,8 @@ namespace Control
 
             for (unsigned int i = 0; i < obst_vec.size(); i++)
             {
+              IMC::CollisionAvoidance cas;
+
               // Get data from RemoteSensorInfo tuple.
               TupleList tuples(obst_vec[i].data);
 
@@ -597,7 +599,7 @@ namespace Control
               double c_d = (double) c/1000;
               double d_d = (double) d/1000;
 
-              trace("OBSTACLE: sog= %f, a= %0.1f, b= %0.1f, c= %0.1f, d= %0.1f", sog_d, a_d, b_d, c_d, d_d);
+              spew("OBSTACLE: sog= %f, a= %0.1f, b= %0.1f, c= %0.1f, d= %0.1f", sog_d, a_d, b_d, c_d, d_d);
 
               // Distance between ASV - Obstacle
               double dist_x = 0.0;
@@ -622,7 +624,24 @@ namespace Control
               int mmsi = 0; 
               geek >> mmsi;
               obst_state(i, 9) = mmsi;
-              
+
+              // Distance between ASV and Obstacle.
+              double distance = WGS84::distance(m_lat_asv, m_lon_asv, 0, obst_vec[i].lat, obst_vec[i].lon, 0);
+
+              //! Fill in CAS message.
+              cas.mmsi = mmsi;
+              cas.lat = obst_vec[i].lat;
+              cas.lon = obst_vec[i].lon;
+              cas.x = dist_x;
+              cas.y = dist_y;
+              cas.speed = sog_d;
+              cas.course = c_degrees_per_radian*obst_vec[i].heading;
+              cas.dist = distance;
+              cas.length = a_d+b_d;
+              cas.width = c_d+d_d;
+              cas.o_vect = (int) obst_vec.size();
+              dispatch(cas);
+
               trace("AUTONAUT (lon,lat,cog,sog) %0.1f %0.1f %0.1f %0.1f | %d-th OBSTACLE (dist_x,dist_y,cog,sog) %0.1f %0.1f %0.1f %f", m_lat_asv, m_lon_asv, c_degrees_per_radian*asv_state(2), asv_state(3), i+1, obst_state(i,0), obst_state(i,1), c_degrees_per_radian*obst_state(i,2), obst_state(i,3));
             }
 
@@ -661,8 +680,12 @@ namespace Control
             //! Collision Avoidance Algorithm - Compute heading offset/(speed offset)
             sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, static_obst, waypoints);
 
-            //! New desired heading
+            //! New desired course and course offset.
             m_heading.value += psi_os;
+            m_heading.off = c_degrees_per_radian*psi_os;
+
+            //! New speed offset.
+            //m_speed.value += u_os;
 
             //! Normalize angle
             m_heading.value = Angles::normalizeRadian(m_heading.value);

@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 4b5324d23968d4e510251a7a76b86ffb                            *
+// IMC XML MD5: 1f595091ca79f7a8a5e6402abbcfe0a5                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -11413,6 +11413,8 @@ namespace DUNE
     public:
       //! Value.
       fp64_t value;
+      //! Offset.
+      fp32_t off;
 
       static uint16_t
       getIdStatic(void)
@@ -11461,7 +11463,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 8;
+        return 12;
       }
 
       fp64_t
@@ -26262,6 +26264,87 @@ namespace DUNE
       getFixedSerializationSize(void) const
       {
         return 16;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Collision Avoidance.
+    class CollisionAvoidance: public Message
+    {
+    public:
+      //! MMSI.
+      fp32_t mmsi;
+      //! Latitude (WGS-84).
+      fp64_t lat;
+      //! Longitude (WGS-84).
+      fp64_t lon;
+      //! Offset north.
+      fp32_t x;
+      //! Offset east.
+      fp32_t y;
+      //! Speed.
+      fp32_t speed;
+      //! Course.
+      fp32_t course;
+      //! Distance.
+      fp32_t dist;
+      //! Length.
+      fp32_t length;
+      //! Width.
+      fp32_t width;
+      //! Obstacle vector size.
+      fp32_t o_vect;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 916;
+      }
+
+      CollisionAvoidance(void);
+
+      CollisionAvoidance*
+      clone(void) const
+      {
+        return new CollisionAvoidance(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return CollisionAvoidance::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "CollisionAvoidance";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 52;
       }
 
       void

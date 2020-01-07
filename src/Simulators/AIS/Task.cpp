@@ -190,7 +190,10 @@ namespace Simulators
         spew("AIS TUPLE = %s",rsi.data.c_str());
 
         if(msg->lat != 0.0 && msg->lon != 0.0)
+        {
+          //rsi.setDestination(0x8803);
           dispatch(rsi);
+        }
       }
 
 

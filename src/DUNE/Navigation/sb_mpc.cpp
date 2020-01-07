@@ -468,7 +468,6 @@ namespace DUNE
 		dist_0 = d.norm(); DIST_0(k)=dist_0;
 
 		los_0 = d/dist_0;
-		//std::cout << "dist_0 : " << DIST_0(k) << std::endl;
 
 		PHI_0(k) = atan2(d(1),d(0));	// bearing
 		//std::cout << "PHI_0/bearing : " << PHI_0(k)*RAD2DEG << std::endl;
@@ -495,12 +494,14 @@ namespace DUNE
 
  		v_o(0) = obst_vect[k]->u_[0];
 		v_o(1) = obst_vect[k]->v_[0];
+
 		rot2d(obst_vect[k]->psi_,v_o);
 
 
 		// obstacle ahead of asv
 		//std::cout << "AH_ : " << obst_vect[k]->AH_0 << std::endl;
 		double los_phi = acos(v_s.dot(los_0)/v_s.norm());
+		std::cout << "LOS_PHI : " << los_phi*RAD2DEG << std::endl;
 		if (obst_vect[k]->AH_0 > -1 && los_phi > PHI_AH_*DEG2RAD && los_phi < 112.5*DEG2RAD){ //90.0?
 			AH_0(k) = obst_vect[k]->AH_0;
 		}else{
@@ -535,7 +536,6 @@ namespace DUNE
 
 		//std::cout << "OT_0 : " << OT_0(k) << std::endl;
 
-
 		// Obstacle out of way? use it to constrain CRG scenario only?
 		OBS_PASSED_0(k) = ( (v_o.dot(-los_0) < cos(112.5*DEG2RAD)*v_o.norm() // obstacle's perspective
 				&& !OTG_0(k))
@@ -546,8 +546,8 @@ namespace DUNE
 		if (guidance_strategy < 2 && dist_0 > D_CLOSE_){ // check angle made with LOS to next WP
 			OBS_PASSED_0(k) = OBS_PASSED_0(k) && v_s.dot(los_s_wp1) > cos(PHI_HO_*DEG2RAD)*v_o.norm();
 		}
-
-		//std::cout << "OBS_PASSED_0 : " << OBS_PASSED_0(k) << std::endl;
+		
+		std::cout << "OBS_PASSED_0 : " << OBS_PASSED_0(k) << std::endl;
 
 
 		// Crossing in progress
@@ -560,7 +560,7 @@ namespace DUNE
 			CRG_0(k) = CRG_0(k) && v_o.dot(los_s_wp1) < cos(PHI_CR_*DEG2RAD)*v_o.norm();
 		}
 
-		//std::cout << "CRG_0 : " << CRG_0(k) << std::endl;
+		std::cout << "CRG_0 : " << CRG_0(k) << std::endl;
 
 
 		// Head-on transition in progress
@@ -578,15 +578,11 @@ namespace DUNE
 
 	}
 
-
 	double Chi_ca_i = 0.0;
 	int i_return_to_path = 0, ik_return_to_path = 0, i_return_to_path_best=n_samp; // iter at which ASV can return to path
 	int cp = 0, n_cp = 3; // course-offset iterator and change points
 	for (int j = 0; j < P_ca_.size(); j++){
 		for (int i = 0; i < Chi_ca_.size(); i++){
-
-			//std::cout << "CHI_CA SIZE= " << Chi_ca_.size() << std::endl;
-			//std::cout << "P_CA= " << P_ca_[j] << std::endl;
 
 		    for (int cp_ = 0; cp_ < n_cp; cp_++){
 
@@ -651,6 +647,7 @@ namespace DUNE
 
 					for (int l = 0; l < n_obst_branches; l++){
 						
+						//std::cout << "(bool)SB_0(k)= " << (bool)SB_0(k) << "(bool)CRG_0(k)= " << (bool)CRG_0(k) << "(bool)OTG_0(k)= " << (bool)OTG_0(k) << "(bool)OT_0(k)= " << (bool)OT_0(k) << "(bool)HOT_0(k)= " << (bool)HOT_0(k) << "DIST_0(k)= " << DIST_0(k) << std::endl;
 						// (bool)AH_0(k) and (bool)OBS_PASSED_0(k) unused?
 						cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, (bool)SB_0(k), (bool)CRG_0(k), (bool)OTG_0(k), (bool)OT_0(k), (bool)HOT_0(k), DIST_0(k), u_d, l, ik_return_to_path); //static_obst
 

@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 4b5324d23968d4e510251a7a76b86ffb                            *
+// IMC XML MD5: 1f595091ca79f7a8a5e6402abbcfe0a5                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -11592,6 +11592,7 @@ namespace DUNE
     DesiredHeading::clear(void)
     {
       value = 0;
+      off = 0;
     }
 
     bool
@@ -11599,6 +11600,7 @@ namespace DUNE
     {
       const IMC::DesiredHeading& other__ = static_cast<const DesiredHeading&>(msg__);
       if (value != other__.value) return false;
+      if (off != other__.off) return false;
       return true;
     }
 
@@ -11613,6 +11615,7 @@ namespace DUNE
     {
       uint8_t* ptr__ = bfr__;
       ptr__ += IMC::serialize(value, ptr__);
+      ptr__ += IMC::serialize(off, ptr__);
       return ptr__;
     }
 
@@ -11621,6 +11624,7 @@ namespace DUNE
     {
       const uint8_t* start__ = bfr__;
       bfr__ += IMC::deserialize(value, bfr__, size__);
+      bfr__ += IMC::deserialize(off, bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -11629,6 +11633,7 @@ namespace DUNE
     {
       const uint8_t* start__ = bfr__;
       bfr__ += IMC::reverseDeserialize(value, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(off, bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -11648,6 +11653,7 @@ namespace DUNE
     DesiredHeading::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
     {
       IMC::toJSON(os__, "value", value, nindent__);
+      IMC::toJSON(os__, "off", off, nindent__);
     }
 
     DesiredZ::DesiredZ(void)
@@ -27885,6 +27891,124 @@ namespace DUNE
       IMC::toJSON(os__, "y", y, nindent__);
       IMC::toJSON(os__, "z1", z1, nindent__);
       IMC::toJSON(os__, "z2", z2, nindent__);
+    }
+
+    CollisionAvoidance::CollisionAvoidance(void)
+    {
+      m_header.mgid = 916;
+      clear();
+    }
+
+    void
+    CollisionAvoidance::clear(void)
+    {
+      mmsi = 0;
+      lat = 0;
+      lon = 0;
+      x = 0;
+      y = 0;
+      speed = 0;
+      course = 0;
+      dist = 0;
+      length = 0;
+      width = 0;
+      o_vect = 0;
+    }
+
+    bool
+    CollisionAvoidance::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::CollisionAvoidance& other__ = static_cast<const CollisionAvoidance&>(msg__);
+      if (mmsi != other__.mmsi) return false;
+      if (lat != other__.lat) return false;
+      if (lon != other__.lon) return false;
+      if (x != other__.x) return false;
+      if (y != other__.y) return false;
+      if (speed != other__.speed) return false;
+      if (course != other__.course) return false;
+      if (dist != other__.dist) return false;
+      if (length != other__.length) return false;
+      if (width != other__.width) return false;
+      if (o_vect != other__.o_vect) return false;
+      return true;
+    }
+
+    int
+    CollisionAvoidance::validate(void) const
+    {
+      if (lat < -1.5707963267948966 || lat > 1.5707963267948966) return false;
+      if (lon < -3.141592653589793 || lon > 3.141592653589793) return false;
+      return true;
+    }
+
+    uint8_t*
+    CollisionAvoidance::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(mmsi, ptr__);
+      ptr__ += IMC::serialize(lat, ptr__);
+      ptr__ += IMC::serialize(lon, ptr__);
+      ptr__ += IMC::serialize(x, ptr__);
+      ptr__ += IMC::serialize(y, ptr__);
+      ptr__ += IMC::serialize(speed, ptr__);
+      ptr__ += IMC::serialize(course, ptr__);
+      ptr__ += IMC::serialize(dist, ptr__);
+      ptr__ += IMC::serialize(length, ptr__);
+      ptr__ += IMC::serialize(width, ptr__);
+      ptr__ += IMC::serialize(o_vect, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    CollisionAvoidance::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(mmsi, bfr__, size__);
+      bfr__ += IMC::deserialize(lat, bfr__, size__);
+      bfr__ += IMC::deserialize(lon, bfr__, size__);
+      bfr__ += IMC::deserialize(x, bfr__, size__);
+      bfr__ += IMC::deserialize(y, bfr__, size__);
+      bfr__ += IMC::deserialize(speed, bfr__, size__);
+      bfr__ += IMC::deserialize(course, bfr__, size__);
+      bfr__ += IMC::deserialize(dist, bfr__, size__);
+      bfr__ += IMC::deserialize(length, bfr__, size__);
+      bfr__ += IMC::deserialize(width, bfr__, size__);
+      bfr__ += IMC::deserialize(o_vect, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    CollisionAvoidance::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(mmsi, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(lat, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(lon, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(speed, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(course, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(dist, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(length, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(width, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(o_vect, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    CollisionAvoidance::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "mmsi", mmsi, nindent__);
+      IMC::toJSON(os__, "lat", lat, nindent__);
+      IMC::toJSON(os__, "lon", lon, nindent__);
+      IMC::toJSON(os__, "x", x, nindent__);
+      IMC::toJSON(os__, "y", y, nindent__);
+      IMC::toJSON(os__, "speed", speed, nindent__);
+      IMC::toJSON(os__, "course", course, nindent__);
+      IMC::toJSON(os__, "dist", dist, nindent__);
+      IMC::toJSON(os__, "length", length, nindent__);
+      IMC::toJSON(os__, "width", width, nindent__);
+      IMC::toJSON(os__, "o_vect", o_vect, nindent__);
     }
 
     AcousticBackscatter::AcousticBackscatter(void)

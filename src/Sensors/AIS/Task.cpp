@@ -188,7 +188,7 @@ namespace Sensors
           if (itr != m_systems.end())
             return;
 
-          ais_data << "CALLSIGN=" << msg.callsign << ";" << "NAME=" << msg.name << ";" << "TYPE_AND_CARGO=" << msg.type_and_cargo << ";" << "A=" << msg.dim_a << ";" << "B=" << msg.dim_b << ";" << "C=" << msg.dim_c << ";" << "D=" << msg.dim_d; //<< "MMSI=" << msg.mmsi << ";" 
+          ais_data << "CALLSIGN=" << msg.callsign << ";" << "NAME=" << msg.name << ";" << "TYPE_AND_CARGO=" << msg.type_and_cargo << ";" << "A=" << msg.dim_a << ";" << "B=" << msg.dim_b << ";" << "C=" << msg.dim_c << ";" << "D=" << msg.dim_d << ";"; //<< "MMSI=" << msg.mmsi << ";" 
 
           m_systems[msg.mmsi] = ShipTypeCode::translate(msg.type_and_cargo);
           return;
@@ -213,7 +213,7 @@ namespace Sensors
           rsi.lat = Angles::radians(msg.y);
           rsi.lon = Angles::radians(msg.x);
           rsi.heading = Angles::radians(msg.cog);
-          ais_data << ";" << "SOG=" << Angles::radians(msg.sog); // put sog into tuple, RemoteSensorInfo has no field for it.
+          ais_data << "SOG=" << Angles::radians(msg.sog); // put sog into tuple, RemoteSensorInfo has no field for it.
           rsi.data = ais_data.str();
           spew("RSI - Vessel(mmsi): %s (lon,lat,heading, speed): %f %f %0.2f %0.2f", rsi.id.c_str(),  c_degrees_per_radian*rsi.lon, c_degrees_per_radian*rsi.lat ,c_degrees_per_radian*rsi.heading, msg.sog);
           spew("AIS TUPLE = %s",rsi.data.c_str());

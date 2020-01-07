@@ -44,3 +44,8 @@ function getMessageValue(data, abbrev)
 {
     return findMessage(data, abbrev).value;
 };
+
+function getMessageUnit(data, abbrev)
+{
+    return findMessage(data, abbrev).unit;
+};
