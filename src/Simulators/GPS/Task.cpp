@@ -250,7 +250,8 @@ namespace Simulators
         m_fix.lat = m_origin.lat;
         m_fix.lon = m_origin.lon;
         m_fix.height = m_origin.height;
-        WGS84::displace(m_sstate.x, m_sstate.y, m_sstate.z, &m_fix.lat, &m_fix.lon, &m_fix.height);
+        //WGS84::displace(m_sstate.x, m_sstate.y, m_sstate.z, &m_fix.lat, &m_fix.lon, &m_fix.height);
+        WGS84::displace(m_sstate.x, m_sstate.y, &m_fix.lat, &m_fix.lon);
         m_fix.utc_time = ((uint32_t)now) % 86400;
 
         trace("fix: %0.6f %0.6f | yaw %0.1f | ground velocity %0.1f %0.1f %0.1f",

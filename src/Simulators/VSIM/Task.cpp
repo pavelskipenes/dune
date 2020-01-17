@@ -218,7 +218,7 @@ namespace Simulators
 
         m_sstate.x = position[0];
         m_sstate.y = position[1];
-        m_sstate.z = std::max(position[2], 0.0);
+        m_sstate.z = 0.0; //std::max(position[2], 0.0);
 
         // Fill attitude.
         double* attitude = m_vehicle->getOrientation();
