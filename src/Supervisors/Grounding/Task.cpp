@@ -76,7 +76,7 @@ namespace Supervisors
       {
         // Define configuration parameters.
         param("Digital Map Path", m_args.path)
-        .defaultValue("/home/dallo/autonaut-toolchain/L2/dune/misc/TrondheimsFjord.txt")
+        .defaultValue("/home/autonaut/autonaut-toolchain/L2/dune/misc/TrondheimsFjord.txt")
         .description("Path to the Digital Map");
 
         // Define configuration parameters.
@@ -184,8 +184,8 @@ namespace Supervisors
         std::vector<double> lat_diff;
         std::vector<double> lon_diff;
         int occurrencies = std::count(lat.begin(),lat.end(),lat[0]); //assume fixed!
-        
-        for(int k=0;k<lat.size()/occurrencies; k++)
+
+        for(unsigned int k=0;k<lat.size()/occurrencies; k++)
         {
           lat_diff.push_back(lat[k*occurrencies]);
           lookup_index.push_back(k*occurrencies);
@@ -210,7 +210,7 @@ namespace Supervisors
           double lon_prev_distance=10000.0;
           double lat_distance;
           double lon_distance;
-          int j;
+          unsigned int j;
           int a;
 
           for(j=0; j<lat_diff.size(); j++)
@@ -242,18 +242,103 @@ namespace Supervisors
           spew("CLOSEST LOCATION: %0.4f %0.4f %d IN LINE %d", lon[a-1], lat[a-1], depth[a-1], a-1);
           spew("DISTANCE FROM QUERIED POINT: %f", WGS84::distance(waypoints_list(i,0), waypoints_list(i,1), 0, Angles::radians(lat[a-1]), Angles::radians(lon[a-1]), 0));
 
-          double bearing_to_closest, range_to_closest;
-          WGS84::getNEBearingAndRange(waypoints_list(i,0),waypoints_list(i,1),Angles::radians(lat[a-1]),Angles::radians(lon[a-1]),&bearing_to_closest,&range_to_closest);
-          spew("BEARING AND RANGE TO CLOSEST: %f %f", Angles::degrees(bearing_to_closest), range_to_closest);
+          //double bearing_to_closest, range_to_closest;
+          //WGS84::getNEBearingAndRange(waypoints_list(i,0),waypoints_list(i,1),Angles::radians(lat[a-1]),Angles::radians(lon[a-1]),&bearing_to_closest,&range_to_closest);
+          //spew("BEARING AND RANGE TO CLOSEST: %f %f", Angles::degrees(bearing_to_closest), range_to_closest);
+          double north_to_closest, east_to_closest, down_to_closest;
+          WGS84::displacement(waypoints_list(i,0),waypoints_list(i,1),0,Angles::radians(lat[a-1]),Angles::radians(lon[a-1]),0, &north_to_closest, &east_to_closest, &down_to_closest);
+          spew("NORTH AND EAST TO CLOSEST: %f %f", north_to_closest, east_to_closest);
 
-          double bearing_to_previous, range_to_previous;
-          double bearing_to_next, range_to_next;
-          if(i==0)
-          {//! then jump to second waypoint.
-            WGS84::getNEBearingAndRange(waypoints_list(i,0),waypoints_list(i,1),waypoints_list(i+1,0),waypoints_list(i+1,1),&bearing_to_next,&range_to_next);
-            spew("BEARING AND RANGE TO NEXT: %f %f", Angles::degrees(bearing_to_next), range_to_next);
+          double north_to_next, east_to_next, down_to_next;
+          WGS84::displacement(waypoints_list(i,0),waypoints_list(i,1),0,waypoints_list(i+1,0),waypoints_list(i+1,1),0, &north_to_next, &east_to_next, &down_to_next);
+          spew("NORTH AND EAST TO NEXT: %f %f", north_to_next, east_to_next);
+
+          int quadrant_closest = returnQuadrant(north_to_closest, east_to_closest);
+          int quadrant_next = returnQuadrant(north_to_next, east_to_next);
+
+          spew("QUADRANT CLOSEST: %d", quadrant_closest);
+          spew("QUADRANT NEXT: %d", quadrant_next);
+
+          double north_closest_to_next, east_closest_to_next, down_closest_to_next;
+
+          // ASSUME DISTANCE TO NEXT WP > DISTANCE TO CLOSEST!!!!
+
+          std::vector<double> lat_close_to_line;
+          std::vector<double> lon_close_to_line;
+          std::vector<double> their_depth;
+
+          switch(quadrant_closest)
+          {
+            case 2:
+              if(quadrant_next==4) //! Search points +N and +E
+              {
+                spew("YUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU");
+                // Both north and east displacements must be positive!
+                WGS84::displacement(Angles::radians(lat[a-1]),Angles::radians(lon[a-1]),0,waypoints_list(i+1,0),waypoints_list(i+1,1),0, &north_closest_to_next, &east_closest_to_next, &down_closest_to_next);
+                
+                spew("NORTH CLOSEST TO NEXT: %f", north_closest_to_next);
+                spew("EAST CLOSEST TO NEXT: %f", east_closest_to_next);
+
+                if(std::fabs(east_closest_to_next)<=m_lon_map_spacing || north_closest_to_next<=m_lat_map_spacing) //Should not be.
+                {
+                  break;
+                } else
+                { // index before = higher LAT but lower LONG.
+                  int number_of_lon_points = std::floor(std::fabs(east_closest_to_next)/m_lon_map_spacing); //(int)
+                  int number_of_lat_points =  std::floor(north_closest_to_next/m_lat_map_spacing); //(int)
+
+                  spew("HOW MANY LAT POINTS: %d", number_of_lat_points);
+                  spew("HOW MANY LON POINTS: %d", number_of_lon_points);
+
+                  int c;
+                  int b;
+                  double range;
+                  double bearing_to_next_wp;
+                  double bearing_to_possible_closest;
+                  double bearing_prev_diff = 10000.0;
+
+                  WGS84::getNEBearingAndRange(waypoints_list(i,0), waypoints_list(i,1),waypoints_list(i+1,0), waypoints_list(i+1,1),&bearing_to_next_wp,&range);
+
+                  for(b=0; b<number_of_lat_points; b++)
+                  {
+                    for(c=0; c<number_of_lon_points; c++)
+                    {
+                      WGS84::getNEBearingAndRange(waypoints_list(i,0), waypoints_list(i,1),Angles::radians(lat_diff[j-2-b]),Angles::radians(lon[a-1-c]),&bearing_to_possible_closest,&range);
+                      double bearing_diff = std::fabs(bearing_to_next_wp-bearing_to_possible_closest);
+
+                      if(bearing_diff<bearing_prev_diff)
+                        bearing_prev_diff = bearing_diff;
+                      else
+                        break; // closest point for LAT lat_diff[j-2-b] is lon[lookup_index[j-2+c-1]
+                    }
+                    lon_close_to_line.push_back(lon[a-1-c+1]);
+                    lat_close_to_line.push_back(lat_diff[j-2-b]);
+                    their_depth.push_back(depth[a-1-c+1]);
+
+                    spew("CLOSEST LOCATION: LAT %f LON %f DEPTH %d", lat_diff[j-2-b], lon[a-1-c+1], depth[a-1-c+1]);
+                  }
+                }
+              }
+              break;
           }
+
         }
+      }
+
+      int
+      returnQuadrant(int north, int east)
+      {
+        int quad;
+        if(north>=0.0 && east>=0.0)
+          quad = 1;
+        if(north<0.0 && east>0.0)
+          quad = 2;
+        if(north<=0.0 && east<=0.0)
+          quad = 3;
+        if(north>0.0 && east<0.0)
+          quad = 4;
+
+        return quad;
       }
 
       //! Main loop.
