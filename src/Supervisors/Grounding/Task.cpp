@@ -330,10 +330,10 @@ namespace Supervisors
           spew("HOW MANY LON POINTS: %d", number_of_lon_points);
 
           int b, jump=1;
-          double range, bearing_to_next_wp, bearing_to_possible_closest, bearing_prev_diff = 10000.0;
+          double range_to_next, range_to_possible_closest, bearing_to_next_wp, bearing_to_possible_closest, bearing_prev_diff = 10000.0;
 
           //! Get bearing and range between current and next wp.
-          WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),wp_list(wp_index+1,0), wp_list(wp_index+1,1),&bearing_to_next_wp,&range);
+          WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),wp_list(wp_index+1,0), wp_list(wp_index+1,1),&bearing_to_next_wp,&range_to_next);
 
           for(b=0; b<number_of_lat_points; b++)
           { 
@@ -348,25 +348,25 @@ namespace Supervisors
                 get_last = 1;
                 //spew("move_lat_index %d move_lon_index %d", move_lat_index, move_lon_index);
                 //spew("NEW LAT: %f", m_lat_diff[move_lat_index]);
-                WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range);
+                WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
               } else if(move_n == true && move_e == false)
               {
                 move_lat_index = lat_diff_index-2-b;
                 move_lon_index = last-(m_lat_occurrencies*jump)+c;
                 get_last = -1;
-                WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range);
+                WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
               } else if(move_n == false && move_e == true)
               {
                 move_lat_index = lat_diff_index+b;
                 move_lon_index = last+(m_lat_occurrencies*jump)-c;
                 get_last = 1;
-                WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range);
+                WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
               } else if(move_n == false && move_e == false)
               {
                 move_lat_index = lat_diff_index+b;
                 move_lon_index = last+(m_lat_occurrencies*jump)+c;
                 get_last = -1;
-                WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range);
+                WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
               }
 
               double bearing_diff = std::fabs(bearing_to_next_wp-bearing_to_possible_closest);
@@ -376,10 +376,14 @@ namespace Supervisors
               else
                 break; // closest point for LAT m_lat_diff[j-2-b] is lon[lookup_index[j-2+c-1]
             }
+
+            spew("CAN THIS BE NEGATIVE??? %f BEARING DIFF %f",range_to_possible_closest, bearing_prev_diff);
+            double minimum_distance_to_line = range_to_possible_closest*std::sin(std::fabs(bearing_prev_diff)); //bearing_prev_diff is the bearing to the closest point.
+
             jump++;
             bearing_prev_diff = 10000.0;
 
-            spew("CLOSEST LOCATION: LAT %f LON %f DEPTH %d", lat[move_lon_index+get_last], lon[move_lon_index+get_last], depth[move_lon_index+get_last]);
+            spew("CLOSEST LOCATION: LAT %f LON %f DEPTH %d WHICH IS %f DISTANT FROM WHERE AUTONAUT WILL PASS", lat[move_lon_index+get_last], lon[move_lon_index+get_last], depth[move_lon_index+get_last], minimum_distance_to_line);
             //spew("FILE LINE %d", move_lon_index+get_last);
 
             index_points_close.push_back(move_lon_index+get_last);
