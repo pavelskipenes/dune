@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 1f595091ca79f7a8a5e6402abbcfe0a5                            *
+// IMC XML MD5: 0030d454b816a0636cd3551ac1ef7ed9                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -26346,6 +26346,140 @@ namespace DUNE
       {
         return 52;
       }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Bathymetry Surroundings.
+    class Surroundings: public Message
+    {
+    public:
+      //! Locations.
+      std::string locations;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 917;
+      }
+
+      Surroundings(void);
+
+      Surroundings*
+      clone(void) const
+      {
+        return new Surroundings(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return Surroundings::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "Surroundings";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 0;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(locations);
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Heave Displacement.
+    class Heave: public Message
+    {
+    public:
+      //! Heave.
+      fp32_t value;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 918;
+      }
+
+      Heave(void);
+
+      Heave*
+      clone(void) const
+      {
+        return new Heave(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return Heave::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "Heave";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 4;
+      }
+
+      fp64_t
+      getValueFP(void) const;
+
+      void
+      setValueFP(fp64_t val);
 
       void
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;

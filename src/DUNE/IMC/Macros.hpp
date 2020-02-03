@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 1f595091ca79f7a8a5e6402abbcfe0a5                            *
+// IMC XML MD5: 0030d454b816a0636cd3551ac1ef7ed9                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -686,6 +686,10 @@
 #define DUNE_IMC_CURRENTVELOCITY 915
 //! CollisionAvoidance identification number.
 #define DUNE_IMC_COLLISIONAVOIDANCE 916
+//! Surroundings identification number.
+#define DUNE_IMC_SURROUNDINGS 917
+//! Heave identification number.
+#define DUNE_IMC_HEAVE 918
 //! AcousticBackscatter identification number.
 #define DUNE_IMC_ACOUSTICBACKSCATTER 1011
 //! Correlation identification number.

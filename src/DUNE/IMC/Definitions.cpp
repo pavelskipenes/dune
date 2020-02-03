@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 1f595091ca79f7a8a5e6402abbcfe0a5                            *
+// IMC XML MD5: 0030d454b816a0636cd3551ac1ef7ed9                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -28009,6 +28009,130 @@ namespace DUNE
       IMC::toJSON(os__, "length", length, nindent__);
       IMC::toJSON(os__, "width", width, nindent__);
       IMC::toJSON(os__, "o_vect", o_vect, nindent__);
+    }
+
+    Surroundings::Surroundings(void)
+    {
+      m_header.mgid = 917;
+      clear();
+    }
+
+    void
+    Surroundings::clear(void)
+    {
+      locations.clear();
+    }
+
+    bool
+    Surroundings::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::Surroundings& other__ = static_cast<const Surroundings&>(msg__);
+      if (locations != other__.locations) return false;
+      return true;
+    }
+
+    int
+    Surroundings::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    Surroundings::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(locations, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    Surroundings::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(locations, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    Surroundings::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(locations, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    Surroundings::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "locations", locations, nindent__);
+    }
+
+    Heave::Heave(void)
+    {
+      m_header.mgid = 918;
+      clear();
+    }
+
+    void
+    Heave::clear(void)
+    {
+      value = 0;
+    }
+
+    bool
+    Heave::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::Heave& other__ = static_cast<const Heave&>(msg__);
+      if (value != other__.value) return false;
+      return true;
+    }
+
+    int
+    Heave::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    Heave::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(value, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    Heave::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(value, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    Heave::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(value, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    fp64_t
+    Heave::getValueFP(void) const
+    {
+      return static_cast<fp64_t>(value);
+    }
+
+    void
+    Heave::setValueFP(fp64_t val)
+    {
+      value = static_cast<fp32_t>(val);
+    }
+
+    void
+    Heave::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "value", value, nindent__);
     }
 
     AcousticBackscatter::AcousticBackscatter(void)

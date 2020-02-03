@@ -63,6 +63,8 @@ namespace Sensors
     static const unsigned c_hdm_fields = 3;
     //! Minimum number of fields of ROT sentence.
     static const unsigned c_rot_fields = 3;
+    //! Minimum number of fields of ROT sentence.
+    static const unsigned c_hev_fields = 2;
     //! Minimum number of fields of PSATHPR sentence.
     static const unsigned c_psathpr_fields = 7;
     //! Power on delay.
@@ -96,10 +98,14 @@ namespace Sensors
       IMC::EulerAngles m_euler;
       //! Angular velocity message.
       IMC::AngularVelocity m_agvel;
+      //! Heave message.
+      IMC::Heave m_heave;
       //! Task arguments.
       Arguments m_args;
       //! Input watchdog.
       Time::Counter<float> m_wdog;
+      //! True if we have heave.
+      bool m_has_heave;
       //! True if we have angular velocity.
       bool m_has_agvel;
       //! True if we have euler angles.
@@ -449,6 +455,7 @@ namespace Sensors
           m_fix.setTimeStamp();
           m_euler.setTimeStamp(m_fix.getTimeStamp());
           m_agvel.setTimeStamp(m_fix.getTimeStamp());
+          m_heave.setTimeStamp(m_fix.getTimeStamp());
         }
 
         if (hasNMEAMessageCode(parts[0], "ZDA"))
@@ -485,6 +492,10 @@ namespace Sensors
         {
           interpretROT(parts);
         }
+        else if (hasNMEAMessageCode(parts[0], "HEV"))
+        {
+          interpretHEV(parts);
+        }
 
         if (parts[0] == m_args.stn_order.back())
         {
@@ -495,6 +506,12 @@ namespace Sensors
           {
             dispatch(m_euler);
             m_has_euler = false;
+          }
+          
+          if (m_has_heave)
+          {
+            dispatch(m_heave);
+            m_has_heave = false;
           }
 
           if (m_has_agvel)
@@ -718,6 +735,23 @@ namespace Sensors
         {
           m_agvel.z = Angles::radians(m_agvel.z) / 60.0;
           m_has_agvel = true;
+        }
+      }
+
+      //! Interpret HEV sentence (rate of turn).
+      //! @param[in] parts vector of strings from sentence.
+      void
+      interpretHEV(const std::vector<std::string>& parts)
+      {
+        if (parts.size() < c_hev_fields)
+        {
+          war(DTR("invalid HEV sentence"));
+          return;
+        }
+
+        if (readNumber(parts[1], m_heave.value))
+        {
+          m_has_heave = true;
         }
       }
 

@@ -92,7 +92,7 @@ namespace
           double m_ampl_est;
           //! Estimator Gain.
           double m_gain;
-          // Average factor.
+          //! Average factor.
           int m_avg;
           //! Estimation Duration timer.
           Time::Counter<float> m_timer;
@@ -114,16 +114,20 @@ namespace
           double m_phi_est_dot;
           //! Parameter Estimate Last.
           std::complex<double> m_phi_est_last; //double m_phi_est_last;
-          //Low-pass filter for amplitude estimation.
+          //! Low-pass filter for amplitude estimation.
           FilterEstimator lowpass_ampl;
-          //Lowpass filter for wave freq estimation.
+          //! Lowpass filter for wave freq estimation.
           FilterEstimator lowpass_est;
-          //Average Estimated Wave Frequency - Dispatch.
+          //! Average Estimated Wave Frequency - Dispatch.
           IMC::EstimatedFreq m_wave_avg;
-          // Last Average Estimated Wave Frequency.
+          //! Last Average Estimated Wave Frequency.
           double m_wave_avg_last;
-          // Estimated Wave Frequency.
+          //! Estimated Wave Frequency.
           double m_wave;
+          //! Heave from GPS, expressed in vessel CG frame.
+          IMC::Heave m_gps_heave;
+          //! Euler Angles from GPS.
+          IMC::EulerAngles m_euler;
 
           Task(const std::string& name, Tasks::Context& ctx):
             DUNE::Tasks::Task(name, ctx),
@@ -193,7 +197,8 @@ namespace
 
             // Setup processing of IMC messages
             bind<Acceleration>(this);
-
+            bind<Heave>(this);
+            bind<EulerAngles>(this);
           }
 
           //! Update internal state with new parameter values.
@@ -215,22 +220,40 @@ namespace
               buildFilters();
           }
 
-          //! Reserve entity identifiers.
           void
-          onEntityReservation(void)
+          consume(const IMC::EulerAngles* msg)
           {
+            if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"GPS")==0)
+            {
+              // Get Euler Angles from GPS.
+              m_euler.theta = msg->theta;
+              m_euler.phi = msg->phi;
+
+              trace("ESTIMATOR - EULER ANGLES FROM GPS: theta = %f phi = %f", m_euler.theta, m_euler.phi);
+            }
+            else
+              return;
           }
 
-          //! Resolve entity names.
           void
-          onEntityResolution(void)
+          consume(const IMC::Heave* msg)
           {
-          }
+            // If this transformation makes it should be included in Sensors/GPS.
+            if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"GPS")==0)
+            {
+              double heave_gps_frame = msg->value;
+              trace("ESTIMATOR - HEAVE FROM GPS AT THE BOW: %f", heave_gps_frame);
 
-          //! Acquire resources.
-          void
-          onResourceAcquisition(void)
-          {
+              // Compute wrt vessel CG: h_cg = h_gps - (0 0 1)*R*r, R=rot matrix between frames, r=vector between frames origins.
+              double r_x = 2.0, r_y = 0.0, r_z = 0.25;
+              m_gps_heave.value = heave_gps_frame + r_x*std::sin(m_euler.theta) - r_z*std::cos(m_euler.theta)*std::cos(m_euler.phi) - r_y*std::cos(m_euler.theta)*std::sin(m_euler.phi);
+
+              trace("ESTIMATOR - HEAVE AT CG: %f", m_gps_heave.value);
+
+              dispatch(m_gps_heave); // no loopback.
+            } else
+                return;
+           
           }
 
           //! Initialize resources.
@@ -245,6 +268,7 @@ namespace
           void
           onResourceRelease(void)
           {
+            // Could use this to free up memory.
           }
 
           void
@@ -258,7 +282,7 @@ namespace
           consume(const IMC::Acceleration* acc)
           {
             
-            m_heave_acc = acc->z - DUNE::Math::c_gravity; // SenTiBoard provides datum with acceleration.
+            m_heave_acc = acc->z - DUNE::Math::c_gravity; // SenTiBoard provides data with acceleration.
             //spew("Consumed Acceleration:%f",m_heave_acc);
 
             if(m_timer.getElapsed()>=m_args.period && m_timer.getElapsed()<=m_args.period+m_args.duration)
@@ -325,7 +349,9 @@ namespace
               //buildFilters();
               m_timer.reset();
               dispatch(m_wave_avg);
-              spew("Averaged Estimated Frequency: %f\n",m_wave_avg.value*100.0);
+              trace("Averaged Estimated Frequency: %f\n",m_wave_avg.value*100.0);
+              trace("Estimated Amplitude:%f",m_ampl_est);
+              
               // Reset weighted average.
               //m_avg=0;
               // Free allocated filters memory.

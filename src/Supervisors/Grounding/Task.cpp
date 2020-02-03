@@ -55,6 +55,10 @@ namespace Supervisors
       int threshold;
       //! Radius.
       int radius;
+      //! Lat room limit.
+      int lat_room_limit;
+      //! Lon room limit.
+      int lon_room_limit;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -73,6 +77,18 @@ namespace Supervisors
       std::vector<double> m_lat_diff;
       //! Latitude occurrencies.
       int m_lat_occurrencies;
+      //! Locations to Neptus.
+      IMC::Surroundings m_locations_to_nept;
+      //! String for tuple: locations_to_nept.
+      std::string m_loc_tuple;
+      //! Index of points to neptus.
+      int m_index_to_neptus;
+      //! Move East and North;
+      bool m_move_north, m_move_east;
+      //! Vehicle latitude
+      double m_lat_vehicle;
+      //! Vehicle longitude
+      double m_lon_vehicle;
       //! Task arguments.
       Arguments m_args;
 
@@ -84,7 +100,8 @@ namespace Supervisors
         m_depth_thr(-30),
         m_lat_map_spacing(0.0),
         m_lon_map_spacing(0.0),
-        m_lat_occurrencies(0)
+        m_lat_occurrencies(0),
+        m_index_to_neptus(0)
       {
         // Define configuration parameters.
         param("Digital Map Path", m_args.path)
@@ -100,9 +117,20 @@ namespace Supervisors
         .units(Units::Meter)
         .description("Radius to check around a queried location.");
 
+        param("Latitude Room Limit", m_args.lat_room_limit)
+        .defaultValue("5000")
+        .units(Units::Meter)
+        .description("Latitude room definition.");
+
+        param("Longitude Room Limit", m_args.lon_room_limit)
+        .defaultValue("5000")
+        .units(Units::Meter)
+        .description("Longitude room definition.");
+
         bind<IMC::Abort>(this);
         bind<IMC::VehicleState>(this);
         bind<IMC::PlanSpecification>(this);
+        bind<IMC::GpsFix>(this);
       }
 
       //! Update internal state with new parameter values.
@@ -168,6 +196,14 @@ namespace Supervisors
         //m_serv_err = (msg->op_mode == IMC::VehicleState::VS_SERVICE) || (msg->op_mode == IMC::VehicleState::VS_ERROR);
       }
 
+      //! From GPS Task
+        void
+        consume(const IMC::GpsFix* msg)
+        {
+          m_lat_vehicle = msg->lat;
+          m_lon_vehicle = msg->lon;
+        }
+
       void
       consume(const IMC::PlanSpecification* msg)
       {
@@ -216,7 +252,7 @@ namespace Supervisors
         //spew("LATITUDES %0.4f %0.4f %0.4f %0.4f %d",m_lat_diff[0], m_lat_diff[1], m_lat_diff[2], m_lat_diff[3], m_lat_diff.size());
         //spew("INDEXES %d %d %d %d %d",lookup_index[0], lookup_index[1], lookup_index[2], lookup_index[3], lookup_index.size());
 
-        for(int i=0; i<waypoints_list.rows(); i++)
+        for(int i=0; i<waypoints_list.rows(); i++) //
         { 
           spew("--------------- WAYPOINT %d ------------", i);
           double lat_d = Angles::degrees(waypoints_list(i,0));
@@ -255,14 +291,27 @@ namespace Supervisors
           }
 
           spew("QUERY POINT COORDINATES LAT %0.4f LON %0.4f", Angles::degrees(waypoints_list(i,0)), Angles::degrees(waypoints_list(i,1)));
-          spew("CLOSEST LOCATION ON MAP: %0.4f %0.4f %d IN LINE %d", lon[a-1], lat[a-1], depth[a-1], a-1);
+          spew("CLOSEST LOCATION ON MAP: %0.4f %0.4f %d IN LINE %d", lat[a-1], lon[a-1], depth[a-1], a-1);
           spew("DISTANCE FROM QUERIED POINT: %f", WGS84::distance(waypoints_list(i,0), waypoints_list(i,1), 0, Angles::radians(lat[a-1]), Angles::radians(lon[a-1]), 0));
 
           // Check the surroundings of the wp the vessel is heading to.
           bool waypoint = true; // means more accurate check.
           std::vector<int> waypoint_index;
           waypoint_index.push_back(a-1);
-          checkSurroundings(waypoint_index, waypoint);
+          checkSurroundingsAndRoom(waypoint_index, waypoint);
+
+          // Add closest waypoint to the list of visited waypoints, locations in radians.
+          std::string lat_closest, lon_closest, depth_closest;
+          lat_closest = std::to_string(Angles::radians(lat[a-1]));
+          lon_closest = std::to_string(Angles::radians(lon[a-1]));
+          depth_closest = std::to_string(depth[a-1]);
+          //std::string index = std::to_string(m_index_to_neptus);
+          //m_index_to_neptus++;
+
+          //m_loc_tuple = "lat" + index + "=" + lat_closest + ";" + "lon" + index + "=" + lon_closest + ";" + "depth" + index + "=" + depth_closest + ";";
+          m_loc_tuple = "lat=" + lat_closest + ";lon=" + lon_closest + ";depth=" + depth_closest + ";";
+
+          spew("TO NEPTUS: %s", m_loc_tuple.c_str());
 
           //! Do not go on if last waypoint.
           if(i < waypoints_list.rows()-1)
@@ -278,37 +327,35 @@ namespace Supervisors
             WGS84::displacement(waypoints_list(i,0),waypoints_list(i,1),0,waypoints_list(i+1,0),waypoints_list(i+1,1),0, &north_to_next, &east_to_next, &down_to_next);
             spew("NORTH AND EAST TO NEXT: %f %f", north_to_next, east_to_next);
 
-            bool move_north, move_east;
-
             //! Choose direction for map lookup based on next wp and closest point positions wrt current wp.
             //! Always assume the closest point is closer than next wp.
             if(north_to_next>north_to_closest)
             {
-              move_north = true;                // move north.
+              m_move_north = true;                // move north.
               if(east_to_next>east_to_closest)
-                move_east = false;               // move east.
+                m_move_east = false;               // move east.
               else
-                move_east = true;              // move west.
+                m_move_east = true;              // move west.
             } else
             {
-              move_north = false;               // move south.
+              m_move_north = false;               // move south.
               if(east_to_next>east_to_closest)
-                move_east = false;
+                m_move_east = false;
               else
-                move_east = true;
+                m_move_east = true;
             }
 
-            spew("MOVE NORTH AND EAST %d %d", move_north, move_east);
+            spew("MOVE NORTH AND EAST %d %d", m_move_north, m_move_east);
 
             //! Find map points on the line between two waypoints.
-            computeInBetween(waypoints_list, a-1, i, j, move_north, move_east);
+            computeInBetween(waypoints_list, a-1, i, j);
           }
         }
 
       }
 
       void
-      computeInBetween(const Math::Matrix& wp_list, int last, int wp_index, int lat_diff_index, bool move_n, bool move_e)
+      computeInBetween(const Math::Matrix& wp_list, int last, int wp_index, int lat_diff_index)
       {
         double north_closest_to_next, east_closest_to_next, down_closest_to_next;
         std::vector<int> index_points_close;
@@ -341,33 +388,35 @@ namespace Supervisors
             for(c=0; c<number_of_lon_points; c++)
             {
               //! Get bearing and range between current waypoint and possible waypoint(s) in between before the next waypoint.
-              if(move_n == true && move_e == true)
+              if(m_move_north == true && m_move_east == true)
               {
                 move_lat_index = lat_diff_index-2-b;
                 move_lon_index = last-(m_lat_occurrencies*jump)-c;
                 get_last = 1;
                 //spew("move_lat_index %d move_lon_index %d", move_lat_index, move_lon_index);
                 //spew("NEW LAT: %f", m_lat_diff[move_lat_index]);
-                WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
-              } else if(move_n == true && move_e == false)
+                //WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
+              } else if(m_move_north == true && m_move_east == false)
               {
                 move_lat_index = lat_diff_index-2-b;
                 move_lon_index = last-(m_lat_occurrencies*jump)+c;
                 get_last = -1;
-                WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
-              } else if(move_n == false && move_e == true)
+                //WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
+              } else if(m_move_north == false && m_move_east == true)
               {
                 move_lat_index = lat_diff_index+b;
                 move_lon_index = last+(m_lat_occurrencies*jump)-c;
                 get_last = 1;
-                WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
-              } else if(move_n == false && move_e == false)
+                //WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
+              } else if(m_move_north == false && m_move_east == false)
               {
                 move_lat_index = lat_diff_index+b;
                 move_lon_index = last+(m_lat_occurrencies*jump)+c;
                 get_last = -1;
-                WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
+                //WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
               }
+
+              WGS84::getNEBearingAndRange(wp_list(wp_index,0), wp_list(wp_index,1),Angles::radians(m_lat_diff[move_lat_index]),Angles::radians(lon[move_lon_index]),&bearing_to_possible_closest,&range_to_possible_closest);
 
               double bearing_diff = std::fabs(bearing_to_next_wp-bearing_to_possible_closest);
 
@@ -377,7 +426,7 @@ namespace Supervisors
                 break; // closest point for LAT m_lat_diff[j-2-b] is lon[lookup_index[j-2+c-1]
             }
 
-            spew("CAN THIS BE NEGATIVE??? %f BEARING DIFF %f",range_to_possible_closest, bearing_prev_diff);
+            //spew("CAN THIS BE NEGATIVE??? %f BEARING DIFF %f",range_to_possible_closest, bearing_prev_diff);
             double minimum_distance_to_line = range_to_possible_closest*std::sin(std::fabs(bearing_prev_diff)); //bearing_prev_diff is the bearing to the closest point.
 
             jump++;
@@ -386,12 +435,23 @@ namespace Supervisors
             spew("CLOSEST LOCATION: LAT %f LON %f DEPTH %d WHICH IS %f DISTANT FROM WHERE AUTONAUT WILL PASS", lat[move_lon_index+get_last], lon[move_lon_index+get_last], depth[move_lon_index+get_last], minimum_distance_to_line);
             //spew("FILE LINE %d", move_lon_index+get_last);
 
+            // Add closest waypoint to line to the list of visited waypoints, locations in radians.
+            std::string lat_closest_to_line, lon_closest_to_line, depth_closest_to_line;
+            lat_closest_to_line = std::to_string(Angles::radians(lat[move_lon_index+get_last]));
+            lon_closest_to_line = std::to_string(Angles::radians(lon[move_lon_index+get_last]));
+            depth_closest_to_line = std::to_string(depth[move_lon_index+get_last]);
+            //std::string index_line = std::to_string(m_index_to_neptus);
+
+            //m_loc_tuple = m_loc_tuple + "lat" + index_line + "=" + lat_closest + ";" + "lon" + index_line + "=" + lon_closest + ";" + "depth" + index_line + "=" + depth_closest + ";";
+            m_loc_tuple = m_loc_tuple + "lat=" + lat_closest_to_line + ";lon=" + lon_closest_to_line + ";depth=" + depth_closest_to_line + ";";
+            //m_index_to_neptus++;
+
             index_points_close.push_back(move_lon_index+get_last);
 
             if(depth[move_lon_index+get_last]<m_args.threshold)
             {
               bool waypoint = false;
-              checkSurroundings(index_points_close, waypoint); // last is the line containing the closest point to the wp.
+              checkSurroundingsAndRoom(index_points_close, waypoint); // last is the line containing the closest point to the wp.
               // ELSE THROW WARNING.
             }
           }
@@ -399,8 +459,8 @@ namespace Supervisors
       }
       
 
-      void
-      checkSurroundings(std::vector<int> goto_location, bool wp)
+      bool
+      checkSurroundingsAndRoom(std::vector<int> goto_location, bool wp)
       {
         int depth_400_above=0, depth_800_above=0, depth_400_below=0, depth_800_below=0, depth_200_left=0, depth_400_left=0, depth_800_left=0, depth_200_right=0;
         int depth_400_right=0, depth_800_right=0, depth_800_left_800_below=0, depth_800_right_800_below=0, depth_400_left_400_below=0, depth_400_right_400_below=0;
@@ -411,28 +471,195 @@ namespace Supervisors
           //int lat_checks = (int) std::floor(m_args.radius/m_lat_map_spacing);
           //int lon_checks = (int) std::floor(m_args.radius/m_lon_map_spacing);
 
+          // Put all expanded locations into vector to Neptus.
           depth_800_left_800_below = depth[goto_location[0]+2*m_lat_occurrencies-4];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]+2*m_lat_occurrencies-4])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]+2*m_lat_occurrencies-4])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]+2*m_lat_occurrencies-4]) + ";";
           depth_800_right_800_below = depth[goto_location[0]+2*m_lat_occurrencies+4];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]+2*m_lat_occurrencies+4])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]+2*m_lat_occurrencies+4])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]+2*m_lat_occurrencies+4]) + ";";
           depth_800_below = depth[goto_location[0]+2*m_lat_occurrencies];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]+2*m_lat_occurrencies])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]+2*m_lat_occurrencies])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]+2*m_lat_occurrencies]) + ";";
 
           depth_400_left_400_below = depth[goto_location[0]+m_lat_occurrencies-2];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]+m_lat_occurrencies-2])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]+m_lat_occurrencies-2])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]+m_lat_occurrencies-2]) + ";";
           depth_400_right_400_below = depth[goto_location[0]+m_lat_occurrencies+2];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]+m_lat_occurrencies+2])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]+m_lat_occurrencies+2])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]+m_lat_occurrencies+2]) + ";";
           depth_400_below = depth[goto_location[0]+m_lat_occurrencies];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]+m_lat_occurrencies])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]+m_lat_occurrencies])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]+m_lat_occurrencies]) + ";";
 
           depth_400_left = depth[goto_location[0]-2];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]-2])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]-2])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]-2]) + ";";
           depth_800_left = depth[goto_location[0]-4];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]-4])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]-4])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]-4]) + ";";
           depth_400_right = depth[goto_location[0]+2];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]+2])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]+2])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]+2]) + ";";
           depth_800_right = depth[goto_location[0]+4];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]+4])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]+4])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]+4]) + ";";
 
           depth_400_left_400_above = depth[goto_location[0]-m_lat_occurrencies-2];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]-m_lat_occurrencies-2])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]-m_lat_occurrencies-2])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]-m_lat_occurrencies-2]) + ";";
           depth_400_right_400_above = depth[goto_location[0]-m_lat_occurrencies+2];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]-m_lat_occurrencies+2])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]-m_lat_occurrencies+2])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]-m_lat_occurrencies+2]) + ";";
           depth_400_above = depth[goto_location[0]-m_lat_occurrencies];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]-m_lat_occurrencies])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]-m_lat_occurrencies])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]-m_lat_occurrencies]) + ";";
 
           depth_800_left_800_above = depth[goto_location[0]-2*m_lat_occurrencies-4];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]-2*m_lat_occurrencies-4])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]-2*m_lat_occurrencies-4])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]-2*m_lat_occurrencies-4]) + ";";
           depth_800_right_800_above = depth[goto_location[0]-2*m_lat_occurrencies+4];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]-2*m_lat_occurrencies+4])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]-2*m_lat_occurrencies+4])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]-2*m_lat_occurrencies+4]) + ";";
           depth_800_above = depth[goto_location[0]-2*m_lat_occurrencies];
+          m_loc_tuple = m_loc_tuple + "lat" + "=" + std::to_string(Angles::radians(lat[goto_location[0]-2*m_lat_occurrencies])) + ";" + "lon" + "=" + std::to_string(Angles::radians(lon[goto_location[0]-2*m_lat_occurrencies])) + ";" + "depth" + "=" + std::to_string(depth[goto_location[0]-2*m_lat_occurrencies]) + ";";
+          //m_index_to_neptus++;
 
-          //spew("GO TO LOCATION LINE %d", goto_location[0]);
+          spew("TO NEPTUS WAYPOINT SURROUNDINGS: %s", m_loc_tuple.c_str());
+
+          // Check room around waypoint.
+          double distance_=0.0; //double lat_distance_above=0.0, lat_distance_below=0.0, lon_distance_above=0.0, lon_distance_below=0.0;
+          int depth_=0.0; //int depth_above=0.0, depth_below=0.0;
+          int index_ = 1; //int lat_index_above = 1, lat_index_below = 1, lon_index_above = 1, lon_index_below = 1;
+          bool land_found = false; //bool land_found_above = false, land_found_below = false, land_found_west = false, land_found_east = false;
+          bool limit_dist = false; //bool limit_dist_above = false, limit_dist_below = false, limit_dist_west = false, limit_dist_east = false;
+
+          int line_location_safe; //int line_location_safe_above, line_location_safe_below, line_location_safe_west, line_location_safe_east;
+          double distance_safe; //double distance_safe_above, distance_safe_below, distance_safe_west, distance_safe_east;
+
+          // CHECK NORTH.
+          while(!limit_dist && !land_found)
+          {
+            depth_ = depth[goto_location[0]-(m_lat_occurrencies*index_)]; // +400 above
+            distance_ = index_*m_lat_map_spacing;//WGS84::distance(m_lat_vehicle, m_lat_vehicle, 0.0, Angles::radians(lat[goto_location[0]-(m_lat_occurrencies*lat_index_above)]), Angles::radians(lon[goto_location[0]-(m_lat_occurrencies*lat_index_above)]), 0.0);
+
+            if(depth_ >= m_args.threshold)
+              land_found = true;
+            else if(distance_>m_args.lat_room_limit)
+              limit_dist = true;
+            else
+              index_++;
+          }
+          
+          if(limit_dist)
+          {
+            line_location_safe = goto_location[0]-(m_lat_occurrencies*index_);
+            spew("----- LIMIT ABOVE REACHED: %f %f %d ---- DISTANCE: %f", lat[line_location_safe], lon[line_location_safe], depth[line_location_safe], distance_);
+            spew("UPPER LIMIT: %f %f %d ---- DISTANCE: %f", lat[line_location_safe], lon[line_location_safe], depth[line_location_safe], distance_);
+          }
+          else
+          {
+            line_location_safe = goto_location[0]-(m_lat_occurrencies*(index_-1));
+            distance_safe = (index_-1)*m_lat_map_spacing;
+            spew("----- DANGEROUS AREA ABOVE: %f %f %d ---- DISTANCE: %f", lat[goto_location[0]-(m_lat_occurrencies*index_)], lon[goto_location[0]-(m_lat_occurrencies*index_)], depth[goto_location[0]-(m_lat_occurrencies*index_)], distance_);
+            spew("UPPER LIMIT: %f %f %d ---- DISTANCE: %f", lat[line_location_safe], lon[line_location_safe], depth[line_location_safe], distance_safe);
+          }
+
+          // Re-initialize iteration variables.
+          distance_ = 0.0;
+          distance_safe = 0.0;
+          depth_ = 0.0;
+          index_ = 1;
+          line_location_safe = 0;
+          land_found = false;
+          limit_dist = false;
+
+          // CHECK SOUTH.
+          while(!limit_dist && !land_found)
+          {
+            depth_ = depth[goto_location[0]+(m_lat_occurrencies*index_)]; // +400 below
+            distance_ = index_*m_lat_map_spacing;//WGS84::distance(m_lat_vehicle, m_lat_vehicle, 0.0, Angles::radians(lat[goto_location[0]-(m_lat_occurrencies*lat_index_above)]), Angles::radians(lon[goto_location[0]-(m_lat_occurrencies*lat_index_above)]), 0.0);
+
+            if(depth_ >= m_args.threshold)
+              land_found = true;
+            else if(distance_>m_args.lat_room_limit)
+              limit_dist = true;
+            else
+              index_++;
+          }
+          
+          if(limit_dist)
+          {
+            line_location_safe = goto_location[0]+(m_lat_occurrencies*index_);
+            spew("----- LIMIT BELOW REACHED: %f %f %d ---- DISTANCE: %f", lat[line_location_safe], lon[line_location_safe], depth[line_location_safe], distance_);
+            spew("LOWER LIMIT: %f %f %d ---- DISTANCE: %f", lat[line_location_safe], lon[line_location_safe], depth[line_location_safe], distance_);
+          }
+          else
+          {
+            line_location_safe = goto_location[0]+(m_lat_occurrencies*(index_-1));
+            distance_safe = (index_-1)*m_lat_map_spacing;
+            spew("----- DANGEROUS AREA BELOW: %f %f %d ---- DISTANCE: %f", lat[goto_location[0]+(m_lat_occurrencies*index_)], lon[goto_location[0]+(m_lat_occurrencies*index_)], depth[goto_location[0]+(m_lat_occurrencies*index_)], distance_);
+            spew("LOWER LIMIT: %f %f %d ---- DISTANCE: %f", lat[line_location_safe], lon[line_location_safe], depth[line_location_safe], distance_safe);
+          }
+
+          // Re-initialize iteration variables.
+          distance_ = 0.0;
+          distance_safe = 0.0;
+          depth_ = 0.0;
+          index_ = 1;
+          line_location_safe = 0;
+          land_found = false;
+          limit_dist = false;
+
+          // CHECK EAST.
+          while(!limit_dist && !land_found)
+          {
+            depth_ = depth[goto_location[0]+index_]; // +200 east
+            distance_ = index_*m_lon_map_spacing;//WGS84::distance(m_lat_vehicle, m_lat_vehicle, 0.0, Angles::radians(lat[goto_location[0]-(m_lat_occurrencies*lat_index_above)]), Angles::radians(lon[goto_location[0]-(m_lat_occurrencies*lat_index_above)]), 0.0);
+
+            if(depth_ >= m_args.threshold)
+              land_found = true;
+            else if(distance_>m_args.lat_room_limit)
+              limit_dist = true;
+            else
+              index_++;
+          }
+          
+          if(limit_dist)
+          {
+            line_location_safe = goto_location[0]+index_;
+            spew("----- LIMIT EAST REACHED: %f %f %d ---- DISTANCE: %f", lat[line_location_safe], lon[line_location_safe], depth[line_location_safe], distance_);
+            spew("EASTERN LIMIT: %f %f %d ---- DISTANCE: %f", lat[line_location_safe], lon[line_location_safe], depth[line_location_safe], distance_);
+          }
+          else
+          {
+            line_location_safe = goto_location[0]+index_-1;
+            distance_safe = (index_-1)*m_lon_map_spacing;
+            spew("----- DANGEROUS AREA EAST: %f %f %d ---- DISTANCE: %f", lat[goto_location[0]+index_], lon[goto_location[0]+index_], depth[goto_location[0]+index_], distance_);
+            spew("EASTERN LIMIT: %f %f %d ---- DISTANCE: %f", lat[line_location_safe], lon[line_location_safe], depth[line_location_safe], distance_safe);
+          }
+
+          // Re-initialize iteration variables.
+          distance_ = 0.0;
+          distance_safe = 0.0;
+          depth_ = 0.0;
+          index_ = 1;
+          line_location_safe = 0;
+          land_found = false;
+          limit_dist = false;
+
+          // CHECK WEST.
+          while(!limit_dist && !land_found)
+          {
+            depth_ = depth[goto_location[0]-index_]; // +200 east
+            distance_ = index_*m_lon_map_spacing;//WGS84::distance(m_lat_vehicle, m_lat_vehicle, 0.0, Angles::radians(lat[goto_location[0]-(m_lat_occurrencies*lat_index_above)]), Angles::radians(lon[goto_location[0]-(m_lat_occurrencies*lat_index_above)]), 0.0);
+
+            if(depth_ >= m_args.threshold)
+              land_found = true;
+            else if(distance_>m_args.lat_room_limit)
+              limit_dist = true;
+            else
+              index_++;
+          }
+          
+          if(limit_dist)
+          {
+            line_location_safe = goto_location[0]-index_;
+            spew("----- LIMIT WEST REACHED: %f %f %d ---- DISTANCE: %f", lat[line_location_safe], lon[line_location_safe], depth[line_location_safe], distance_);
+            spew("WESTERN LIMIT: %f %f %d ---- DISTANCE: %f", lat[line_location_safe], lon[line_location_safe], depth[line_location_safe], distance_);
+          }
+          else
+          {
+            line_location_safe = goto_location[0]-index_+1;
+            distance_safe = (index_-1)*m_lon_map_spacing;
+            spew("----- DANGEROUS AREA WEST: %f %f %d ---- DISTANCE: %f", lat[goto_location[0]-index_], lon[goto_location[0]-index_], depth[goto_location[0]-index_], distance_);
+            spew("WESTERN LIMIT: %f %f %d ---- DISTANCE: %f", lat[line_location_safe], lon[line_location_safe], depth[line_location_safe], distance_safe);
+          }
 
           if(depth_800_left_800_below>m_args.threshold)
             spew("Vessel is heading to a point 1131 meters north-east of a shallow point!! LINE:%d DEPTH:%d", goto_location[0]+2*m_lat_occurrencies-4, depth[goto_location[0]+2*m_lat_occurrencies-4]);
@@ -467,7 +694,10 @@ namespace Supervisors
           else if(depth_800_right>m_args.threshold)
             spew("Vessel is heading to a point 800 meters west of a shallow point!! LINE:%d DEPTH:%d", goto_location[0]+4, depth[goto_location[0]+4]);
           else
+          {
             spew("WAYPOINT SURROUNDINGS ARE SAFE!");
+            return true;
+          }            
         }
         else
         {
@@ -495,7 +725,10 @@ namespace Supervisors
           else if(depth_400_right>m_args.threshold)
             spew("Vessel trajectory passing 400 west of a shallow point!!");
           else
+          {
             spew("SURROUNDINGS TO THE NEXT WAYPOINT ARE SAFE!");
+            return true;
+          }
         }
       }
 
