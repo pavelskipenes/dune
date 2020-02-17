@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 0030d454b816a0636cd3551ac1ef7ed9                            *
+// IMC XML MD5: 9ccf6c5bd15323270be690da48354dfd                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -11324,89 +11324,6 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
-    //! Obstacle State.
-    class ObstacleState: public Message
-    {
-    public:
-      //! MMSI.
-      uint32_t mmsi;
-      //! Longitude (WGS-84).
-      fp64_t lon;
-      //! Latitude (WGS-84).
-      fp64_t lat;
-      //! Offset north.
-      fp32_t x;
-      //! Offset east.
-      fp32_t y;
-      //! Rotation over z axis.
-      fp32_t psi;
-      //! Ground Velocity X (North).
-      fp32_t u;
-      //! Ground Velocity Y (East).
-      fp32_t v;
-      //! Size A Lenght.
-      fp32_t a;
-      //! Size B Length.
-      fp32_t b;
-      //! Size C Width.
-      fp32_t c;
-      //! Size D Width.
-      fp32_t d;
-
-      static uint16_t
-      getIdStatic(void)
-      {
-        return 364;
-      }
-
-      ObstacleState(void);
-
-      ObstacleState*
-      clone(void) const
-      {
-        return new ObstacleState(*this);
-      }
-
-      void
-      clear(void);
-
-      bool
-      fieldsEqual(const Message& msg__) const;
-
-      int
-      validate(void) const;
-
-      uint8_t*
-      serializeFields(uint8_t* bfr__) const;
-
-      uint16_t
-      deserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      getId(void) const
-      {
-        return ObstacleState::getIdStatic();
-      }
-
-      const char*
-      getName(void) const
-      {
-        return "ObstacleState";
-      }
-
-      unsigned
-      getFixedSerializationSize(void) const
-      {
-        return 56;
-      }
-
-      void
-      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
-    };
-
     //! Desired Heading.
     class DesiredHeading: public ControlCommand
     {
@@ -20717,6 +20634,103 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
+    //! AIS Info.
+    class AisInfo: public Message
+    {
+    public:
+      //! Message Type.
+      std::string msg_type;
+      //! Class.
+      std::string sensor_class;
+      //! MMSI.
+      std::string mmsi;
+      //! Callsign.
+      std::string callsign;
+      //! Name.
+      std::string name;
+      //! Navigation Status.
+      uint8_t nav_status;
+      //! Type and Cargo.
+      uint8_t type_and_cargo;
+      //! Latitude.
+      fp64_t lat;
+      //! Longitude.
+      fp64_t lon;
+      //! Course.
+      fp32_t course;
+      //! Speed.
+      fp32_t speed;
+      //! Size A Length.
+      fp32_t a;
+      //! Size B Length.
+      fp32_t b;
+      //! Size C Width.
+      fp32_t c;
+      //! Size D Width.
+      fp32_t d;
+      //! Draught.
+      fp32_t draught;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 607;
+      }
+
+      AisInfo(void);
+
+      AisInfo*
+      clone(void) const
+      {
+        return new AisInfo(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return AisInfo::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "AisInfo";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 46;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(msg_type) + IMC::getSerializationSize(sensor_class) + IMC::getSerializationSize(mmsi) + IMC::getSerializationSize(callsign) + IMC::getSerializationSize(name);
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
     //! MapPoint.
     class MapPoint: public Message
     {
@@ -21087,87 +21101,6 @@ namespace DUNE
 
       void
       setDestinationEntityNested(uint8_t value__);
-    };
-
-    //! AIS Static Info.
-    class AisStaticInfo: public Message
-    {
-    public:
-      //! Id.
-      std::string id;
-      //! Callsign.
-      std::string callsign;
-      //! Name.
-      std::string name;
-      //! Type and Cargo.
-      uint8_t type_and_cargo;
-      //! Size A Length.
-      fp32_t a;
-      //! Size B Length.
-      fp32_t b;
-      //! Size C Width.
-      fp32_t c;
-      //! Size D Width.
-      fp32_t d;
-
-      static uint16_t
-      getIdStatic(void)
-      {
-        return 607;
-      }
-
-      AisStaticInfo(void);
-
-      AisStaticInfo*
-      clone(void) const
-      {
-        return new AisStaticInfo(*this);
-      }
-
-      void
-      clear(void);
-
-      bool
-      fieldsEqual(const Message& msg__) const;
-
-      int
-      validate(void) const;
-
-      uint8_t*
-      serializeFields(uint8_t* bfr__) const;
-
-      uint16_t
-      deserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      getId(void) const
-      {
-        return AisStaticInfo::getIdStatic();
-      }
-
-      const char*
-      getName(void) const
-      {
-        return "AisStaticInfo";
-      }
-
-      unsigned
-      getFixedSerializationSize(void) const
-      {
-        return 17;
-      }
-
-      unsigned
-      getVariableSerializationSize(void) const
-      {
-        return IMC::getSerializationSize(id) + IMC::getSerializationSize(callsign) + IMC::getSerializationSize(name);
-      }
-
-      void
-      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
     //! Vehicle Links.

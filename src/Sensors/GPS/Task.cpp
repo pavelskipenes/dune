@@ -31,6 +31,8 @@
 #include <cstring>
 #include <algorithm>
 #include <cstddef>
+#include <iomanip>
+#include <sstream>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
@@ -69,6 +71,8 @@ namespace Sensors
     static const unsigned c_psathpr_fields = 7;
     //! Power on delay.
     static const double c_pwr_on_delay = 5.0;
+    //! Command reply timeout.
+    static const float c_timeout = 3.0f;
 
     struct Arguments
     {
@@ -80,12 +84,20 @@ namespace Sensors
       std::vector<std::string> stn_order;
       //! Input timeout in seconds.
       float inp_tout;
+      //! Output timeout in seconds.
+      float out_tout;
       //! Initialization commands.
       std::string init_cmds[c_max_init_cmds];
       //! Initialization replies.
       std::string init_rpls[c_max_init_cmds];
       //! Power channels.
       std::vector<std::string> pwr_channels;
+      //! Rate of Turn time constant for v104s GPS compass.
+      double hrtau;
+      //! Course time constant for v104s GPS compass.
+      double cogtau;
+      //! Heading time constant for v104s GPS compass.
+      double htau;
     };
 
     struct Task: public Tasks::Task
@@ -104,6 +116,10 @@ namespace Sensors
       Arguments m_args;
       //! Input watchdog.
       Time::Counter<float> m_wdog;
+      //! Output watchdog.
+      Time::Counter<float> m_out_timer;
+      //! Sent new config to GPS.
+      bool m_cmd_sent;
       //! True if we have heave.
       bool m_has_heave;
       //! True if we have angular velocity.
@@ -120,6 +136,8 @@ namespace Sensors
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
         m_handle(NULL),
+        m_cmd_sent(false),
+        m_has_heave(false),
         m_has_agvel(false),
         m_has_euler(false),
         m_reader(NULL)
@@ -139,6 +157,12 @@ namespace Sensors
         .minimumValue("0.0")
         .description("Input timeout");
 
+        param("Output Timeout", m_args.out_tout)
+        .units(Units::Second)
+        .defaultValue("5.0")
+        .minimumValue("1.0")
+        .description("Timeout before a configuration is set.");
+
         param("Power Channel - Names", m_args.pwr_channels)
         .defaultValue("")
         .description("Device's power channels");
@@ -146,6 +170,18 @@ namespace Sensors
         param("Sentence Order", m_args.stn_order)
         .defaultValue("")
         .description("Sentence order");
+
+        param("ROT Time Constant", m_args.hrtau)
+        .defaultValue("2.0")
+        .description("Rate of Turn time constant for v104s GPS compass, GPROT message.");
+
+        param("COG Time Constant", m_args.cogtau)
+        .defaultValue("0.0")
+        .description("Course over ground time constant for v104s GPS compass, GPVTG.");
+
+        param("Heading Time Constant", m_args.htau)
+        .defaultValue("20.0")
+        .description("Heading time constant for v104s GPS compass, GPVTG.");
 
         for (unsigned i = 0; i < c_max_init_cmds; ++i)
         {
@@ -163,6 +199,17 @@ namespace Sensors
 
         bind<IMC::DevDataText>(this);
         bind<IMC::IoEvent>(this);
+      }
+
+      void
+      onUpdateParameters(void)
+      {
+        if(paramChanged(m_args.hrtau))
+          sendCommand("ROT");
+        if(paramChanged(m_args.cogtau))
+          sendCommand("COG");
+        if(paramChanged(m_args.htau))
+          sendCommand("H");
       }
 
       void
@@ -279,6 +326,70 @@ namespace Sensors
 
         if (msg->type == IMC::IoEvent::IOV_TYPE_INPUT_ERROR)
           throw RestartNeeded(msg->error, 5);
+      }
+
+      //! Send command to device.
+      //! @param[in] cmd command to send.
+      //! @param[in] ack wait for ack.
+      //! @return true if command succeeded, false otherwise.
+      void
+      sendCommand(const std::string& cmd)
+      {
+        if (m_reader == NULL)
+          return;
+
+        // Create an output string stream.
+        std::ostringstream stream;
+        // Set Fixed -Point Notation.
+        stream << std::fixed;
+        // Set precision to 1 digit.
+        stream << std::setprecision(1);
+        
+        if(cmd.compare("ROT") == 0)
+        {
+          //Add double to stream
+          stream << m_args.hrtau;
+          // Get string from output string stream
+          std::string to_send = stream.str();
+          std::string bfr("$JATT,HRTAU," + to_send + "\r\n");
+          m_handle->writeString(bfr.c_str());
+          trace("sent: '%s'", sanitize(bfr).c_str());
+        } else if(cmd.compare("COG") == 0)
+        {
+          //Add double to stream
+          stream << m_args.cogtau;
+          // Get string from output string stream
+          std::string to_send = stream.str();
+          std::string bfr("$JATT,COGTAU," + to_send + "\r\n");
+          m_handle->writeString(bfr.c_str());
+          trace("sent: '%s'", sanitize(bfr).c_str());
+        } else if(cmd.compare("H") == 0)
+        {
+          //Add double to stream
+          stream << m_args.htau;
+          // Get string from output string stream
+          std::string to_send = stream.str();
+          std::string bfr("$JATT,HTAU," + to_send + "\r\n");
+          m_handle->writeString(bfr.c_str());
+          trace("sent: '%s'", sanitize(bfr).c_str());
+        }
+
+        m_cmd_sent = true;
+        m_out_timer.setTop(m_args.out_tout);
+      }
+
+      //! Read input and checks if a given sequence is received.
+      int
+      checkConfirmation(std::string line)
+      {
+        std::string sub = line.substr(line.length() - 4,2);
+        std::string sub_ = line.substr(0,line.size() - 2);
+        if(line.at(1) == '>' && sub.compare("OK") == 0)
+          return 1;
+        else if(line.at(1) == '>' && sub_.compare("$> Save Complete") == 0)
+          return 2;
+        else
+          return 3;
       }
 
       void
@@ -407,6 +518,8 @@ namespace Sensors
       void
       processSentence(const std::string& line)
       {
+        bool discard_current = false;
+
         // Discard leading noise.
         size_t sidx = 0;
         for (sidx = 0; sidx < line.size(); ++sidx)
@@ -415,33 +528,58 @@ namespace Sensors
             break;
         }
 
-        // Discard trailing noise.
-        size_t eidx = 0;
-        for (eidx = line.size() - 1; eidx > sidx; --eidx)
+        if(m_cmd_sent)
         {
-          if (line[eidx] == '*')
-            break;
+          int confirmed = checkConfirmation(line);
+          if(confirmed==1)
+          {
+            trace("'%s' received from GPS, configuration set!", line.c_str());
+            // Configuration was applied, now can save.
+            std::string endline = "\r\n";
+            std::string save_str = "$JSAVE" + endline;
+            m_handle->writeString(save_str.c_str());
+            trace("sent: '%s'", sanitize(save_str).c_str());
+
+            discard_current = true;
+          } else if(confirmed==2)
+          {
+            m_out_timer.reset();
+            m_cmd_sent = false;
+            trace("'%s' received from GPS, configuration saved!", line.c_str());
+            discard_current = true;
+          }
         }
 
-        if (sidx >= eidx)
-          return;
+        if(!discard_current)
+        {
+          // Discard trailing noise.
+          size_t eidx = 0;
+          for (eidx = line.size() - 1; eidx > sidx; --eidx)
+          {
+            if (line[eidx] == '*')
+              break;
+          }
 
-        // Compute checksum.
-        uint8_t ccsum = 0;
-        for (size_t i = sidx + 1; i < eidx; ++i)
-          ccsum ^= line[i];
+          if (sidx >= eidx)
+            return;
 
-        // Validate checksum.
-        unsigned rcsum = 0;
-        if (std::sscanf(&line[0] + eidx + 1, "%02X", &rcsum) != 1)
-          return;
+          // Compute checksum.
+          uint8_t ccsum = 0;
+          for (size_t i = sidx + 1; i < eidx; ++i)
+            ccsum ^= line[i];
 
-        // Split sentence
-        std::vector<std::string> parts;
-        String::split(line.substr(sidx + 1, eidx - sidx - 1), ",", parts);
+          // Validate checksum.
+          unsigned rcsum = 0;
+          if (std::sscanf(&line[0] + eidx + 1, "%02X", &rcsum) != 1)
+            return;
 
-        if (std::find(m_args.stn_order.begin(), m_args.stn_order.end(), parts[0]) != m_args.stn_order.end())
-          interpretSentence(parts);
+          // Split sentence
+          std::vector<std::string> parts;
+          String::split(line.substr(sidx + 1, eidx - sidx - 1), ",", parts);
+
+          if (std::find(m_args.stn_order.begin(), m_args.stn_order.end(), parts[0]) != m_args.stn_order.end())
+            interpretSentence(parts);
+        }
       }
 
       //! Interpret given sentence.
@@ -787,7 +925,7 @@ namespace Sensors
         {
           waitForMessages(1.0);
 
-          if (m_wdog.overflow())
+          if (m_wdog.overflow()) //|| m_out_timer.overflow()
           {
             setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
             throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);

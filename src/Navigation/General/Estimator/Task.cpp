@@ -245,7 +245,7 @@ namespace
               trace("ESTIMATOR - HEAVE FROM GPS AT THE BOW: %f", heave_gps_frame);
 
               // Compute wrt vessel CG: h_cg = h_gps - (0 0 1)*R*r, R=rot matrix between frames, r=vector between frames origins.
-              double r_x = 2.0, r_y = 0.0, r_z = 0.25;
+              double r_x = 2.0, r_y = 0.0, r_z = -0.25;
               m_gps_heave.value = heave_gps_frame + r_x*std::sin(m_euler.theta) - r_z*std::cos(m_euler.theta)*std::cos(m_euler.phi) - r_y*std::cos(m_euler.theta)*std::sin(m_euler.phi);
 
               trace("ESTIMATOR - HEAVE AT CG: %f", m_gps_heave.value);

@@ -151,6 +151,9 @@ namespace Sensors
         text.value = nmea_msg;
         dispatch(text);
 
+        // AIS message.
+        IMC::AisInfo ais_msg;
+
         // Ignore messages concerning own vessel.
         if(nmea_msg[0]=='!')
         {
@@ -159,12 +162,11 @@ namespace Sensors
 
           std::string nmea_payload = GetBody(nmea_msg.c_str());
 
+          ais_msg.msg_type = nmea_payload[0];
+
           //trace("AIS MESSAGE PAYLOAD: %s", nmea_payload.c_str());
 
-          // We are able to send a message with ship information.
-          IMC::RemoteSensorInfo rsi;
-          // Create string for tuple: rsi.data
-          std::ostringstream ais_data;
+          //trace("AIS MESSAGE TYPE %c", nmea_payload[0]);
 
           // Position Report Class A.
           if ((nmea_payload[0] == '1') ||
@@ -172,29 +174,40 @@ namespace Sensors
               (nmea_payload[0] == '3'))
           {
             Ais1_2_3 msg(nmea_payload.c_str(), GetPad(nmea_msg));
-            
-            // Navigational status has to be interpreted here or in CAS.
-            trace("AIS1_2_3: %d %d %f %f %f %f", msg.mmsi, msg.nav_status, msg.y, msg.x, msg.cog, msg.sog);
 
-            spew("PAYLOAD AIS1_2_3: %s", nmea_payload.c_str());
-            
-            // static_cast<std::ostringstream*>(&(std::ostringstream() << msg.mmsi))->str();
-            int mmsi_ais = (int) msg.mmsi;
-            rsi.id = mmsi_ais;
+            // We are able to send a message with ship information.
+            IMC::RemoteSensorInfo rsi;
+            rsi.id = static_cast<std::ostringstream*>(&(std::ostringstream() << msg.mmsi))->str();
 
             // Find ship type.
             std::map<int, std::string>::iterator itr = m_systems.find(msg.mmsi);
             if (itr != m_systems.end())
+            {
+              ais_msg.sensor_class = itr->second;
               rsi.sensor_class = itr->second;
+            }
 
             rsi.lat = Angles::radians(msg.y);
             rsi.lon = Angles::radians(msg.x);
             rsi.heading = Angles::radians(msg.cog);
-            ais_data << "SOG=" << Angles::radians(msg.sog); // put sog into tuple, RemoteSensorInfo has no field for it.
-            rsi.data = ais_data.str();
-            spew("RSI - Vessel(mmsi): %s (lon,lat,heading, speed): %f %f %0.2f %0.2f", rsi.id.c_str(),  c_degrees_per_radian*rsi.lon, c_degrees_per_radian*rsi.lat ,c_degrees_per_radian*rsi.heading, msg.sog);
-            spew("AIS TUPLE = %s",rsi.data.c_str());
-            //dispatch(rsi);
+            dispatch(rsi);
+
+            ais_msg.mmsi = std::to_string(msg.mmsi);
+            //ais_msg.callsign = "NO CALLSIGN";
+            //ais_msg.name = "NO NAME";
+            ais_msg.nav_status = msg.nav_status;
+            //ais_msg.type_and_cargo = 000;
+            ais_msg.lat = Angles::radians(msg.y);
+            ais_msg.lon = Angles::radians(msg.x);
+            ais_msg.course = Angles::radians(msg.cog);
+            ais_msg.speed = Angles::radians(msg.sog);
+            
+            // Navigational status has to be interpreted here or in CAS.
+            //trace("AIS1_2_3: %d %d %f %f %f %f", msg.mmsi, msg.nav_status, msg.y, msg.x, msg.cog, msg.sog);
+
+            //spew("PAYLOAD AIS1_2_3: %s", nmea_payload.c_str());
+            //spew("RSI - Vessel(mmsi): %s (lon,lat,heading, speed): %f %f %0.2f %0.2f", rsi.id.c_str(),  c_degrees_per_radian*rsi.lon, c_degrees_per_radian*rsi.lat ,c_degrees_per_radian*rsi.heading, msg.sog);
+
           } else if (nmea_payload[0] == '5' && !m_nmea5_wait_fg) // Static and Voyage Related Data, first fragment.
           {
             nmea_msg.erase(nmea_msg.size() - c_nmea5_trail - 1, c_nmea5_trail);
@@ -202,7 +215,9 @@ namespace Sensors
             m_nmea5_wait_fg = true;
             return;
           } else
-            trace("MISSED MESSAGE!!!!!!!!!!!!!!");
+          {
+            trace("MISSED MESSAGE!!!!!!!!!!!!!!: %s", nmea_msg.c_str());
+          }
 
           // Static and Voyage Related Data, second fragment.
           if (m_nmea5_wait_fg)
@@ -219,18 +234,25 @@ namespace Sensors
             m_nmea5_wait_fg = false;
             Ais5 msg(nmea_payload.c_str(), GetPad(nmea_msg));
 
-            trace("AIS5: %d %s %s %d %d %d %d %d %f", msg.mmsi, msg.callsign.c_str(), msg.name.c_str(), msg.type_and_cargo, msg.dim_a, msg.dim_b, msg.dim_c, msg.dim_d, msg.draught);
-
             // Add system MMSI and Type if not existent.
             std::map<int, std::string>::iterator itr = m_systems.find(msg.mmsi);
             if (itr != m_systems.end())
               return;
-
-            ais_data << "CALLSIGN=" << msg.callsign << ";NAME=" << msg.name << ";TYPE_AND_CARGO=" << msg.type_and_cargo << ";A=" << msg.dim_a << ";B=" << msg.dim_b << ";C=" << msg.dim_c << ";D=" << msg.dim_d << ";"; //<< "MMSI=" << msg.mmsi << ";"
+            
+            ais_msg.mmsi = std::to_string(msg.mmsi);
+            ais_msg.callsign = msg.callsign;
+            ais_msg.name = msg.name;
+            //ais_msg.nav_status = 000;
+            ais_msg.type_and_cargo = msg.type_and_cargo;
+            ais_msg.a = msg.dim_a;
+            ais_msg.b = msg.dim_b;
+            ais_msg.c = msg.dim_c;
+            ais_msg.d = msg.dim_d;
+            ais_msg.draught = msg.draught;            
 
             m_systems[msg.mmsi] = ShipTypeCode::translate(msg.type_and_cargo);
-            return;
           }
+          dispatch(ais_msg);
         }
       }
 

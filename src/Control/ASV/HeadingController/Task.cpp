@@ -63,6 +63,8 @@ namespace Control
         double bsf_taps;
         //! Band-stop filter scaling.
         double bsf_scaling;
+        //! Desired turning rate.
+        float desired_yaw_der;
       };
 
       struct Task: public Tasks::Task
@@ -79,6 +81,8 @@ namespace Control
         IMC::SetServoPosition m_act;
         //! Current rudder position/actuation.
         IMC::ServoPosition m_last_act;
+        //! Angular velocity message.
+        IMC::AngularVelocity m_angvel;
         //! Control loops last reference
         uint32_t m_scope_ref;
         //! Task arguments.
@@ -155,6 +159,12 @@ namespace Control
           .minimumValue("1")
           .description("BSF scaling percentage around cut-off estimated frequency");
 
+          param("Desired turning rate", m_args.desired_yaw_der)
+          .defaultValue("0.0")
+          .minimumValue("0.0")
+          .maximumValue("5.0")
+          .description("User-defined desired turning rate.");
+
           // Initialize entity state.
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
 
@@ -164,6 +174,7 @@ namespace Control
           bind<IMC::DesiredHeading>(this);
           bind<IMC::ControlLoops>(this);
           bind<IMC::EstimatedFreq>(this);
+          bind<IMC::AngularVelocity>(this);
         }
 
         void
@@ -258,12 +269,26 @@ namespace Control
         }
 
         void
+        consume(const IMC::AngularVelocity* msg)
+        {
+          if (msg->getDestination() != getSystemId())
+            return;
+
+          if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"GPS")==0)
+          {
+            m_angvel.z = msg->z;
+            trace("HEADING CONTROLLER ANGULAR VELOCITY: %f", m_angvel.z);
+          } else
+              return;
+        }
+
+        void
         buildFilters(void)
         {
           if(m_args.lp_filtering==true)
             lpf.build("LPF", m_args.lpf_taps, 1/m_tstep, pow(2*M_PI/(m_args.lpf_scaling*m_wave_freq),-1)); // Assuming delta is in seconds.
           if(m_args.n_filtering==true)
-            nf.build("NF", m_args.nf_taps, 1/m_tstep, pow(2*M_PI/m_wave_freq,-1)); //
+            nf.build("NF", m_args.nf_taps, 1/m_tstep, pow(2*M_PI/m_wave_freq,-1));
           if(m_args.bs_filtering==true)
             bs.build("BSF", m_args.nf_taps, 1/m_tstep, pow(2*M_PI/m_wave_freq,-1)-pow(2*M_PI/m_wave_freq,-1)*(m_args.bsf_scaling/100), pow(2*M_PI/m_wave_freq,-1)+pow(2*M_PI/m_wave_freq,-1)*(m_args.bsf_scaling/100));
         }
@@ -287,9 +312,12 @@ namespace Control
 		      // Heading Error (From desired heading)
           float err_yaw = Angles::normalizeRadian(m_desired_yaw - msg->psi);
 
+          // Derivative Error.
+          float err_yaw_der = m_args.desired_yaw_der - m_angvel.z; //m_angvel.z may need to be filtered?
+
           // Yaw Controller (PID controller) 
-          float rudder_cmd = m_yaw_pid.step(m_tstep, err_yaw);
-          m_act.value = rudder_cmd; // - for simulation, but has to be adjusted.
+          float rudder_cmd = m_yaw_pid.step(m_tstep, err_yaw, err_yaw_der);
+          m_act.value = rudder_cmd;
 
 		      //spew("AutoNaut - Rudder_cmd/m_act: %0.3f  Desired heading: %0.3f", m_act.value, c_degrees_per_radian*m_desired_yaw);			
           dispatchRudder(m_act.value, m_tstep);
