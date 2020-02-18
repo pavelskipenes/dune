@@ -128,6 +128,7 @@ namespace Supervisors
         bind<IMC::ManeuverControlState>(this);
         bind<IMC::VehicleCommand>(this);
         bind<IMC::PlanControl>(this);
+        bind<IMC::GpsFix>(this);
       }
 
       void
@@ -308,6 +309,16 @@ namespace Supervisors
           if (was && !m_vs.control_loops)
             onDisabledControlLoops();
         }
+      }
+
+      void
+      consume(const IMC::GpsFix* msg)
+      {
+        IMC::GpsFix gpsfix_l3;
+        gpsfix_l3 = *msg;
+        gpsfix_l3.setSource(getSystemId());
+        dispatch(gpsfix_l3);
+        spew("YUUUUUHUUUUUUUUUUUUUUUUUUUUUU");
       }
 
       //! Split comma separated list and translate labels, then join again

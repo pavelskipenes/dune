@@ -164,6 +164,7 @@ namespace Sensors
 
         bind<IMC::Salinity>(this);
         bind<IMC::Temperature>(this);
+        bind<IMC::Depth>(this);
 
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_ACTIVATING);
       }
@@ -300,12 +301,15 @@ namespace Sensors
       }
 
       void
-      onEstimatedState(const IMC::EstimatedState& msg)
+      consume(const IMC::Depth* msg)
       {
-        if (msg.getSource() != getSystemId())
+        //! Should come from CTD.
+        if (msg->getSource() != getSystemId())
           return;
 
-        m_depth = msg.depth;
+        m_depth = msg->value;
+
+        spew("Depth Consumed from CTD: %f", m_depth);
       }
 
       void

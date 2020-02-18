@@ -74,8 +74,6 @@ namespace Sensors
       float alpha;
       //! Conductivity cell thermal mass tau correction.
       float tau;
-      //! Name of device's power channel.
-      std::string power_channel;
       //! True to enable automatic activation/deactivation based on medium.
       bool auto_activation;
     };
@@ -201,10 +199,6 @@ namespace Sensors
         .minimumValue("5.0")
         .maximumValue("10.0")
         .description("Conductivity cell thermal mass tau correction.");
-
-        param("Power Channel", m_args.power_channel)
-        .defaultValue("CTD")
-        .description("Name of device's power channel");
 
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
       }
