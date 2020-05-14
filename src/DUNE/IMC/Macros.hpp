@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 4b5324d23968d4e510251a7a76b86ffb                            *
+// IMC XML MD5: 74be120809af3aaef1656d2b342ffed9                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -326,8 +326,6 @@
 #define DUNE_IMC_GROUPSTREAMVELOCITY 362
 //! Airflow identification number.
 #define DUNE_IMC_AIRFLOW 363
-//! ObstacleState identification number.
-#define DUNE_IMC_OBSTACLESTATE 364
 //! DesiredHeading identification number.
 #define DUNE_IMC_DESIREDHEADING 400
 //! DesiredZ identification number.
@@ -540,6 +538,8 @@
 #define DUNE_IMC_REPORTEDSTATE 600
 //! RemoteSensorInfo identification number.
 #define DUNE_IMC_REMOTESENSORINFO 601
+//! AisInfo identification number.
+#define DUNE_IMC_AISINFO 607
 //! Map identification number.
 #define DUNE_IMC_MAP 602
 //! MapFeature identification number.
@@ -548,8 +548,6 @@
 #define DUNE_IMC_MAPPOINT 604
 //! CcuEvent identification number.
 #define DUNE_IMC_CCUEVENT 606
-//! AisStaticInfo identification number.
-#define DUNE_IMC_AISSTATICINFO 607
 //! VehicleLinks identification number.
 #define DUNE_IMC_VEHICLELINKS 650
 //! TrexObservation identification number.
@@ -682,8 +680,16 @@
 #define DUNE_IMC_VESSELWIND 913
 //! RelativeWind identification number.
 #define DUNE_IMC_RELATIVEWIND 914
+//! AbsoluteWind identification number.
+#define DUNE_IMC_ABSOLUTEWIND 919
 //! CurrentVelocity identification number.
 #define DUNE_IMC_CURRENTVELOCITY 915
+//! CollisionAvoidance identification number.
+#define DUNE_IMC_COLLISIONAVOIDANCE 916
+//! Surroundings identification number.
+#define DUNE_IMC_SURROUNDINGS 917
+//! Heave identification number.
+#define DUNE_IMC_HEAVE 918
 //! AcousticBackscatter identification number.
 #define DUNE_IMC_ACOUSTICBACKSCATTER 1011
 //! Correlation identification number.
@@ -692,5 +698,9 @@
 #define DUNE_IMC_CURRENTPROFILECELL 1014
 //! CurrentProfile identification number.
 #define DUNE_IMC_CURRENTPROFILE 1015
+//! TBRFishTag identification number.
+#define DUNE_IMC_TBRFISHTAG 2007
+//! TBRSensor identification number.
+#define DUNE_IMC_TBRSENSOR 2008
 
 #endif

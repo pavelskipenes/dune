@@ -211,7 +211,7 @@ namespace Sensors
             start();
           }
         }
-      } 
+      }
 
       void 
       onEntityReservation(void)

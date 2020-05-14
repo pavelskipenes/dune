@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 4b5324d23968d4e510251a7a76b86ffb                            *
+// IMC XML MD5: 74be120809af3aaef1656d2b342ffed9                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -11324,95 +11324,14 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
-    //! Obstacle State.
-    class ObstacleState: public Message
-    {
-    public:
-      //! MMSI.
-      uint32_t mmsi;
-      //! Longitude (WGS-84).
-      fp64_t lon;
-      //! Latitude (WGS-84).
-      fp64_t lat;
-      //! Offset north.
-      fp32_t x;
-      //! Offset east.
-      fp32_t y;
-      //! Rotation over z axis.
-      fp32_t psi;
-      //! Ground Velocity X (North).
-      fp32_t u;
-      //! Ground Velocity Y (East).
-      fp32_t v;
-      //! Size A Lenght.
-      fp32_t a;
-      //! Size B Length.
-      fp32_t b;
-      //! Size C Width.
-      fp32_t c;
-      //! Size D Width.
-      fp32_t d;
-
-      static uint16_t
-      getIdStatic(void)
-      {
-        return 364;
-      }
-
-      ObstacleState(void);
-
-      ObstacleState*
-      clone(void) const
-      {
-        return new ObstacleState(*this);
-      }
-
-      void
-      clear(void);
-
-      bool
-      fieldsEqual(const Message& msg__) const;
-
-      int
-      validate(void) const;
-
-      uint8_t*
-      serializeFields(uint8_t* bfr__) const;
-
-      uint16_t
-      deserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      getId(void) const
-      {
-        return ObstacleState::getIdStatic();
-      }
-
-      const char*
-      getName(void) const
-      {
-        return "ObstacleState";
-      }
-
-      unsigned
-      getFixedSerializationSize(void) const
-      {
-        return 56;
-      }
-
-      void
-      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
-    };
-
     //! Desired Heading.
     class DesiredHeading: public ControlCommand
     {
     public:
       //! Value.
       fp64_t value;
+      //! Offset.
+      fp32_t off;
 
       static uint16_t
       getIdStatic(void)
@@ -11461,7 +11380,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 8;
+        return 12;
       }
 
       fp64_t
@@ -20715,6 +20634,103 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
+    //! AIS Info.
+    class AisInfo: public Message
+    {
+    public:
+      //! Message Type.
+      std::string msg_type;
+      //! Class.
+      std::string sensor_class;
+      //! MMSI.
+      std::string mmsi;
+      //! Callsign.
+      std::string callsign;
+      //! Name.
+      std::string name;
+      //! Navigation Status.
+      uint8_t nav_status;
+      //! Type and Cargo.
+      uint8_t type_and_cargo;
+      //! Latitude.
+      fp64_t lat;
+      //! Longitude.
+      fp64_t lon;
+      //! Course.
+      fp32_t course;
+      //! Speed.
+      fp32_t speed;
+      //! Size A Length.
+      fp32_t a;
+      //! Size B Length.
+      fp32_t b;
+      //! Size C Width.
+      fp32_t c;
+      //! Size D Width.
+      fp32_t d;
+      //! Draught.
+      fp32_t draught;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 607;
+      }
+
+      AisInfo(void);
+
+      AisInfo*
+      clone(void) const
+      {
+        return new AisInfo(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return AisInfo::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "AisInfo";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 46;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(msg_type) + IMC::getSerializationSize(sensor_class) + IMC::getSerializationSize(mmsi) + IMC::getSerializationSize(callsign) + IMC::getSerializationSize(name);
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
     //! MapPoint.
     class MapPoint: public Message
     {
@@ -21085,87 +21101,6 @@ namespace DUNE
 
       void
       setDestinationEntityNested(uint8_t value__);
-    };
-
-    //! AIS Static Info.
-    class AisStaticInfo: public Message
-    {
-    public:
-      //! Id.
-      std::string id;
-      //! Callsign.
-      std::string callsign;
-      //! Name.
-      std::string name;
-      //! Type and Cargo.
-      uint8_t type_and_cargo;
-      //! Size A Length.
-      fp32_t a;
-      //! Size B Length.
-      fp32_t b;
-      //! Size C Width.
-      fp32_t c;
-      //! Size D Width.
-      fp32_t d;
-
-      static uint16_t
-      getIdStatic(void)
-      {
-        return 607;
-      }
-
-      AisStaticInfo(void);
-
-      AisStaticInfo*
-      clone(void) const
-      {
-        return new AisStaticInfo(*this);
-      }
-
-      void
-      clear(void);
-
-      bool
-      fieldsEqual(const Message& msg__) const;
-
-      int
-      validate(void) const;
-
-      uint8_t*
-      serializeFields(uint8_t* bfr__) const;
-
-      uint16_t
-      deserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      getId(void) const
-      {
-        return AisStaticInfo::getIdStatic();
-      }
-
-      const char*
-      getName(void) const
-      {
-        return "AisStaticInfo";
-      }
-
-      unsigned
-      getFixedSerializationSize(void) const
-      {
-        return 17;
-      }
-
-      unsigned
-      getVariableSerializationSize(void) const
-      {
-        return IMC::getSerializationSize(id) + IMC::getSerializationSize(callsign) + IMC::getSerializationSize(name);
-      }
-
-      void
-      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
     //! Vehicle Links.
@@ -26136,8 +26071,6 @@ namespace DUNE
     public:
       //! Angle.
       fp32_t angle;
-      //! Direction.
-      std::string direction;
       //! Speed.
       fp32_t speed;
 
@@ -26191,10 +26124,67 @@ namespace DUNE
         return 8;
       }
 
-      unsigned
-      getVariableSerializationSize(void) const
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Absolute Wind.
+    class AbsoluteWind: public Message
+    {
+    public:
+      //! Direction.
+      fp32_t dir;
+      //! Speed.
+      fp32_t speed;
+
+      static uint16_t
+      getIdStatic(void)
       {
-        return IMC::getSerializationSize(direction);
+        return 919;
+      }
+
+      AbsoluteWind(void);
+
+      AbsoluteWind*
+      clone(void) const
+      {
+        return new AbsoluteWind(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return AbsoluteWind::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "AbsoluteWind";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 8;
       }
 
       void
@@ -26263,6 +26253,221 @@ namespace DUNE
       {
         return 16;
       }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Collision Avoidance.
+    class CollisionAvoidance: public Message
+    {
+    public:
+      //! MMSI.
+      fp32_t mmsi;
+      //! Latitude (WGS-84).
+      fp64_t lat;
+      //! Longitude (WGS-84).
+      fp64_t lon;
+      //! Offset north.
+      fp32_t x;
+      //! Offset east.
+      fp32_t y;
+      //! Speed.
+      fp32_t speed;
+      //! Course.
+      fp32_t course;
+      //! Distance.
+      fp32_t dist;
+      //! Length.
+      fp32_t length;
+      //! Width.
+      fp32_t width;
+      //! Obstacle vector size.
+      fp32_t o_vect;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 916;
+      }
+
+      CollisionAvoidance(void);
+
+      CollisionAvoidance*
+      clone(void) const
+      {
+        return new CollisionAvoidance(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return CollisionAvoidance::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "CollisionAvoidance";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 52;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Bathymetry Surroundings.
+    class Surroundings: public Message
+    {
+    public:
+      //! Locations.
+      std::string locations;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 917;
+      }
+
+      Surroundings(void);
+
+      Surroundings*
+      clone(void) const
+      {
+        return new Surroundings(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return Surroundings::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "Surroundings";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 0;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(locations);
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Heave Displacement.
+    class Heave: public Message
+    {
+    public:
+      //! Heave.
+      fp32_t value;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 918;
+      }
+
+      Heave(void);
+
+      Heave*
+      clone(void) const
+      {
+        return new Heave(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return Heave::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "Heave";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 4;
+      }
+
+      fp64_t
+      getValueFP(void) const;
+
+      void
+      setValueFP(fp64_t val);
 
       void
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
@@ -26568,6 +26773,177 @@ namespace DUNE
 
       void
       setDestinationEntityNested(uint8_t value__);
+    };
+
+    //! TBR Fish Tag.
+    class TBRFishTag: public Message
+    {
+    public:
+      //! Transmit Protocol.
+      enum TransmitProtocolEnum
+      {
+        //! R256.
+        TBR_R256 = 1,
+        //! R04K.
+        TBR_R04K = 2,
+        //! R06K.
+        TBR_R06K = 3,
+        //! R64K.
+        TBR_R64K = 4,
+        //! R01M.
+        TBR_R01M = 5,
+        //! S256.
+        TBR_S256 = 6,
+        //! HS256.
+        TBR_HS256 = 7,
+        //! DS256.
+        TBR_DS256 = 8
+      };
+
+      //! TBR serial number.
+      uint32_t serial_no;
+      //! UNIX Timestamp.
+      uint32_t unix_timestamp;
+      //! Millisecond.
+      uint16_t millis;
+      //! Transmit Protocol.
+      uint8_t trans_protocol;
+      //! Transmitter ID.
+      uint32_t trans_id;
+      //! Transmitter Data.
+      uint16_t trans_data;
+      //! Signal to Noise Ratio.
+      uint8_t snr;
+      //! Transmitter Detection Frequency.
+      uint8_t trans_freq;
+      //! Receiver Memory Address.
+      uint16_t recv_mem_addr;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 2007;
+      }
+
+      TBRFishTag(void);
+
+      TBRFishTag*
+      clone(void) const
+      {
+        return new TBRFishTag(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return TBRFishTag::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "TBRFishTag";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 21;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! TBR Sensor Reading.
+    class TBRSensor: public Message
+    {
+    public:
+      //! TBR serial number.
+      uint32_t serial_no;
+      //! UNIX Timestamp.
+      uint32_t unix_timestamp;
+      //! Temperature.
+      fp32_t temperature;
+      //! Average noise level.
+      uint8_t avg_noise_level;
+      //! Peak noise level,.
+      uint8_t peak_noise_level;
+      //! Receiver listening frequency.
+      uint8_t recv_listen_freq;
+      //! Receiver Memory Address.
+      uint16_t recv_mem_addr;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 2008;
+      }
+
+      TBRSensor(void);
+
+      TBRSensor*
+      clone(void) const
+      {
+        return new TBRSensor(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return TBRSensor::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "TBRSensor";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 17;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
   }
 }
