@@ -58,6 +58,9 @@ namespace Sensors
     static const unsigned c_tag_fields = 9;
     //! Number of fields in TBLive sensor reading
     static const unsigned c_tbr_sensor_fields = 8;
+       //! Message used to sync Thelma hydrophones
+    static const std::string syncString = "(+)";
+
     struct Arguments
     {
       //! Serial port device.
@@ -66,8 +69,6 @@ namespace Sensors
       unsigned uart_baud;
       //! Order of sentences.
       std::vector<std::string> stn_order;
-      //! Input timeout in seconds.
-      float inp_tout;
       //! Initialization commands.
       std::string init_cmds[c_max_init_cmds];
       //! Initialization replies.
@@ -76,11 +77,13 @@ namespace Sensors
       std::vector<std::string> pwr_channels;
       //! Write full unix timestamp every timestamp_send_divider times task is run.
       unsigned int timestamp_send_divider;
+      //! Sync Period;
+      double sync_period;
       //! Triggers sensor on and off.
       bool activate;
     };
 
-    struct Task: public DUNE::Tasks::Periodic
+    struct Task: public DUNE::Tasks::Task
     {
       //! GPIO state handle
       Hardware::GPIO* m_gpio;
@@ -96,17 +99,25 @@ namespace Sensors
       TBRReader* m_TBRReader;
       //! How often the full unix timestamp is sent, in executions % counter
       unsigned int timestamp_send_counter;
-      //! User defined.
-      unsigned int m_timestamp_send_divider;
-      //! User defined input timeout (s).
-      float m_tout;
+      //! Timer.
+      Time::Counter<float> m_sync_timer;
+      //! Current Lat and Lon of vehicle.
+      fp64_t m_current_lat, m_current_lon;
+      //! Science sensors commands from L2.
+      IMC::ScienceSensors m_science;
+      //! Sampling duration timer.
+      Counter<double> m_duration;
+      //! Intervals between samplings.
+      Counter<double> m_intervals;
 
       Task(const std::string& name, Tasks::Context& ctx):
-        DUNE::Tasks::Periodic(name, ctx),
+        DUNE::Tasks::Task(name, ctx),
         m_gpio(NULL),
         m_active(false),
         m_handle(NULL),
-        m_TBRReader(NULL)
+        m_TBRReader(NULL),
+        m_current_lat(0.0),
+        m_current_lon(0.0)
       {
         // Define configuration parameters.
         param("Activate Sensor", m_args.activate)
@@ -123,15 +134,15 @@ namespace Sensors
         .defaultValue("115200")
         .description("Serial port baud rate");
 
+        param("Sync Period", m_args.sync_period)
+        .units(Units::Second)
+        .defaultValue("10.0")
+        .minimumValue("0.0")
+        .description("Period between sync messages");
+
         param("Write full timestamp divider", m_args.timestamp_send_divider)
         .defaultValue("10")
         .description("Write full unix timestamp every timestamp_send_divider times task is run.");
-
-        param("Input Timeout", m_args.inp_tout)
-        .units(Units::Second)
-        .defaultValue("4.0")
-        .minimumValue("0.0")
-        .description("Input timeout");
 
         param("Power Channel - Names", m_args.pwr_channels)
         .defaultValue("")
@@ -153,21 +164,23 @@ namespace Sensors
         }
 
         bind<IMC::DevDataText>(this);
-        //bind<IMC::IoEvent>(this);
+        bind<IMC::IoEvent>(this);
+        bind<IMC::GpsFix>(this);
+        bind<IMC::ScienceSensors>(this);
 
-        setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_ACTIVATING);
+        //setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_ACTIVATING);
       }
 
       void
       onUpdateParameters(void)
       {
+        if(paramChanged(m_args.sync_period))
+          m_sync_timer.setTop(m_args.sync_period);
+
         // If sensor is on and Neptus wants to turn it off.
         if(m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
         {
-          // Stop communication.
-          stop();
-          // Wait 2 seconds and turn sensor off.
-          Delay::wait(2.0);
+          spew("On update parameters: sensor OFF");
           m_gpio->setValue(1);
           // Sensor is not active.
           m_active = false;
@@ -184,6 +197,7 @@ namespace Sensors
           {
             // Sensor is active.
             m_active = true;
+            spew("On update parameters: TBLive ON");
           }
           else
           {
@@ -191,36 +205,11 @@ namespace Sensors
           }
         }
 
-        if (paramChanged(m_args.timestamp_send_divider))
-        {
-          m_timestamp_send_divider = m_args.timestamp_send_divider;
-        }
-        
-        if (paramChanged(m_args.inp_tout))
-        {
-          m_tout = m_args.inp_tout;
-        }
       }
 
       void
       onResourceAcquisition(void)
       {
-        /*if (m_args.pwr_channels.size() > 0)
-        {
-          IMC::PowerChannelControl pcc;
-          pcc.op = IMC::PowerChannelControl::PCC_OP_TURN_ON;
-          for (size_t i = 0; i < m_args.pwr_channels.size(); ++i)
-          {
-            pcc.name = m_args.pwr_channels[i];
-            dispatch(pcc);
-          }
-        }
-
-        Counter<double> timer(c_pwr_on_delay);
-        while (!stopping() && !timer.overflow())
-          waitForMessages(timer.getRemaining());
-        */
-
         try
         {
           //m_uart = new SerialPort(m_args.uart_dev, m_args.uart_baud);
@@ -231,18 +220,20 @@ namespace Sensors
           if (!openSocket())
             m_handle = new SerialPort(m_args.uart_dev, m_args.uart_baud);
 
-          m_TBRReader = new TBRReader(this, m_handle);
-          m_TBRReader->start();
+            m_TBRReader = new TBRReader(this, m_handle);
+            m_TBRReader->start();
 
-          m_gpio = new Hardware::GPIO(67); // change accordingly
-          m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
+            m_gpio = new Hardware::GPIO(246);
+            m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
           if(m_active)
           {
+            spew("On resource acquisition: sensor ON");
             // turn on
             m_gpio->setValue(0);
           }
           else
           {
+            spew("On resource acquisition: sensor OFF");
             //turn off.
             m_gpio->setValue(1);
           }
@@ -254,19 +245,6 @@ namespace Sensors
         }
 
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-
-        /*try
-        {
-          if (!openSocket())
-            m_handle = new SerialPort(m_args.uart_dev, m_args.uart_baud);
-
-          m_TBRReader = new TBRReader(this, m_handle);
-          m_TBRReader->start();
-        }
-        catch (...)
-        {
-          throw RestartNeeded(DTR("1"), 5);
-        }*/
       }
 
       bool
@@ -294,6 +272,7 @@ namespace Sensors
           m_TBRReader = NULL;
         }
 
+        m_active = false;
         Memory::clear(m_gpio);
         Memory::clear(m_handle);
       }
@@ -308,6 +287,7 @@ namespace Sensors
 
           std::string cmd = String::unescape(m_args.init_cmds[i]);
           m_handle->writeString(cmd.c_str());
+          spew("String to TBLive: %s",cmd.c_str());
 
           if (!m_args.init_rpls[i].empty())
           {
@@ -321,9 +301,14 @@ namespace Sensors
           }
         }
 
-        sendTbrTimestampSync();
-
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+        //! Set timer for periodic check of surroundings.
+        debug("Waiting to start timer to dividable by 10.");
+        while(std::time(0) % 10 != 0);
+        m_sync_timer.setTop(m_args.sync_period);
+        sendTbrTimestampSync();
+        debug("Finished waiting to start timer to dividable by 10.");
+        
         return true;
       }
 
@@ -344,7 +329,7 @@ namespace Sensors
           processSentence(msg->value);
       }
 
-      /*void
+      void
       consume(const IMC::IoEvent* msg)
       {
         if (msg->getDestination() != getSystemId())
@@ -355,7 +340,17 @@ namespace Sensors
 
         if (msg->type == IMC::IoEvent::IOV_TYPE_INPUT_ERROR)
           throw RestartNeeded(msg->error, 5);
-      }*/
+      }
+
+      void
+      consume(const IMC::GpsFix* msg)
+      {
+        if (msg->getSource() != getSystemId())
+          return;
+        m_current_lat=msg->lat;
+        m_current_lon=msg->lon;
+        //spew("Received position: %f %f \n", m_current_lat, m_current_lon);
+      }
 
       //! Wait reply to initialization command.
       //! @param[in] stn string to compare.
@@ -411,33 +406,25 @@ namespace Sensors
         // Add Luhn verification number
         UTCUnixTimestamp += std::to_string(calcLuhnVerifDigit(UTCUnixTimestamp.c_str()));
 
-        // Add preamble
-        std::string cmd = "(+)" + UTCUnixTimestamp;
-
-        // Send sync signal slowly, because TBR700RT can't handle the speed(max 1 char per microsecond)
-        char a[1] = {'0'};
-        for(char& c : cmd) {
-            a[0] = c;
-            m_handle->write(a, 1);
-            Delay::waitMsec(1);
-        }
-
-        spew(DTR("Send: %s"), cmd.c_str());
+        // Add preamble and send
+        slowTbrSend(syncString + UTCUnixTimestamp);
       }
+
       void sendTbrSync() {
+        slowTbrSend(syncString);
+      }
 
-        std::string cmd = "(+)";
-
-        // Send slowly, because TBR700RT can't handle the speed(max 1 char per microsecond)
+      void slowTbrSend(std::string cmd) {
+        // Send to uart slowly, because ThelmaHydrophone processes max 1 char per millisecond
         char a[1] = {'0'};
         for(char& c : cmd) {
             a[0] = c;
             m_handle->write(a, 1);
             Delay::waitMsec(1);
         }
-
-        spew(DTR("Send: %s"), cmd.c_str());
+        spew(DTR("Sent: \"%s\" at \"%ld\""), cmd.c_str(), std::time(0)); 
       }
+
       //! Read int from input string.
       //! @param[in] str input string.
       //! @param[out] dst number.
@@ -620,8 +607,8 @@ namespace Sensors
           trans_protocol = IMC::TBRFishTag::TBR_R256;
         else if(parts[3] == "R04K")
           trans_protocol = IMC::TBRFishTag::TBR_R04K;
-        else if(parts[3] == "R06K")
-          trans_protocol = IMC::TBRFishTag::TBR_R06K;
+        else if(parts[3] == "S64K")
+          trans_protocol = IMC::TBRFishTag::TBR_S64K;
         else if(parts[3] == "R64K")
           trans_protocol = IMC::TBRFishTag::TBR_R64K;
         else if(parts[3] == "R01M")
@@ -670,20 +657,118 @@ namespace Sensors
         tag_msg.snr = SNR;
         tag_msg.trans_freq = trans_freq;
         tag_msg.recv_mem_addr = recv_mem_addr;
+        tag_msg.lat = m_current_lat;
+        tag_msg.lon = m_current_lon;
         dispatch(tag_msg);
       }
+
       void
-      task(void)
+      consume(const IMC::ScienceSensors* msg)
       {
-        if(m_TBRReader != NULL && m_handle != NULL) {
-          timestamp_send_counter++;
-          if(timestamp_send_counter >= m_timestamp_send_divider) {
-            sendTbrTimestampSync();
-            timestamp_send_counter = 0;
-          } else {
-            sendTbrSync();
+        if (msg->getSource() != getSystemId())
+        {
+          // Message is from L2.
+          m_science = *msg;
+          
+          if(m_science.tbl == 2)
+          {
+            // implement sensor rebooting.
+          } else if(!m_active && m_science.tbl == 0)
+          {
+            // Turn sensor on.
+            m_gpio->setValue(0);
+            // Wait 2 seconds and initialize.
+            Delay::wait(2.0);
+            if(initializeSensor())
+            {
+              // Sensor is active.
+              m_active = true;
+              trace("from Iridium: TBLive ON");
+              if(m_science.tbl_dur > 0.0)
+              {
+                m_duration.setTop(m_science.tbl_dur);
+                trace("Sampling duration set: %d",m_science.tbl_dur);
+              } else
+              {
+                trace("Sampling duration NOT set");
+                m_duration.setTop(0.0);
+              }
+            }
+            else
+            {
+              trace("Could not initialize TBLive sensor");
+            }
+          } else if(m_science.tbl == 1)
+          {
+            m_gpio->setValue(1);
+            // Sensor is not active.
+            m_active = false;
+            m_intervals.setTop(0.0);
+            m_duration.setTop(0.0);
+            trace("from Iridium: TBLive OFF.");
           }
-          //waitForMessages(1.0);
+
+          // if m_science.tbl == 3 -> do nothing.
+        }
+      }
+
+      void
+      onMain(void)
+      {
+        // Wait for resource acquisition and initialization
+        while(getEntityState() != IMC::EntityState::ESTA_NORMAL);
+
+        while(!stopping()) {
+          
+          consumeMessages();
+          
+          if(m_sync_timer.overflow() && m_active)
+          {
+            m_sync_timer.reset();
+
+            if(timestamp_send_counter >= m_args.timestamp_send_divider) {
+              sendTbrTimestampSync();
+              timestamp_send_counter = 0;
+            } else {
+              sendTbrSync();
+            }
+            //spew("C: %ld", std::time(0));
+            spew("Sending duration: %f", m_sync_timer.getElapsed());
+            timestamp_send_counter++;
+          }
+
+          // If sensor is active and sampling period expires.
+          if(m_active && m_duration.getTop()!=0.0 && m_duration.overflow())
+          {
+            m_gpio->setValue(1);
+            // Sensor is not active.
+            m_active = false;
+            trace("TBLive finished sampling: turning OFF");
+            
+            if(m_science.tbl_fr > 0.0) //Samplings are periodical, not just one.
+              m_intervals.setTop(m_science.tbl_fr);
+          }
+
+          // If sensor is inactive and sleeping period expires.
+          if(!m_active && m_intervals.getTop()!=0.0 && m_intervals.overflow())
+          {
+            // Turn sensor on.
+            m_gpio->setValue(0);
+            // Wait 2 seconds and initialize.
+            Delay::wait(2.0);
+            if(initializeSensor())
+            {
+              // Sensor is active.
+              m_active = true;
+              trace("Periodical: TBLive ON");
+              m_duration.reset();
+              m_duration.setTop(m_science.tbl_dur);
+            }
+            else
+            {
+              trace("Could not initialize TBLive sensor");
+            }
+          }
         }
       }
     };

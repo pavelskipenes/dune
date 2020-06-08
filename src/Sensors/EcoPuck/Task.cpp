@@ -92,6 +92,12 @@ namespace Sensors
       IMC::Chlorophyll m_chl;
       //! Received data line.
       std::string m_line;
+      //! Science sensors commands from L2.
+      IMC::ScienceSensors m_science;
+      //! Sampling duration timer.
+      Counter<double> m_duration;
+      //! Intervals between samplings.
+      Counter<double> m_intervals;
       //! Task arguments.
       Arguments m_args;
       
@@ -154,6 +160,8 @@ namespace Sensors
 
         m_dom.type = IMC::DissolvedOrganicMatter::DT_COLORED;
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
+
+        bind<IMC::ScienceSensors>(this);
       }
 
       //! Update internal state with new parameter values.
@@ -170,6 +178,7 @@ namespace Sensors
           m_gpio->setValue(1);
           // Sensor is not active.
           m_active = false;
+          trace("onUpdateParameters ECOPuck OFF");
         }
 
         // If sensor is off and Neptus wants to turn it on.
@@ -183,10 +192,11 @@ namespace Sensors
           {
             // Sensor is active.
             m_active = true;
+            trace("onUpdateParameters ECOPuck ON");
           }
           else
           {
-            trace("Could not initialize optode sensor");
+            trace("Could not initialize ECOPuck sensor");
           }
         }
 
@@ -214,15 +224,17 @@ namespace Sensors
           m_uart->setCanonicalInput(true);
           m_uart->flush();
 
-          m_gpio = new Hardware::GPIO(66);
+          m_gpio = new Hardware::GPIO(243);
           m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
           if(m_active)
           {
+            trace("onResourceAcquisition ECOPuck ON");
             // turn on
             m_gpio->setValue(0);
           }
           else
           {
+            trace("onResourceAcquisition ECOPuck OFF");
             //turn off.
             m_gpio->setValue(1);
           }
@@ -257,8 +269,63 @@ namespace Sensors
       onResourceRelease(void)
       {
         sendCommand(c_cmd_stop);
+        m_active = false;
         Memory::clear(m_uart);
         Memory::clear(m_gpio);
+      }
+
+      void
+      consume(const IMC::ScienceSensors* msg)
+      {
+        if (msg->getSource() != getSystemId())
+        {
+          // Message is from L2.
+          m_science = *msg;
+          
+          if(m_science.eco == 2)
+          {
+            // implement sensor rebooting.
+          } else if(!m_active && m_science.eco == 0)
+          {
+            // Turn sensor on.
+            m_gpio->setValue(0);
+            // Wait 2 seconds and initialize.
+            Delay::wait(2.0);
+            if(initializeSensor())
+            {
+              // Sensor is active.
+              m_active = true;
+              trace("from Iridium: ECOPuck ON");
+              if(m_science.eco_dur > 0.0)
+              {
+                m_duration.setTop(m_science.eco_dur);
+                trace("Sampling duration set: %d",m_science.eco_dur);
+              } else
+              {
+                trace("Sampling duration NOT set");
+                m_duration.setTop(0.0);
+              }
+            }
+            else
+            {
+              trace("Could not initialize ECOPuck sensor");
+            }
+          } else if(m_science.eco == 1)
+          {
+            // Stop communication.
+            sendCommand(c_cmd_stop);
+            // Wait 2 seconds and turn sensor off.
+            Delay::wait(2.0);
+            m_gpio->setValue(1);
+            // Sensor is not active.
+            m_active = false;
+            m_intervals.setTop(0.0);
+            m_duration.setTop(0.0);
+            trace("from Iridium: ECOPuck OFF.");
+          }
+
+          // if m_science.eco == 3 -> do nothing.
+        }
       }
 
       //! Process incoming sentence.
@@ -363,6 +430,43 @@ namespace Sensors
             {
               setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
               throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
+            }
+          }
+          
+          // If sensor is active and sampling period expires.
+          if(m_active && m_duration.getTop()!=0.0 && m_duration.overflow())
+          {
+            // Stop communication.
+            sendCommand(c_cmd_stop);
+            // Wait 2 seconds and turn sensor off.
+            Delay::wait(2.0);
+            m_gpio->setValue(1);
+            // Sensor is not active.
+            m_active = false;
+            trace("ECOPuck finished sampling: turning OFF");
+            
+            if(m_science.eco_fr > 0.0) //Samplings are periodical, not just one.
+              m_intervals.setTop(m_science.eco_fr);
+          }
+
+          // If sensor is inactive and sleeping period expires.
+          if(!m_active && m_intervals.getTop()!=0.0 && m_intervals.overflow())
+          {
+            // Turn sensor on.
+            m_gpio->setValue(0);
+            // Wait 2 seconds and initialize.
+            Delay::wait(2.0);
+            if(initializeSensor())
+            {
+              // Sensor is active.
+              m_active = true;
+              trace("Periodical: ECOPuck ON");
+              m_duration.reset();
+              m_duration.setTop(m_science.eco_dur);
+            }
+            else
+            {
+              trace("Could not initialize EcoPuck sensor");
             }
           }
 

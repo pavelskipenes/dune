@@ -104,6 +104,12 @@ namespace Sensors
       IMC::SoundSpeed m_sspeed;
       //! Received data line.
       std::string m_line;
+      //! Science sensors commands from L2.
+      IMC::ScienceSensors m_science;
+      //! Sampling duration timer.
+      Counter<double> m_duration;
+      //! Intervals between samplings.
+      Counter<double> m_intervals;
       //! Task arguments.
       Arguments m_args;
 
@@ -201,6 +207,8 @@ namespace Sensors
         .description("Conductivity cell thermal mass tau correction.");
 
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
+
+        bind<IMC::ScienceSensors>(this);
       }
 
       //! Update internal state with new parameter values.
@@ -210,6 +218,7 @@ namespace Sensors
         // If sensor is on and Neptus wants to turn it off.
         if(m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
         {
+          trace("onUpdateParameters: sensor OFF");
           // Stop communication.
           stop();
           // Wait 2 seconds and turn sensor off.
@@ -217,12 +226,13 @@ namespace Sensors
           m_gpio->setValue(1);
           // Sensor is not active.
           m_active = false;
-          requestDeactivation();
+          //requestDeactivation();
         }
 
         // If sensor is off and Neptus wants to turn it on.
         if(!m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
         {
+          trace("onUpdateParameters: sensor ON");
           // Turn sensor on.
           m_gpio->setValue(0);
           // Wait 2 seconds and initialize.
@@ -231,7 +241,9 @@ namespace Sensors
           {
             // Sensor is active.
             m_active = true;
-            requestActivation();
+            //requestActivation();
+            //Delay::wait(2.0);
+            start();
           }
           else
           {
@@ -239,18 +251,18 @@ namespace Sensors
           }
         }
 
-        if (isActive())
+        //if (isActive())
+        //{
+        if (paramChanged(m_args.rt) || paramChanged(m_args.mincfreq) ||
+            paramChanged(m_args.tau) || paramChanged(m_args.alpha) ||
+            paramChanged(m_args.delay) || paramChanged(m_args.tadvance) ||
+            paramChanged(m_args.avg) || paramChanged(m_args.zerofreq))
         {
-          if (paramChanged(m_args.rt) || paramChanged(m_args.mincfreq) ||
-              paramChanged(m_args.tau) || paramChanged(m_args.alpha) ||
-              paramChanged(m_args.delay) || paramChanged(m_args.tadvance) ||
-              paramChanged(m_args.avg) || paramChanged(m_args.zerofreq))
-          {
-            stop();
-            setup();
-            start();
-          }
+          stop();
+          setup();
+          start();
         }
+        //}
       }
 
       void 
@@ -276,15 +288,17 @@ namespace Sensors
           m_uart->setCanonicalInput(true);
           m_uart->flush();
 
-          m_gpio = new Hardware::GPIO(64);
+          m_gpio = new Hardware::GPIO(247);
           m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
           if(m_active)
           {
+            spew("On resource acquisition: sensor ON");
             // turn on
             m_gpio->setValue(0);
           }
           else
           {
+            spew("On resource acquisition: sensor OFF");
             //turn off.
             m_gpio->setValue(1);
           }
@@ -315,6 +329,7 @@ namespace Sensors
       onResourceRelease(void)
       {
         stop();
+        m_active = false;
         Memory::clear(m_uart);
         Memory::clear(m_gpio);
       }
@@ -518,6 +533,64 @@ namespace Sensors
         return true;
       }
 
+      void
+      consume(const IMC::ScienceSensors* msg)
+      {
+        if (msg->getSource() != getSystemId())
+        {
+          // Message is from L2.
+          m_science = *msg;
+          
+          if(m_science.ctd == 2)
+          {
+            // implement sensor rebooting.
+          } else if(!m_active && m_science.ctd == 0)
+          {
+            // Turn sensor on.
+            m_gpio->setValue(0);
+            // Wait 2 seconds and initialize.
+            Delay::wait(2.0);
+            if(setup())
+            {
+              // Sensor is active.
+              m_active = true;
+              trace("from Iridium: CTD ON");
+
+              // start sampling.
+              start();
+
+              if(m_science.ctd_dur > 0.0)
+              {
+                m_duration.setTop(m_science.ctd_dur);
+                trace("Sampling duration set: %d",m_science.ctd_dur);
+              } else
+              {
+                trace("Sampling duration NOT set");
+                m_duration.setTop(0.0);
+              }
+            }
+            else
+            {
+              trace("Could not initialize CTD sensor");
+            }
+          } else if(m_science.ctd == 1)
+          {
+            // Stop communication.
+            stop();
+            // Wait 2 seconds and turn sensor off.
+            Delay::wait(2.0);
+            m_gpio->setValue(1);
+            // Sensor is not active.
+            m_active = false;
+            m_intervals.setTop(0.0);
+            m_duration.setTop(0.0);
+            trace("from Iridium: CTD OFF.");
+          }
+
+          // if m_science.ctd == 3 -> do nothing.
+        }
+      }
+
       //! Main loop.
       void
       onMain(void)
@@ -540,11 +613,50 @@ namespace Sensors
               throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
             }
           }
-          else
+          
+          // If sensor is active and sampling period expires.
+          if(m_active && m_duration.getTop()!=0.0 && m_duration.overflow())
           {
-            // If no instruction arrived from neptus, reset timer to avoid task from restarting
-            m_wdog.reset();
+            // Stop communication.
+            stop();
+            // Wait 2 seconds and turn sensor off.
+            Delay::wait(2.0);
+            m_gpio->setValue(1);
+            // Sensor is not active.
+            m_active = false;
+            trace("CTD finished sampling: turning OFF");
+            
+            if(m_science.ctd_fr > 0.0) //Samplings are periodical, not just one.
+              m_intervals.setTop(m_science.ctd_fr);
           }
+
+          // If sensor is inactive and sleeping period expires.
+          if(!m_active && m_intervals.getTop()!=0.0 && m_intervals.overflow())
+          {
+            // Turn sensor on.
+            m_gpio->setValue(0);
+            // Wait 2 seconds and initialize.
+            Delay::wait(2.0);
+            if(setup())
+            {
+              // Sensor is active.
+              m_active = true;
+              trace("Periodical: CTD ON");
+              m_duration.reset();
+              m_duration.setTop(m_science.ctd_dur);
+
+              // Start sampling.
+              start();
+            }
+            else
+            {
+              trace("Could not initialize CTD sensor");
+            }
+          }
+
+          // If no instruction arrived from neptus, reset timer to avoid task from restarting
+          if(!m_active)
+            m_wdog.reset();
 
           waitForMessages(0.01);
         }

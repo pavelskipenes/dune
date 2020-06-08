@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 74be120809af3aaef1656d2b342ffed9                            *
+// IMC XML MD5: f03569c742b632df430f37f79f94d0ad                            *
 //***************************************************************************
 
 MESSAGE(1, EntityState)
@@ -365,4 +365,7 @@ MESSAGE(1014, CurrentProfileCell)
 MESSAGE(1015, CurrentProfile)
 MESSAGE(2007, TBRFishTag)
 MESSAGE(2008, TBRSensor)
+MESSAGE(2009, IridiumReport)
+MESSAGE(2010, ScienceSensors)
+MESSAGE(920, AisGpsFix)
 #undef MESSAGE

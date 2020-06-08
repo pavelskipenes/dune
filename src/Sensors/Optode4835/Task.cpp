@@ -117,6 +117,12 @@ namespace Sensors
       std::string m_line;
       //! Temperature entity id.
       unsigned m_temp_eid;
+      //! Science sensors commands from L2.
+      IMC::ScienceSensors m_science;
+      //! Sampling duration timer.
+      Counter<double> m_duration;
+      //! Intervals between samplings.
+      Counter<double> m_intervals;
       //! Task arguments.
       Arguments m_args;
       
@@ -165,6 +171,7 @@ namespace Sensors
         bind<IMC::Salinity>(this);
         bind<IMC::Temperature>(this);
         bind<IMC::Depth>(this);
+        bind<IMC::ScienceSensors>(this);
 
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_ACTIVATING);
       }
@@ -245,7 +252,7 @@ namespace Sensors
           m_uart->setCanonicalInput(true);
           m_uart->flush();
 
-          m_gpio = new Hardware::GPIO(67);
+          m_gpio = new Hardware::GPIO(245);
           m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
           if(m_active)
           {
@@ -296,6 +303,7 @@ namespace Sensors
       onResourceRelease(void)
       {
         stop();
+        m_active = false;
         Memory::clear(m_uart);
         Memory::clear(m_gpio);
       }
@@ -523,6 +531,60 @@ namespace Sensors
         return false;
       }
 
+      void
+      consume(const IMC::ScienceSensors* msg)
+      {
+        if (msg->getSource() != getSystemId())
+        {
+          // Message is from L2.
+          m_science = *msg;
+          
+          if(m_science.opt == 2)
+          {
+            // implement sensor rebooting.
+          } else if(!m_active && m_science.opt == 0)
+          {
+            // Turn sensor on.
+            m_gpio->setValue(0);
+            // Wait 2 seconds and initialize.
+            Delay::wait(2.0);
+            if(initializeSensor())
+            {
+              // Sensor is active.
+              m_active = true;
+              trace("from Iridium: Optode ON");
+              if(m_science.opt_dur > 0.0)
+              {
+                m_duration.setTop(m_science.opt_dur);
+                trace("Sampling duration set: %d",m_science.opt_dur);
+              } else
+              {
+                trace("Sampling duration NOT set");
+                m_duration.setTop(0.0);
+              }
+            }
+            else
+            {
+              trace("Could not initialize optode sensor");
+            }
+          } else if(m_science.opt == 1)
+          {
+            // Stop communication.
+            stop();
+            // Wait 2 seconds and turn sensor off.
+            Delay::wait(2.0);
+            m_gpio->setValue(1);
+            // Sensor is not active.
+            m_active = false;
+            m_intervals.setTop(0.0);
+            m_duration.setTop(0.0);
+            trace("from Iridium: Optode OFF.");
+          }
+
+          // if m_science.opt == 3 -> do nothing.
+        }
+      }
+
       //! Main loop.
       void
       onMain(void)
@@ -545,6 +607,46 @@ namespace Sensors
               throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
             }
           }
+
+          // If sensor is active and sampling period expires.
+            if(m_active && m_duration.getTop()!=0.0 && m_duration.overflow())
+            {
+              // Stop communication.
+              stop();
+              // Wait 2 seconds and turn sensor off.
+              Delay::wait(2.0);
+              m_gpio->setValue(1);
+              // Sensor is not active.
+              m_active = false;
+              trace("Optode finished sampling: turning OFF");
+              
+              if(m_science.opt_fr > 0.0) //Samplings are periodical, not just one.
+              {
+                m_intervals.setTop(m_science.opt_fr);
+                spew("Optode sleeping for %d seconds",m_science.opt_fr);
+              }
+            }
+
+            // If sensor is inactive and sleeping period expires.
+            if(!m_active && m_intervals.getTop()!=0.0 && m_intervals.overflow())
+            {
+              // Turn sensor on.
+              m_gpio->setValue(0);
+              // Wait 2 seconds and initialize.
+              Delay::wait(2.0);
+              if(initializeSensor())
+              {
+                // Sensor is active.
+                m_active = true;
+                trace("Periodical: Optode ON");
+                m_duration.reset();
+                m_duration.setTop(m_science.opt_dur);
+              }
+              else
+              {
+                trace("Could not initialize optode sensor");
+              }
+            }
 
           // If no instruction arrived from neptus, reset timer to avoid task from restarting
           if(!m_active)

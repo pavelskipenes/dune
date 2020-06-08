@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 74be120809af3aaef1656d2b342ffed9                            *
+// IMC XML MD5: f03569c742b632df430f37f79f94d0ad                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -702,5 +702,11 @@
 #define DUNE_IMC_TBRFISHTAG 2007
 //! TBRSensor identification number.
 #define DUNE_IMC_TBRSENSOR 2008
+//! IridiumReport identification number.
+#define DUNE_IMC_IRIDIUMREPORT 2009
+//! ScienceSensors identification number.
+#define DUNE_IMC_SCIENCESENSORS 2010
+//! AisGpsFix identification number.
+#define DUNE_IMC_AISGPSFIX 920
 
 #endif

@@ -24,7 +24,7 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: renan                                                            *
+// Author: Renan & Alberto                                                  *
 //***************************************************************************
 
 // DUNE headers.
@@ -108,6 +108,12 @@ namespace Sensors
       bool m_triggered;
       //! True if we're using serial link.
       bool m_serial;
+      //! Science sensors commands from L2.
+      IMC::ScienceSensors m_science;
+      //! Sampling duration timer.
+      Counter<double> m_duration;
+      //! Intervals between samplings.
+      Counter<double> m_intervals;
       //! Configuration parameters.
       Arguments m_args;
       
@@ -262,6 +268,7 @@ namespace Sensors
         .description("Bandwidth selection. (“NARROW”, “BROAD”)");
 
         bind<IMC::Salinity>(this);
+        bind<IMC::ScienceSensors>(this);
 
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
       }
@@ -278,6 +285,7 @@ namespace Sensors
           m_gpio->setValue(1);
           // Sensor is not active.
           m_active = false;
+          trace("onUpdateParameters ADCP OFF");
         }
 
         // If sensor is off and Neptus wants to turn it on.
@@ -286,10 +294,11 @@ namespace Sensors
           // Turn sensor on.
           m_gpio->setValue(0);
           // Wait 2 seconds and initialize.
-          Delay::wait(2.0);
+          Delay::wait(20.0);
           if(!initializeSensor())
             throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
           m_active = true;
+          trace("onUpdateParameters ADCP ON");
         }
         
         if (m_active && getEntityState() == IMC::EntityState::ESTA_NORMAL)
@@ -316,24 +325,27 @@ namespace Sensors
       onResourceAcquisition(void)
       {
         consumeMessages();
-        
+
         try
         {
           // GPIO init
-          m_gpio = new Hardware::GPIO(65);
+          m_gpio = new Hardware::GPIO(248);
           m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
           
           // Test if sensor is active
           if(m_active)
           {
+            trace("onResourceAcquisition ADCP ON");
             // turn on
             m_gpio->setValue(0);
-            Delay::wait(2.0);
+            // Need some time to start connection.
+            Delay::wait(20.0);
             if(!initializeSensor())
               throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
           }
           else
           {
+            trace("onResourceAcquisition ADCP OFF");
             //turn off.
             m_gpio->setValue(1);
           }
@@ -352,8 +364,11 @@ namespace Sensors
       {
         // Attempt to open socket
         if(!openSocket())
+        {
+          spew("ADCP cannot open socket.");
           throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
-      
+        }
+
         // Driver init
         if (isConnected())
         {
@@ -367,20 +382,16 @@ namespace Sensors
           m_wdog.setTop(c_data_timeout);
         }
         else
-        {
           return false;
-        }
         
         trace("ADCP driver connected");
 
-        if ( isParserOn() )
+        if (isParserOn())
         {
           m_parser->set( m_args.ncells, m_args.cellsize, m_args.blank );
         }
         else
-        {
           return false;
-        }
 
         return true;
       }
@@ -508,7 +519,58 @@ namespace Sensors
 
 
         m_parser = new Parser( this, m_data_h, m_args.pos, m_args.ang, m_entities, m_entity,
-                               m_args.ncells, m_args.cellsize, m_args.blank );      }
+                               m_args.ncells, m_args.cellsize, m_args.blank );
+      }
+
+      void
+      consume(const IMC::ScienceSensors* msg)
+      {
+        if (msg->getSource() != getSystemId())
+        {
+          // Message is from L2.
+          m_science = *msg;
+          
+          if(m_science.adcp == 2)
+          {
+            // implement sensor rebooting.
+          } else if(!m_active && m_science.adcp == 0)
+          {
+            // Turn sensor on.
+            m_gpio->setValue(0);
+            // Wait 2 seconds and initialize.
+            Delay::wait(20.0);
+            if(initializeSensor())
+            {
+              // Sensor is active.
+              m_active = true;
+              trace("from Iridium: ADCP ON");
+              if(m_science.adcp_dur > 0.0)
+              {
+                m_duration.setTop(m_science.adcp_dur);
+                trace("Sampling duration set: %d",m_science.adcp_dur);
+              } else
+              {
+                trace("Sampling duration NOT set");
+                m_duration.setTop(0.0);
+              }
+            }
+            else
+            {
+              trace("Could not initialize ADCP sensor");
+            }
+          } else if(m_science.adcp == 1)
+          {
+            m_gpio->setValue(1);
+            // Sensor is not active.
+            m_active = false;
+            m_intervals.setTop(0.0);
+            m_duration.setTop(0.0);
+            trace("from Iridium: ADCP OFF.");
+          }
+
+          // if m_science.eco == 3 -> do nothing.
+        }
+      }
 
       //! Main loop.
       void
@@ -529,12 +591,48 @@ namespace Sensors
               m_wdog.reset();
 
             if (m_wdog.overflow())
+            {
+              spew("Data missing");
               throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
+            }
           }
-          else
+
+          // If sensor is active and sampling period expires.
+          if(m_active && m_duration.getTop()!=0.0 && m_duration.overflow())
           {
-            m_wdog.reset();
+            m_gpio->setValue(1);
+            // Sensor is not active.
+            m_active = false;
+            trace("ECOPuck finished sampling: turning OFF");
+            
+            if(m_science.eco_fr > 0.0) //Samplings are periodical, not just one.
+              m_intervals.setTop(m_science.eco_fr);
           }
+
+          // If sensor is inactive and sleeping period expires.
+          if(!m_active && m_intervals.getTop()!=0.0 && m_intervals.overflow())
+          {
+            // Turn sensor on.
+            m_gpio->setValue(0);
+            // Wait 2 seconds and initialize.
+            Delay::wait(20.0);
+            if(initializeSensor())
+            {
+              // Sensor is active.
+              m_active = true;
+              trace("Periodical: ADCP ON");
+              m_duration.reset();
+              m_duration.setTop(m_science.eco_dur);
+            }
+            else
+            {
+              trace("Could not initialize ADCP sensor");
+            }
+          }
+          
+          // If no instruction arrived from neptus, reset timer to avoid task from restarting
+          if(!m_active)
+            m_wdog.reset();
           
           waitForMessages(0.01);
         }
