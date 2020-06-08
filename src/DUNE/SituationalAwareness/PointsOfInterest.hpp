@@ -1,6 +1,6 @@
 //***************************************************************************
-// Copyright 2007-2019 Universidade do Porto - Faculdade de Engenharia      *
-// Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
+// Copyright 2013-2020 Norwegian University of Science and Technology (NTNU)*
+// Department of Engineering Cybernetics (ITK)                              *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
 //                                                                          *
@@ -24,44 +24,41 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Ricardo Martins                                                  *
-//***************************************************************************
-// Automatically generated.                                                 *
-//***************************************************************************
-// IMC XML MD5: f03569c742b632df430f37f79f94d0ad                            *
+// Author: Nikolai Lauvås                                                  *
 //***************************************************************************
 
-#ifndef DUNE_IMC_HEADER_HPP_INCLUDED_
-#define DUNE_IMC_HEADER_HPP_INCLUDED_
+#ifndef DUNE_SITUATIONALAWARENESS_POINTSOFINTEREST_HPP_INCLUDED_
+#define DUNE_SITUATIONALAWARENESS_POINTSOFINTEREST_HPP_INCLUDED_
 
 // DUNE headers.
-#include <DUNE/Config.hpp>
+//#include <DUNE/Config.hpp>
+//#include <DUNE/DUNE.hpp>
+#include <DUNE/SituationalAwareness/LocationData.hpp>
+
 
 namespace DUNE
 {
-  namespace IMC
+  namespace SituationalAwareness
   {
-    //! Header format.
-    struct Header
+    // Export DLL Symbol.
+    class DUNE_DLL_SYM PointsOfInterest;
+
+    //! The PointsOfInterest class 
+    class PointsOfInterest: public LocationData
     {
-      //! Synchronization Number.
-      uint16_t sync;
-      //! Message Identification Number.
-      uint16_t mgid;
-      //! Message size.
-      uint16_t size;
-      //! Time stamp.
-      fp64_t timestamp;
-      //! Source Address.
-      uint16_t src;
-      //! Source Entity.
-      uint8_t src_ent;
-      //! Destination Address.
-      uint16_t dst;
-      //! Destination Entity.
-      uint8_t dst_ent;
+    public:
+      //! PointsOfInterest constructor.
+      PointsOfInterest(std::string dbPath);
+      
+      //! PointsOfInterest destructor.
+      ~PointsOfInterest(void);
+      LocationVector getPOISquare(double Lat, double Lon, double half_size, std::string tablename);
+      LocationVector getPOIRectangle(double Lat, double Lon, double east_from_center, double north_from_center, std::string tablename);
+    private:
+      double gridSize;
     };
   }
 }
 
-#endif
+
+#endif // END DUNE_SITUATIONALAWARENESS_POINTSOFINTEREST_HPP_INCLUDED_

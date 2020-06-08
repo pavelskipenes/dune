@@ -177,8 +177,8 @@ namespace DUNE
 	}
 
 
-	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,4>& static_obst, const Eigen::Matrix<double,-1,2>& waypoints_){
-		// REMOVED: Eigen::Matrix<double,-1,2>& predicted_traj, Eigen::Matrix<double,-1,1>& colav_status, Eigen::Matrix<double,-1,-1>& obst_status
+	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints_, bool static_obst, Math::Matrix contours){
+	// REMOVED: Eigen::Matrix<double,-1,2>& predicted_traj, Eigen::Matrix<double,-1,1>& colav_status, Eigen::Matrix<double,-1,-1>& obst_status
 	double cost = INFINITY;
 	double cost_k = 0, cost_i = 0, cost_o = 0; //cost_ac = 0;
 	int n_obst, n_wps, n_samp=T_/DT_, n_samp_pred=n_samp/pred_step, n_psi_os_best;
@@ -197,6 +197,11 @@ namespace DUNE
 	Eigen::VectorXd y_opt(n_samp_pred);
 
 	Eigen::MatrixXd waypoints(waypoints_.rows(), waypoints_.cols()); waypoints = waypoints_;
+
+	for(int f=0; f<contours.rows(); f++)
+	{
+		std::cout << contours(f,0) << " " << contours(f,1) << std::endl;
+	}
 
 
 	if (obst_states.rows() == 0 && oldObstacles_.size() == 0 ){
@@ -237,7 +242,7 @@ namespace DUNE
 
 					obst_exists = true;
 
-					//std::cout << "Yey!! obstacle exists!" << std::endl;
+					std::cout << "Yey!! obstacle exists!" << std::endl;
 
 					break;
 				}
@@ -397,13 +402,10 @@ namespace DUNE
 
 	}
 
+	// ***Just testing !! along-track error using Eq (10.58 or 10.10) in Fossen 2011
+	double along_track_dist = fabs((0 - asv_state(0))*cos(psi_path) + (300 - asv_state(1))*sin(psi_path));
 
-
-
-		// ***Just testing !! along-track error using Eq (10.58 or 10.10) in Fossen 2011
-		double along_track_dist = fabs((0 - asv_state(0))*cos(psi_path) + (300 - asv_state(1))*sin(psi_path));
-
-		std::cout << "remaining track dist :  " << along_track_dist << std::endl;
+	std::cout << "remaining track dist :  " << along_track_dist << std::endl;
 
 
 	if ( track_dist > R + asv->getL() ) { // else last WP reached, assume constant course!
@@ -467,13 +469,23 @@ namespace DUNE
 		d(1) = obst_vect[k]->y_[0] - asv_state(1);
 		dist_0 = d.norm(); DIST_0(k)=dist_0;
 
+		std::cout << "d(0): " << d(0) << " d(1): " << d(1) << std::endl;
+		std::cout << "DIST_0(k): " << DIST_0(k) << std::endl;
+
 		los_0 = d/dist_0;
+
+		std::cout << "los_0: " << los_0*RAD2DEG << std::endl;
 
 		PHI_0(k) = atan2(d(1),d(0));	// bearing
 		//std::cout << "PHI_0/bearing : " << PHI_0(k)*RAD2DEG << std::endl;
 
+		std::cout << "PHI_0(k): " << PHI_0(k)*RAD2DEG << " and normalize_angle(asv_state(2)): " << normalize_angle(asv_state(2))*RAD2DEG << std::endl;
+
 		phi_0 = PHI_0(k) - normalize_angle(asv_state(2));
+		std::cout << "phi_0 " << phi_0*RAD2DEG << std::endl;
 		phi_0 = normalize_angle(phi_0);
+		std::cout << "phi_0 after " << phi_0*RAD2DEG << std::endl;
+		
 
 		//std::cout << "relative bearing : " << phi_0*RAD2DEG << std::endl;
 
@@ -490,7 +502,7 @@ namespace DUNE
 			SB_0(k) = phi_0 >= 0;  // ENU: < 0, NED (MR): >= 0
 		}
 		obst_vect[k]->SB_0 = (int) SB_0(k);
-		//std::cout << "SB_0 : " << SB_0(k) << std::endl;
+		std::cout << "SB_0 : " << SB_0(k) << std::endl;
 
  		v_o(0) = obst_vect[k]->u_[0];
 		v_o(1) = obst_vect[k]->v_[0];
@@ -501,14 +513,19 @@ namespace DUNE
 		// obstacle ahead of asv
 		//std::cout << "AH_ : " << obst_vect[k]->AH_0 << std::endl;
 		double los_phi = acos(v_s.dot(los_0)/v_s.norm());
+		//double los_phi = phi_0;
 		std::cout << "LOS_PHI : " << los_phi*RAD2DEG << std::endl;
-		if (obst_vect[k]->AH_0 > -1 && los_phi > PHI_AH_*DEG2RAD && los_phi < 112.5*DEG2RAD){ //90.0?
+		if (obst_vect[k]->AH_0 > -1 && los_phi > PHI_AH_*DEG2RAD && los_phi < 90.0*DEG2RAD){ //112.5?
+		{
 			AH_0(k) = obst_vect[k]->AH_0;
+			std::cout << "NONONO" << std::endl;
+		}
 		}else{
 			AH_0(k) = v_s.dot(los_0) > cos(PHI_AH_*DEG2RAD)*v_s.norm(); // 90.0 or PHI_AH_?
+			std::cout << "SISISI" << std::endl;
 		}
 		obst_vect[k]->AH_0 = (int) AH_0(k);
-		//std::cout << "AH_0 : " << AH_0(k) << std::endl;
+		std::cout << "AH_0 : " << AH_0(k) << std::endl;
 
 
 		// asv overtaking obstacle
@@ -651,6 +668,8 @@ namespace DUNE
 						// (bool)AH_0(k) and (bool)OBS_PASSED_0(k) unused?
 						cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, (bool)SB_0(k), (bool)CRG_0(k), (bool)OTG_0(k), (bool)OT_0(k), (bool)HOT_0(k), DIST_0(k), u_d, l, ik_return_to_path); //static_obst
 
+						//std::cout << "SPEED " << P_ca_[j] << " AND OFFSET " << Chi_ca_[i]*RAD2DEG << " HAVE COST " << cost_k << std::endl;
+						
 						if(guidance_strategy >= 2 && cp == 0 && Chi_ca_[i] != 0)
 							cost_k = cost_k + 0.1*n_cp; // (a small) path deviation penalty
 

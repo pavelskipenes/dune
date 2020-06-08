@@ -24,7 +24,7 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Alberto Dallolio                                                     *
+// Author: Alberto Dallolio                                                 *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -37,7 +37,7 @@ namespace Control
 {
   namespace ASV
   {
-    namespace HeadingController
+    namespace Autopilot
     {
       using DUNE_NAMESPACES;
 
@@ -47,8 +47,10 @@ namespace Control
         float act_max;
         //! Ramp actuation limit when the value is rising in actuation per second
         float act_ramp;
-        //! PID gains for heading controller.
-        std::vector<float> yaw_gains;
+        //! PID gains for heading controller during turn.
+        std::vector<float> yaw_gains_turn;
+        //! PID gains for heading controller during transect.
+        std::vector<float> yaw_gains_trans;
         //! Log the size of each PID parcel
         bool log_parcels;
         //! Filter activation variables.
@@ -75,6 +77,18 @@ namespace Control
         int course_thr;
         //! GPS entity label.
         std::string elabel_gps;
+        //! Enable gain scheduling.
+        bool en_gain_sch;
+        //! Enable thruster usage.
+        bool en_thrust;
+        //! Enable thruster usage during turns.
+        bool en_thrust_turn;
+        //! Maximum Motor thrust.
+        float max_thrust;
+        //! Minimun SOG for thrusting.
+        double min_sog;
+        //! User defined thrust assistance.
+        double thrust_assist;
       };
 
       struct Task: public Tasks::Task
@@ -84,9 +98,7 @@ namespace Control
         //! YAW PID controller
         DiscretePID m_yaw_pid;
         //! Control Parcels for yaw controller
-        IMC::ControlParcel m_parcel_yaw;
-        //! Desired course from Path Controller.
-        float m_desired_yaw_pc;
+        IMC::ControlParcel m_parcel;
         //! Desired course used by PID.
         float m_desired_yaw;
         //! Previous Desired course used by PID.
@@ -125,8 +137,20 @@ namespace Control
         double m_tstep;
         //! Chopping boolean.
         bool m_chopping;
-        //! Indicated desired heading update from Path Controller.
+        //! Turning for filtering.
+        bool m_turning_filt;
+        //! A turn is happening.
+        bool m_turning;
+        //! Desired Heading is arrived.
         bool m_des_head_arrived;
+        //! Current motor actuation.
+        IMC::SetThrusterActuation m_act_thrust;
+        //! Speed Over Ground.
+        double m_sog;
+        //! Enable gain scheduling.
+        bool m_en_gain_sch;
+        //! Thrust during assistance.
+        double m_thrust_assistance;
         //! Task arguments.
         Arguments m_args;
 
@@ -137,16 +161,48 @@ namespace Control
           m_wave_freq(0.0),
           m_tstep(0.0),
           m_chopping(false),
-          m_des_head_arrived(false)
+          m_turning_filt(false),
+          m_turning(false),
+          m_des_head_arrived(false),
+          m_en_gain_sch(false)
         {
+          param("Enable Gain Scheduling", m_args.en_gain_sch)
+          .defaultValue("true")
+          .description("Enable gain scheduling during turn");
+
+          param("Enable Thrust Assistance", m_args.en_thrust)
+          .defaultValue("true")
+          .description("Assist navigation with thruster");
+          
+          param("Enable Thrust During Turn", m_args.en_thrust_turn)
+          .defaultValue("true")
+          .description("Assist the turn using the thruster");
+
+          param("Thrust Assistance", m_args.thrust_assist)
+          .defaultValue("0.75")
+          .description("Percentage of thrust assistance");
+
+          param("Maximum Thrust Actuation", m_args.max_thrust)
+          .defaultValue("1.0")
+          .description("Maximum Motor Command");
+
+          param("Minimum Speed for Thrust", m_args.min_sog)
+          .defaultValue("0.3")
+          .description("Speed [m/s] below which thruster is used");
+
           param("Maximum Rudder Actuation", m_args.act_max)
           .defaultValue("1.0")
           .description("Maximum Rudder Command");
 
-          param("Yaw PID Gains", m_args.yaw_gains)
+          param("Yaw PID Gains Transect", m_args.yaw_gains_trans)
           .defaultValue("")
           .size(3)
-          .description("PID gains for YAW controller");
+          .description("PID gains for YAW controller during straight line");
+
+          param("Yaw PID Gains Turning", m_args.yaw_gains_turn)
+          .defaultValue("")
+          .size(3)
+          .description("PID gains for YAW controller during turn");
 
           param("Ramp Actuation Limit", m_args.act_ramp)
           .defaultValue("0.0")
@@ -219,7 +275,7 @@ namespace Control
 
           param("Desired Course Difference Threshold", m_args.course_thr)
           .defaultValue("30")
-          .description("Incremental portioning during desired course change.");
+          .description("Minimum desired course change that triggers low-pass filtring.");
 
           param("Desired turning rate", m_args.desired_yaw_der)
           .defaultValue("0.0")
@@ -237,21 +293,31 @@ namespace Control
           bind<IMC::ControlLoops>(this);
           bind<IMC::EstimatedFreq>(this);
           bind<IMC::AngularVelocity>(this);
+          bind<IMC::GpsFix>(this);
         }
 
         void
         onUpdateParameters(void)
         {
 
-          if (paramChanged(m_args.yaw_gains) ||
+          if (paramChanged(m_args.yaw_gains_trans) ||
               paramChanged(m_args.log_parcels))
           {
             reset();
-            setup();
+            setup(m_args.yaw_gains_trans);
+          }
+
+          if (paramChanged(m_args.yaw_gains_turn))
+          {
+            reset();
+            setup(m_args.yaw_gains_turn);
           }
 
           if(paramChanged(m_args.ext_filter_type))
             m_ext_filter_type = m_args.ext_filter_type;
+
+          if(paramChanged(m_args.thrust_assist))
+            m_thrust_assistance = m_args.thrust_assist;
 
           if(paramChanged(m_args.course_des_filering))
           {
@@ -260,6 +326,9 @@ namespace Control
             else
               m_chopping = false;
           }
+
+          if(paramChanged(m_args.en_gain_sch))
+            m_en_gain_sch = m_args.en_gain_sch;
 
           if(paramChanged(m_args.lp_filtering) ||
              paramChanged(m_args.n_filtering) ||
@@ -294,7 +363,7 @@ namespace Control
           if (m_args.log_parcels)
           {
             std::string label = getEntityLabel();
-            m_parcel_yaw.setSourceEntity(reserveEntity(label + " - Yaw Parcel"));
+            m_parcel.setSourceEntity(reserveEntity(label + " - Yaw Parcel"));
           }
         }
 
@@ -328,27 +397,36 @@ namespace Control
 
         //! Setup PIDs.
         void
-        setup(void)
+        setup(std::vector<float> gains)
         {
-          m_yaw_pid.setGains(m_args.yaw_gains);
-          m_yaw_pid.setOutputLimits(-m_args.act_max, m_args.act_max);	// Anti-windup (was not set before sea trials) and not yet been tested.
+          m_yaw_pid.setGains(gains);
+          m_yaw_pid.setOutputLimits(-m_args.act_max, m_args.act_max);	// Anti-windup
+          //float ki_sat = 1/gains[1];
+          //m_yaw_pid.setIntegralLimits(ki_sat);
+
+          debug("SETTING GAINS: %0.3f, %0.3f, %0.3f", gains[0], gains[1], gains[2]);
 
           if (m_args.log_parcels)
           {
-            m_yaw_pid.enableParcels(this, &m_parcel_yaw);
+            m_yaw_pid.enableParcels(this, &m_parcel);
           }
         }
 
         void
         onResourceInitialization(void)
         {
+          // Reset Heading Controller.
           reset();
+
+          // Set initial thruster speed to zero.
+          m_act_thrust.id = 0;
+          m_act_thrust.value = 0.0;
         }
 
         void
         consume(const IMC::Abort* msg)
         {
-          if (msg->getDestination() != getSystemId())
+          if (msg->getSource() != getSystemId())
             return;
 
           // Redundancy, in case everything else fails
@@ -359,7 +437,7 @@ namespace Control
         void
         consume(const IMC::AngularVelocity* msg)
         {
-          if (msg->getDestination() != getSystemId() || msg->getSourceEntity() != m_gps_eid)
+          if (msg->getSource() != getSystemId() || msg->getSourceEntity() != m_gps_eid)
             return;
 
           m_angvel.z = msg->z;
@@ -390,18 +468,18 @@ namespace Control
         void
         consume(const IMC::EstimatedState* msg)
         {
-		      // Controller not active. Use current yaw
+		      // Controller not active use current yaw.
           if (!isActive())
           {
             m_desired_yaw = msg->psi;
             return;
           }
 
-          if(m_desired_yaw_pc == 0.0000)
+          /*if(m_desired_yaw == 0.0000)
           {
-            spew("PATH CONTROLLER NOT READY");
+            trace("PATH CONTROLLER NOT READY");
             return;
-          }
+          }*/
 
           // Compute Time Delta.
           m_tstep = m_delta.getDelta();
@@ -409,35 +487,9 @@ namespace Control
           if (m_tstep < 0.0)
             return;
 
-          // Filtering the desired course in order to smoothen out step changes.
-          if(m_chopping && m_des_head_arrived)
-          {
-            double course_diff = std::fabs(m_desired_yaw_pc - m_desired_yaw_prev);
-            spew("COURSE DIFF: %f", Angles::degrees(course_diff));
-            if(course_diff > Angles::radians(m_args.course_thr) && m_desired_yaw_pc > m_desired_yaw_prev)
-            {
-              spew("Positive Chopping!");
-              double increase = (double) m_args.chop/100;
-              m_desired_yaw = m_desired_yaw_prev + course_diff*(increase);
-              spew("INCREASE %f", increase);
-              spew("COURSE INSTEAD: %f", Angles::degrees(m_desired_yaw));
-            } else if(course_diff > Angles::radians(m_args.course_thr) && m_desired_yaw_pc < m_desired_yaw_prev)
-            {
-              spew("Negative Chopping!");
-              double decrease = (double) m_args.chop/100;
-              m_desired_yaw = m_desired_yaw_prev - course_diff*(decrease);
-              spew("DECREASE %f", decrease);
-              spew("COURSE INSTEAD: %f", Angles::degrees(m_desired_yaw));
-            } else
-              m_desired_yaw = m_desired_yaw_pc;
-            m_des_head_arrived = false;
-          } else
-            m_desired_yaw = m_desired_yaw_pc;
-
-		      // Course Error (From IMC::DesiredHeading)
+          // Course Error (From IMC::DesiredHeading)
           float err_yaw = Angles::normalizeRadian(m_desired_yaw - msg->psi);
-
-          spew("ERROR c: %f", Angles::degrees(err_yaw));
+          debug("COURSE ERROR: %f", Angles::degrees(err_yaw));
 
           // Derivative Error.
           float err_yaw_der = m_args.desired_yaw_der - m_angvel.z; //m_angvel.z may need to be filtered?
@@ -448,21 +500,13 @@ namespace Control
 
 		      //spew("AutoNaut - Rudder_cmd/m_act: %0.3f  Desired heading: %0.3f", m_act.value, c_degrees_per_radian*m_desired_yaw);			
           dispatchRudder(m_act.value, m_tstep);
+          //debug("Commanded Rudder Angle %ld", trimValue(roundToInteger(m_act.value*45*10), -45, 45));
 
-          /*//! Desired Rudder Angle
-      	  int16_t print_rudder;
-
-          print_rudder = roundToInteger(m_act.value*45*10);
-          print_rudder = trimValue(print_rudder, -45, 45);
-
-          //spew("ServoPosition value: %d", print_rudder);*/
-
-          //m_des_course.value = m_desired_yaw_filt;
-          //dispatch(m_des_course); // Dispatch course to see difference from Path Controller when filtered.
-
-          m_desired_yaw_prev = m_desired_yaw;
+          // Dispatch thrust command.
+          dispatchThrust();
 
           m_des_course_rate.value = m_args.desired_yaw_der;
+          dispatch(m_des_course_rate);
         }
 
         void
@@ -471,10 +515,94 @@ namespace Control
           if (!isActive())
             return;
 
-          m_desired_yaw_pc = msg->value;
-          spew("AutoNaut - Desired Course: %0.3f  ", Angles::degrees(msg->value));
-
           m_des_head_arrived = true;
+
+          m_desired_yaw = msg->value;
+          debug("DES_COURSE FROM PC: %0.3f  ", Angles::degrees(m_desired_yaw));
+          //trace("NORMALIZED DES_COURSE FROM PC: %0.3f  ", Angles::degrees(m_desired_yaw));
+
+          // Check if waypoint switch has occurred with significant reference change.
+          double course_diff = std::fabs(m_desired_yaw - m_desired_yaw_prev);
+          trace("COURSE DIFF: %f", Angles::degrees(course_diff));
+          double course_diff_norm = std::fabs(normalize_angle(course_diff));
+          debug("NORMALIZED COURSE DIFF: %f", Angles::degrees(course_diff_norm));
+
+          if(course_diff_norm > Angles::radians(m_args.course_thr))
+            m_turning = true;
+
+          double offset = (double) m_args.chop/100;
+
+          if(m_chopping && course_diff_norm > Angles::radians(m_args.course_thr) && course_diff>=Angles::radians(180))
+          {
+            if(m_en_gain_sch && !m_turning_filt)
+            {
+              //! Reset Heading Controller.
+              reset();
+              //! Re-configure PID if adaptive autopilot is chosen.
+              setup(m_args.yaw_gains_turn);
+            }
+            m_turning_filt = true;
+
+            if(m_desired_yaw > m_desired_yaw_prev)
+            {
+              if(m_desired_yaw_prev<0)
+              {
+                m_desired_yaw = m_desired_yaw_prev - (course_diff_norm*offset);
+                debug("Negative Chopping! DECREASE -%f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_yaw));
+              }
+              else
+              {
+                m_desired_yaw = m_desired_yaw_prev + (course_diff_norm*offset);
+                debug("Negative Chopping! DECREASE %f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_yaw));
+              }
+            } else if(m_desired_yaw < m_desired_yaw_prev)
+            {
+              m_desired_yaw = normalize_angle(m_desired_yaw_prev + (course_diff_norm*offset));
+              debug("Positive Chopping! INCREASE %f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_yaw));
+            }
+          } else if(m_chopping && course_diff_norm > Angles::radians(m_args.course_thr) && course_diff<Angles::radians(180))
+          {
+            if(m_en_gain_sch && !m_turning_filt)
+            {
+              //! Reset Heading Controller.
+              reset();
+              //! Re-configure PID if adaptive autopilot is chosen.
+              setup(m_args.yaw_gains_turn);
+            }
+            m_turning_filt = true;
+
+            if(m_desired_yaw > m_desired_yaw_prev)
+            {
+              m_desired_yaw = m_desired_yaw_prev + (course_diff_norm*offset);
+              debug("Positive Chopping! INCREASE %f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_yaw));
+            }
+            else if(m_desired_yaw < m_desired_yaw_prev)
+            {
+              m_desired_yaw = m_desired_yaw_prev - (course_diff_norm*offset);
+              debug("Negative Chopping! DECREASE %f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_yaw));
+            }
+          } else if(course_diff_norm < Angles::radians(m_args.course_thr))
+          {
+            if(m_en_gain_sch && m_turning_filt)
+            {
+              debug("TURN IS FINISHED - RESTORING TRANSECT PID GAINS");
+              //! Reset Heading Controller.
+              reset();
+              //! Re-configure PID if adaptive autopilot is chosen.
+              setup(m_args.yaw_gains_trans);
+            }
+            m_turning_filt = false;
+            m_turning = false;
+            trace("NOT TURNING!");
+          }
+          m_desired_yaw_prev = m_desired_yaw;
+        }
+
+        double normalize_angle(double angle)
+        {
+          while(angle <= -M_PI) angle += 2*M_PI;
+          while (angle > M_PI) angle -= 2*M_PI;
+          return angle;
         }
 
         void
@@ -512,7 +640,11 @@ namespace Control
           debug(isActive() ? DTR("enabling") : DTR("disabling"));
 
           if (!isActive())
+          {
             reset();
+            m_act_thrust.value = 0.0;
+            dispatch(m_act_thrust);
+          }
         }
 
         //! Dispatch to bus ServoPosition message
@@ -581,6 +713,46 @@ namespace Control
           
           m_last_act.value = m_act.value;
           //spew("AutoNaut - Rudder dispatched: %0.3f  ", m_act.value);
+        }
+
+        void
+        consume(const IMC::GpsFix* msg)
+        {
+          if(msg->getSource() != getSystemId() || msg->getSourceEntity() != m_gps_eid)
+            return;
+
+          m_sog = msg->sog;
+
+          if(!m_des_head_arrived)
+          {
+            m_desired_yaw_prev = msg->cog;
+            trace("DES COURSE PREV %.3f", Angles::degrees(m_desired_yaw_prev));
+          }
+            
+        }
+
+        //! Dispatch to bus SetThrusterActuation message
+        void
+        dispatchThrust()
+        {
+          double value;
+          // Use thruster if thruster is enabled, turning assistance is enabled and vessel is actually turning.
+          if(m_args.en_thrust_turn && (m_turning_filt || m_turning)) //m_args.en_thrust && 
+          {
+            value = m_thrust_assistance;
+            debug("Assisting the turn: thrust %.3f", value);
+          } else if(m_args.en_thrust && !m_turning && m_sog < m_args.min_sog) // or if thruster is enabled, vessel is not turning, but speed is very low.
+          {
+            value = m_thrust_assistance;
+            debug("Assisting the transect: thrust %.3f", value);
+          } else
+            value = 0.0;
+          
+          m_act_thrust.value = trimValue(value, -m_args.max_thrust, m_args.max_thrust);
+
+          dispatch(m_act_thrust);
+
+          //spew("SetThrusterActuation values: %f, %d", m_act_thrust.value, trimValue(roundToInteger(m_act.value * 100), -100, 100));
         }
 
         void

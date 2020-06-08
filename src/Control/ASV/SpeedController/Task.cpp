@@ -82,6 +82,8 @@ namespace Control
         uint8_t m_speed_units;
         //! Time of last estimated state message.
         Delta m_delta;
+        //! Desired course from Path Controller.
+        float m_desired_yaw_pc;
         //! RPM PID controller
         DiscretePID m_rpm_pid;
         //! MPS PID controller
@@ -105,6 +107,7 @@ namespace Control
 
         Task(const std::string& name, Tasks::Context& ctx):
           Tasks::Task(name, ctx),
+          m_desired_speed(0.0),
           m_previous_rpm(0.0),
           m_scope_ref(0)
         {
@@ -164,9 +167,8 @@ namespace Control
 
           param("Log PID Parcels", m_args.log_parcels)
           .defaultValue("false")
-          .description("Log the size of each PID parcel");       
+          .description("Log the size of each PID parcel");
 
-          m_desired_speed = 0.0;
           m_speed_units = IMC::SUNITS_PERCENTAGE;
 
           // Initialize entity state.
@@ -176,6 +178,7 @@ namespace Control
           bind<IMC::Abort>(this);
           bind<IMC::Rpm>(this);
           bind<IMC::DesiredSpeed>(this);
+          bind<IMC::DesiredHeading>(this);
           bind<IMC::ControlLoops>(this);
           bind<IMC::EstimatedState>(this);
         }
@@ -277,6 +280,15 @@ namespace Control
         }
 
         void
+        consume(const IMC::DesiredHeading* msg)
+        {
+          if (!isActive())
+            return;
+
+          m_desired_yaw_pc = msg->value;
+        }
+
+        void
         consume(const IMC::DesiredSpeed* msg)
         {
           if (!isActive())
@@ -284,6 +296,8 @@ namespace Control
 
           m_desired_speed = msg->value;
           m_speed_units = msg->speed_units;
+
+          spew("Desired Speed: %f", m_desired_speed);
         }
 
         void
@@ -296,6 +310,13 @@ namespace Control
           if (!isActive())
           {
             m_desired_speed = msg->u;
+            return;
+          }
+
+          // Do not use the thrust if the Path Controller has not produced a desired heading.
+          if(m_desired_yaw_pc == 0.0000)
+          {
+            spew("PATH CONTROLLER NOT READY ------------- SPEED");
             return;
           }
 

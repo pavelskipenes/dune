@@ -24,44 +24,24 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Ricardo Martins                                                  *
-//***************************************************************************
-// Automatically generated.                                                 *
-//***************************************************************************
-// IMC XML MD5: f03569c742b632df430f37f79f94d0ad                            *
+// Author: Alberto Dallolio                                                 *
 //***************************************************************************
 
-#ifndef DUNE_IMC_HEADER_HPP_INCLUDED_
-#define DUNE_IMC_HEADER_HPP_INCLUDED_
-
-// DUNE headers.
-#include <DUNE/Config.hpp>
+#ifndef DUNE_SITUATIONALAWARENESS_HPP_INCLUDED_
+#define DUNE_SITUATIONALAWARENESS_HPP_INCLUDED_
 
 namespace DUNE
 {
-  namespace IMC
-  {
-    //! Header format.
-    struct Header
-    {
-      //! Synchronization Number.
-      uint16_t sync;
-      //! Message Identification Number.
-      uint16_t mgid;
-      //! Message size.
-      uint16_t size;
-      //! Time stamp.
-      fp64_t timestamp;
-      //! Source Address.
-      uint16_t src;
-      //! Source Entity.
-      uint8_t src_ent;
-      //! Destination Address.
-      uint16_t dst;
-      //! Destination Entity.
-      uint8_t dst_ent;
-    };
-  }
+  //! %Math routines and classes.
+  namespace SituationalAwareness
+  { }
 }
+
+#include <DUNE/SituationalAwareness/PointsOfInterest.hpp>
+#include <DUNE/SituationalAwareness/DepareData.hpp>
+#include <DUNE/SituationalAwareness/PathPlanner.hpp>
+#include <DUNE/SituationalAwareness/NauticalCharts.hpp>
+#include <DUNE/SituationalAwareness/LocationData.hpp>
+
 
 #endif

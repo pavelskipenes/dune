@@ -41,12 +41,24 @@ namespace Monitors
 
     struct Arguments
     {
+      //! Panels power entity label.
+      std::string elabel_panels;
+      //! System power entity label.
+      std::string elabel_system;
+      //! Thruster power entity label.
+      std::string elabel_thruster;
       //! Reports periodicity
       unsigned report_periodicity;
     };
 
     struct Task: public DUNE::Tasks::Periodic
     {
+      //! GPS entity eid.
+      int m_panels_eid;
+      //! IMU entity eid.
+      int m_system_power_eid;
+      //! Yaw entity eid.
+      int m_thruster_power_eid;
       //! Emergency message.
       std::string m_emsg;
       //! Fuel level.
@@ -57,12 +69,26 @@ namespace Monitors
       float m_bat_voltage;
       //! Executing plan's progress.
       float m_progress;
+      //! PowerSettings.
+      IMC::PowerSettings m_pwr_settings;
       //! Are we executing a plan
       bool m_in_mission;
       //! Iridium request identifier.
       unsigned m_req;
       //! Vehicle State
       uint8_t m_vstate;
+      //! Speed Over Ground.
+      float m_sog;
+      //! Speed Over Ground.
+      float m_cog;
+      //! Satellites in view.
+      int m_sat;
+      //! Panels generated power.
+      double m_panels_power;
+      //! System consumed power.
+      double m_system_power;
+      //! Thruster power.
+      double m_thruster_power;
       //! Communications timer.
       Counter<double> m_timer;
       //! Task arguments.
@@ -73,6 +99,15 @@ namespace Monitors
         Tasks::Periodic(name, ctx),
         m_req(0)
       {
+        param("Entity Label - Panels Power", m_args.elabel_panels)
+        .description("Entity label of 'GpsFix' and 'GroundVelocity' messages");
+
+        param("Entity Label - System Power", m_args.elabel_system)
+        .description("Entity label of 'EulerAngles' and 'AngularVelocity' messages");
+
+        param("Entity Label - Thruster Power", m_args.elabel_thruster)
+        .description("Entity label of 'EulerAngles' messages (field 'psi')");
+
         paramActive(Tasks::Parameter::SCOPE_IDLE,
                     Tasks::Parameter::VISIBILITY_USER);
 
@@ -88,6 +123,9 @@ namespace Monitors
         bind<IMC::PlanControlState>(this);
         bind<IMC::VehicleState>(this);
         bind<IMC::Voltage>(this);
+        bind<IMC::PowerSettings>(this);
+        bind<IMC::Power>(this);
+        bind<IMC::IridiumReport>(this);
 
         m_fuel = -1.0;
         m_fuel_conf = -1.0;
@@ -102,6 +140,57 @@ namespace Monitors
       {
         if (paramChanged(m_args.report_periodicity))
          m_timer.setTop(m_args.report_periodicity);
+      }
+
+      void
+      onEntityResolution(void)
+      {
+        try
+        {
+          m_panels_eid = resolveEntity(m_args.elabel_panels);
+        }
+        catch (...)
+        {
+          m_panels_eid = 0;
+        }
+
+        try
+        {
+          m_system_power_eid = resolveEntity(m_args.elabel_system);
+        }
+        catch (...)
+        {
+          m_system_power_eid = 0;
+        }
+
+        try
+        {
+          m_thruster_power_eid = resolveEntity(m_args.elabel_thruster);
+        }
+        catch (...)
+        {
+          m_thruster_power_eid = 0;
+        }
+      }
+
+      //! From Actuators/CR6
+      void
+      consume(const IMC::Power* msg)
+      {
+        if(msg->getSourceEntity() == m_panels_eid)
+          m_panels_power = msg->value;
+        else if(msg->getSourceEntity() == m_system_power_eid)
+          m_system_power = msg->value;
+        else if(msg->getSourceEntity() == m_thruster_power_eid)
+          m_thruster_power = msg->value;
+      }
+
+      //! From Actuators/CR6
+      void
+      consume(const IMC::IridiumReport* msg)
+      {
+        // Set Iridium State Report frequency as commanded from shore (via Iridium itself).
+        m_timer.setTop(msg->frequency);
       }
 
       void
@@ -133,6 +222,22 @@ namespace Monitors
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
       }
 
+      //! Consume a PowerSettings Message.
+      void
+      consume(const IMC::PowerSettings* msg)
+      {
+        std::string ent = resolveEntity(msg->getSourceEntity()).c_str();
+        if(ent.compare("Relay Power Settings") == 0)
+        {
+          m_pwr_settings.l2 = msg->l2;
+          m_pwr_settings.l3 = msg->l3;
+          m_pwr_settings.iridium = msg->iridium;
+          m_pwr_settings.modem = msg->modem;
+          m_pwr_settings.pumps = msg->pumps;
+          m_pwr_settings.vhf = msg->vhf;
+        }      
+      }
+
       void
       consume(const IMC::GpsFix* msg)
       {
@@ -146,15 +251,22 @@ namespace Monitors
           double lon_min;
           Angles::convertDecimalToDM(Angles::degrees(msg->lon), lon_deg, lon_min);
 
+          m_sog = msg->sog;
+          m_cog = msg->cog;
+          m_cog = Angles::degrees(m_cog);
+          m_sat = msg->satellites;
+
+          double consumed_power = m_system_power + m_thruster_power;
+
           Time::BrokenDown bdt;
 
           m_emsg = String::str(
-              "(%s) %02u:%02u:%02u / %d %f, %d %f / f:%d v:%d c:%d / s: %c",
-              getSystemName(), bdt.hour, bdt.minutes, bdt.seconds, lat_deg,
-              lat_min, lon_deg, lon_min, (int)m_fuel, (int)m_bat_voltage,
-              (int)m_fuel_conf, vehicleStateChar(m_vstate));
+              "%02u:%02u:%02u / %d %f,%d %f / b:%d c:%d s:%.2f sat:%d pp:%d cp:%d / s:%c / %d%d%d%d%d%d",
+              bdt.hour, bdt.minutes, bdt.seconds, lat_deg, //getSystemName(), 
+              lat_min, lon_deg, lon_min, (int)m_bat_voltage, (int)m_cog,
+              m_sog, m_sat, (int)m_panels_power, (int)consumed_power, vehicleStateChar(m_vstate), m_pwr_settings.l2, m_pwr_settings.l3, m_pwr_settings.iridium, m_pwr_settings.modem, m_pwr_settings.pumps, m_pwr_settings.vhf);
 
-          m_emsg += m_in_mission ? String::str(" / p:%d", (int)m_progress) : "";
+          //m_emsg += m_in_mission ? String::str(" / p:%d", (int)m_progress) : "";
         }
       }
 

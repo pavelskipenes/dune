@@ -216,7 +216,8 @@ namespace Transports
       void
       onUpdateParameters(void)
       {
-        m_iridium_timer.setTop(m_args.iridium_period);
+        if(paramChanged(m_args.iridium_period))
+          m_iridium_timer.setTop(m_args.iridium_period);
       }
 
       void

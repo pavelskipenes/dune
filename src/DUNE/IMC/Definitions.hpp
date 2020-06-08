@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 9ccf6c5bd15323270be690da48354dfd                            *
+// IMC XML MD5: f03569c742b632df430f37f79f94d0ad                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -26071,8 +26071,6 @@ namespace DUNE
     public:
       //! Angle.
       fp32_t angle;
-      //! Direction.
-      std::string direction;
       //! Speed.
       fp32_t speed;
 
@@ -26126,10 +26124,67 @@ namespace DUNE
         return 8;
       }
 
-      unsigned
-      getVariableSerializationSize(void) const
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Absolute Wind.
+    class AbsoluteWind: public Message
+    {
+    public:
+      //! Direction.
+      fp32_t dir;
+      //! Speed.
+      fp32_t speed;
+
+      static uint16_t
+      getIdStatic(void)
       {
-        return IMC::getSerializationSize(direction);
+        return 919;
+      }
+
+      AbsoluteWind(void);
+
+      AbsoluteWind*
+      clone(void) const
+      {
+        return new AbsoluteWind(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return AbsoluteWind::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "AbsoluteWind";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 8;
       }
 
       void
@@ -26718,6 +26773,468 @@ namespace DUNE
 
       void
       setDestinationEntityNested(uint8_t value__);
+    };
+
+    //! TBR Fish Tag.
+    class TBRFishTag: public Message
+    {
+    public:
+      //! Transmit Protocol.
+      enum TransmitProtocolEnum
+      {
+        //! R256.
+        TBR_R256 = 1,
+        //! R04K.
+        TBR_R04K = 2,
+        //! R64K.
+        TBR_R64K = 4,
+        //! R01M.
+        TBR_R01M = 5,
+        //! S256.
+        TBR_S256 = 6,
+        //! S64K.
+        TBR_S64K = 3,
+        //! HS256.
+        TBR_HS256 = 7,
+        //! DS256.
+        TBR_DS256 = 8
+      };
+
+      //! TBR serial number.
+      uint32_t serial_no;
+      //! UNIX Timestamp.
+      uint32_t unix_timestamp;
+      //! Millisecond.
+      uint16_t millis;
+      //! Transmit Protocol.
+      uint8_t trans_protocol;
+      //! Transmitter ID.
+      uint32_t trans_id;
+      //! Transmitter Data.
+      uint16_t trans_data;
+      //! Signal to Noise Ratio.
+      uint8_t snr;
+      //! Transmitter Detection Frequency.
+      uint8_t trans_freq;
+      //! Receiver Memory Address.
+      uint16_t recv_mem_addr;
+      //! Latitude (WGS-84).
+      fp64_t lat;
+      //! Longitude (WGS-84).
+      fp64_t lon;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 2007;
+      }
+
+      TBRFishTag(void);
+
+      TBRFishTag*
+      clone(void) const
+      {
+        return new TBRFishTag(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return TBRFishTag::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "TBRFishTag";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 37;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! TBR Sensor Reading.
+    class TBRSensor: public Message
+    {
+    public:
+      //! TBR serial number.
+      uint32_t serial_no;
+      //! UNIX Timestamp.
+      uint32_t unix_timestamp;
+      //! Temperature.
+      fp32_t temperature;
+      //! Average noise level.
+      uint8_t avg_noise_level;
+      //! Peak noise level,.
+      uint8_t peak_noise_level;
+      //! Receiver listening frequency.
+      uint8_t recv_listen_freq;
+      //! Receiver Memory Address.
+      uint16_t recv_mem_addr;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 2008;
+      }
+
+      TBRSensor(void);
+
+      TBRSensor*
+      clone(void) const
+      {
+        return new TBRSensor(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return TBRSensor::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "TBRSensor";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 17;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Iridium State Reports.
+    class IridiumReport: public Message
+    {
+    public:
+      //! Frequency.
+      uint32_t frequency;
+      //! Information.
+      std::string info;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 2009;
+      }
+
+      IridiumReport(void);
+
+      IridiumReport*
+      clone(void) const
+      {
+        return new IridiumReport(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return IridiumReport::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "IridiumReport";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 4;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(info);
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! L3 Scientific Sensors.
+    class ScienceSensors: public Message
+    {
+    public:
+      //! ADCP.
+      int8_t adcp;
+      //! ADCP duration.
+      uint32_t adcp_dur;
+      //! ADCP activation frequency.
+      uint32_t adcp_fr;
+      //! CTD.
+      int8_t ctd;
+      //! CTD duration.
+      uint32_t ctd_dur;
+      //! CTD activation frequency.
+      uint32_t ctd_fr;
+      //! OPTODE.
+      int8_t opt;
+      //! OPTODE duration.
+      uint32_t opt_dur;
+      //! OPTODE activation frequency.
+      uint32_t opt_fr;
+      //! TBLive.
+      int8_t tbl;
+      //! TBLive duration.
+      uint32_t tbl_dur;
+      //! TBLive activation frequency.
+      uint32_t tbl_fr;
+      //! EcoPuck.
+      int8_t eco;
+      //! EcoPuck duration.
+      uint32_t eco_dur;
+      //! EcoPuck activation frequency.
+      uint32_t eco_fr;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 2010;
+      }
+
+      ScienceSensors(void);
+
+      ScienceSensors*
+      clone(void) const
+      {
+        return new ScienceSensors(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return ScienceSensors::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "ScienceSensors";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 45;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! AIS GPS.
+    class AisGpsFix: public Message
+    {
+    public:
+      //! Type.
+      enum TypeEnum
+      {
+        //! Stand Alone.
+        GFT_STANDALONE = 0x00,
+        //! Differential.
+        GFT_DIFFERENTIAL = 0x01,
+        //! Dead Reckoning.
+        GFT_DEAD_RECKONING = 0x02,
+        //! Manual Input.
+        GFT_MANUAL_INPUT = 0x03,
+        //! Simulation.
+        GFT_SIMULATION = 0x04
+      };
+
+      //! Validity.
+      enum ValidityBits
+      {
+        //! Valid Date.
+        GFV_VALID_DATE = 0x0001,
+        //! Valid Time.
+        GFV_VALID_TIME = 0x0002,
+        //! Valid Position.
+        GFV_VALID_POS = 0x0004,
+        //! Valid Course Over Ground.
+        GFV_VALID_COG = 0x0008,
+        //! Valid Speed Over Ground.
+        GFV_VALID_SOG = 0x0010,
+        //! Valid Horizontal Accuracy Estimate.
+        GFV_VALID_HACC = 0x0020,
+        //! Valid Vertical Accuracy Estimate.
+        GFV_VALID_VACC = 0x0040,
+        //! Valid Horizontal Dilution of Precision.
+        GFV_VALID_HDOP = 0x0080,
+        //! Valid Vertical Dilution of Precision.
+        GFV_VALID_VDOP = 0x0100
+      };
+
+      //! Validity.
+      uint16_t validity;
+      //! Type.
+      uint8_t type;
+      //! UTC Year.
+      uint16_t utc_year;
+      //! UTC Month.
+      uint8_t utc_month;
+      //! UTC Day.
+      uint8_t utc_day;
+      //! UTC Time of Fix.
+      fp32_t utc_time;
+      //! Latitude WGS-84.
+      fp64_t lat;
+      //! Longitude WGS-84.
+      fp64_t lon;
+      //! Height above WGS-84 ellipsoid.
+      fp32_t height;
+      //! Number of Satellites.
+      uint8_t satellites;
+      //! Course Over Ground.
+      fp32_t cog;
+      //! Speed Over Ground.
+      fp32_t sog;
+      //! Horizontal Dilution of Precision.
+      fp32_t hdop;
+      //! Vertical Dilution of Precision.
+      fp32_t vdop;
+      //! Horizontal Accuracy Estimate.
+      fp32_t hacc;
+      //! Vertical Accuracy Estimate.
+      fp32_t vacc;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 920;
+      }
+
+      AisGpsFix(void);
+
+      AisGpsFix*
+      clone(void) const
+      {
+        return new AisGpsFix(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return AisGpsFix::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "AisGpsFix";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 56;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
   }
 }

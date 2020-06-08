@@ -78,6 +78,12 @@ namespace Sensors
       IMC::VesselWind m_vessel_wind;
       // Relative Wind speed and angle
       IMC::RelativeWind m_relative_wind;
+      // Relative Wind speed and angle
+      IMC::AbsoluteWind m_abs_wind;
+      // Vessel sog.
+      double m_sog;
+      // Vessel cog.
+      double m_cog;
       //! Task arguments.
       Arguments m_args;
 
@@ -101,6 +107,8 @@ namespace Sensors
         .description("Timeout for waiting UART data");
 
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
+
+        bind<IMC::GpsFix>(this);
       }
 
       //! Update internal state with new parameter values.
@@ -149,6 +157,16 @@ namespace Sensors
       onResourceRelease(void)
       {
         Memory::clear(m_uart);
+      }
+
+      void
+      consume(const IMC::GpsFix* msg)
+      {
+        if (msg->getDestination() != getSystemId())
+          return;
+        
+        m_sog = msg->sog;
+        m_cog = msg->cog;
       }
 
       void
@@ -257,16 +275,48 @@ namespace Sensors
           // Relative wind direction and speed
           if(sentenceID.compare("$WIVWR") == 0)
           {
+            double speed = std::atof(getToken(m_line, ",", 6).c_str());
+            m_relative_wind.speed = speed;
             double angle = std::atof(getToken(m_line, ",", 2).c_str());
             std::string dir = getToken(m_line, ",", 3);
-            double speed = std::atof(getToken(m_line, ",", 6).c_str());
-            m_relative_wind.angle = angle;
-            m_relative_wind.direction = dir;
-            m_relative_wind.speed = speed;
+            // Normalize relative wind angle 0-360deg wrt vessel’s line from stern to bow.
+            if(dir.compare("L")==0)
+              m_relative_wind.angle = 360.0 - angle;
+            else
+              m_relative_wind.angle = angle;
+
             dispatch(m_relative_wind);
-            spew("Relative wind dir. and speed - Angle: %.1f deg | Direction: %s | Speed: %.1f m/s", angle, dir.c_str(), speed);
+            spew("Relative wind ang. and speed - Angle: %.1f deg | Speed: %.1f m/s", m_relative_wind.angle, m_relative_wind.speed);
+
+            if(m_sog < 0.1) // m/s
+            {
+              // Relative and true winds can be considered equal.
+              m_abs_wind.dir = normalize_angle(Angles::degrees(m_cog) + m_relative_wind.angle);
+              m_abs_wind.speed = m_relative_wind.speed;
+            }
+            else
+            {
+              // Compute true wind: if vessel was stationary.
+              double true_wind_dir;
+              double true_wind_speed = std::sqrt(std::pow(m_relative_wind.speed,2) + std::pow(m_sog,2) - 2*m_relative_wind.speed*m_sog*std::cos(m_relative_wind.angle));
+              if(m_relative_wind.angle > 0.0 && m_relative_wind.angle <= 180.0)
+                true_wind_dir = std::acos((m_relative_wind.speed*std::cos(m_relative_wind.angle) - m_sog)/true_wind_speed);
+              else
+                true_wind_dir = -std::acos((m_relative_wind.speed*std::cos(m_relative_wind.angle) - m_sog)/true_wind_speed);
+
+              m_abs_wind.speed = true_wind_speed;
+              m_abs_wind.dir = normalize_angle(Angles::degrees(m_cog) + m_relative_wind.angle);
+            }
+            dispatch(m_abs_wind);
           }
-        }      
+        }
+      }
+
+      double normalize_angle(double angle)
+      {
+        while(angle <= -M_PI) angle += 2*M_PI;
+        while (angle > M_PI) angle -= 2*M_PI;
+        return angle;
       }
 
       //! Main loop.

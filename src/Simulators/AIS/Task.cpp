@@ -42,65 +42,106 @@ namespace Simulators
 
     struct Arguments
     {
-        std::string mmsi, name, callsign, type_and_cargo;
-        // length = A + B, width = C + D
-        double size_a, size_b, size_c, size_d;
+      //! Ais Info.
+      std::string mmsi, sensor_class, name, callsign;
+      //! Type and Cargo.
+      int type_and_cargo;
+      // length = A + B, width = C + D
+      double size_a, size_b, size_c, size_d, draught;
+      //! Ais5 Frequency.
+      double ais5_freq;
+      //! Ais123 Frequency.
+      double ais123_freq_static, ais123_freq_moving;
         
     };
 
     struct Task: public DUNE::Tasks::Task
     {
-      //! Obstacle State message
-      IMC::RemoteSensorInfo rsi;
-
-      //! Vessel ID.
-      std::string id_;
-      //! Vessel Name.
-      std::string name_;
+      //! Ais5 Frequency.
+      double m_ais5_freq;
+      //! AIS message type.
+      std::string m_msg_type;
+      //! Vessel Sensor Class.
+      std::string m_sensor_class;
+      //! Vessel MMSI.
+      std::string m_mmsi;
       //! Vessel callsign.
-      std::string callsign_;
+      std::string m_callsign;
+      //! Vessel Name.
+      std::string m_name;
+      //! Navigation Status.
+      int m_nav_status;
       //! Vessel type and cargo.
-      std::string type_and_cargo_;
+      int m_type_and_cargo;
       //! Size.
-      double a_,b_,c_,d_;
+      double m_a, m_b, m_c, m_d, m_draught;
+      //! Last Ais5 broadcast time.
+      double m_last_broadc_time_ais5;
+      //! Last Ais123 broadcast time - anchored.
+      double m_last_broadc_time_ais123s;
+      //! Last Ais123 broadcast time - under way.
+      double m_last_broadc_time_ais123m;
 
       //! Task arguments
       Arguments m_args;
 
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
-        id_(),
-        name_(),
-        callsign_(),
-        type_and_cargo_(),
-        a_(),
-        b_(),
-        c_(),
-        d_()
+        m_nav_status(0),
+        m_type_and_cargo(0),
+        m_last_broadc_time_ais5(0.0),
+        m_last_broadc_time_ais123s(0.0),
+        m_last_broadc_time_ais123m(0.0)
       {
+        param("Ais5 Broadcast Frequency", m_args.ais5_freq)
+        .units(Units::Second)
+        .defaultValue("5")
+        .description("Ais5 message frequency when vessel moves");
+
+        param("Ais123 Broadcast Frequency Static", m_args.ais123_freq_static)
+        .units(Units::Second)
+        .defaultValue("5")
+        .description("Ais123 message frequency when vessel is anchored");
+
+        param("Ais123 Broadcast Frequency Moving", m_args.ais123_freq_moving)
+        .units(Units::Second)
+        .defaultValue("10")
+        .description("Ais123 message frequency when vessel is moving");
+
+        param("Sensor Class", m_args.sensor_class)
+        .description("Vessel AIS Sensor Class");
+
         param("MMSI", m_args.mmsi)
         .description("Vessel MMSI");
 
-        param("Name", m_args.name)
-        .description("Vessel Name");
-
         param("Callsign", m_args.callsign)
         .description("Vessel VHF Radio Callsign");
+
+        param("Name", m_args.name)
+        .description("Vessel Name");        
 
         param("Type and Cargo", m_args.type_and_cargo)
         .description("Vessel Type and Cargo");
 
         param("Size A", m_args.size_a)
+        .units(Units::Meter)
         .description("Length to stern from the located AIS [m]");
      
 		    param("Size B", m_args.size_b)
+        .units(Units::Meter)
         .description("Length to bow from the located AIS [m]");
         
         param("Size C", m_args.size_c)
+        .units(Units::Meter)
         .description("Length to port from the located AIS [m]");
         
         param("Size D", m_args.size_d)
+        .units(Units::Meter)
         .description("Length to starboard from the located AIS [m]");
+
+        param("Draught", m_args.draught)
+        .units(Units::Meter)
+        .description("Draught [m]");
 
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
 
@@ -112,87 +153,126 @@ namespace Simulators
       void
       onUpdateParameters(void)
       {
+        if(paramChanged(m_args.ais5_freq))
+          m_ais5_freq = m_args.ais5_freq; 
+        if(paramChanged(m_args.sensor_class))
+          m_sensor_class = m_args.sensor_class;
         if(paramChanged(m_args.mmsi))
-          id_ = m_args.mmsi;
-        if(paramChanged(m_args.name))
-          name_ = m_args.name;
+          m_mmsi = m_args.mmsi;
         if(paramChanged(m_args.callsign))
-          callsign_ = m_args.callsign;
+          m_callsign = m_args.callsign;  
+        if(paramChanged(m_args.name))
+          m_name = m_args.name;
         if(paramChanged(m_args.type_and_cargo))
-          type_and_cargo_ = m_args.type_and_cargo;
+          m_type_and_cargo = m_args.type_and_cargo;
         if(paramChanged(m_args.size_a))
-          a_ = m_args.size_a;
+          m_a = m_args.size_a;
         if(paramChanged(m_args.size_b))
-          b_ = m_args.size_b;
+          m_b = m_args.size_b;
         if(paramChanged(m_args.size_c))
-          c_ = m_args.size_c;
+          m_c = m_args.size_c;
         if(paramChanged(m_args.size_d))
-          d_ = m_args.size_d;
+          m_d = m_args.size_d;
+        if(paramChanged(m_args.draught))
+          m_draught = m_args.draught;
       }
 
       //! Initialize resources.
       void
       onResourceInitialization(void)
       {
-        id_ = m_args.mmsi;
-        name_ = m_args.name;
-        callsign_ = m_args.callsign;
-        type_and_cargo_ = m_args.type_and_cargo;
-        a_ = m_args.size_a;
-        b_ = m_args.size_b;
-        c_ = m_args.size_c;
-        d_ = m_args.size_d;
+        m_sensor_class = m_args.sensor_class;
+        m_mmsi = m_args.mmsi;
+        m_callsign = m_args.callsign;
+        m_name = m_args.name;
+        m_type_and_cargo = m_args.type_and_cargo;
+        m_a = m_args.size_a;
+        m_b = m_args.size_b;
+        m_c = m_args.size_c;
+        m_d = m_args.size_d;
+        m_draught = m_args.draught;
       }
 
       void
       consume(const IMC::GpsFix* msg)
       {
-        rsi.lat = msg->lat;
-		    rsi.lon = msg->lon;
-		    rsi.heading = msg->cog;
+        double now = Clock::get();
 
-        // AIS Static Info.
-        rsi.id = id_;
-
-        // Trim sog from obstacles when standing still: avoid integration.
-        double sog = msg->sog;
-        if(sog < 0.01)
-          sog = 0.0;
-
-        std::ostringstream a;
-        a << a_*1000;
-        std::string a_send = a.str();
-
-        std::ostringstream b;
-        b << b_*1000;
-        std::string b_send = b.str();
-
-        std::ostringstream c;
-        c << c_*1000;
-        std::string c_send = c.str();
-
-        std::ostringstream d;
-        d << d_*1000;
-        std::string d_send = d.str();
-
-        std::ostringstream rsi_sog;
-        rsi_sog << sog*1000;
-        std::string rsi_sog_send = rsi_sog.str();
-
-        // String for tuple: rsi.data
-        std::ostringstream ais_data;
-        // SOG added here.
-        ais_data << "CALLSIGN=" << callsign_ << ";" << "NAME=" << name_ << ";" << "TYPE_AND_CARGO=" << type_and_cargo_ << ";" << "A=" << a_send << ";" << "B=" << b_send << ";" << "C=" << c_send << ";" << "D=" << d_send << ";" << "SOG=" << rsi_sog_send; //<< "MMSI=" << msg.mmsi << ";"
-        rsi.data = ais_data.str();
-
-        spew("Obstacle %s info: (lon,lat,cog,sog) %f %f %f %s",
-                     rsi.id.c_str(), c_degrees_per_radian*rsi.lon, c_degrees_per_radian*rsi.lat, Angles::degrees(rsi.heading), rsi_sog_send.c_str());
-        spew("AIS TUPLE = %s",rsi.data.c_str());
-
-        if(msg->lat != 0.0 && msg->lon != 0.0)
+        // Send Ais5.
+        if(msg->sog > 1 && (now > m_last_broadc_time_ais5 + m_ais5_freq))
         {
-          //rsi.setDestination(0x8803);
-          dispatch(rsi);
+          //! Obstacle State message
+          IMC::AisInfo ais_msg_5;
+          ais_msg_5.msg_type = "5";
+          ais_msg_5.mmsi = m_mmsi;
+          ais_msg_5.callsign = m_callsign;
+          ais_msg_5.name = m_name;
+          ais_msg_5.type_and_cargo = m_type_and_cargo;
+          ais_msg_5.a = m_a;
+          ais_msg_5.b = m_b;
+          ais_msg_5.c = m_c;
+          ais_msg_5.d = m_d;
+          ais_msg_5.draught = m_draught;
+
+          if(msg->lat != 0.0 && msg->lon != 0.0)
+          {
+            //rsi.setDestination(0x8803);
+            dispatch(ais_msg_5);
+            spew("AIS5 - Obstacle %s, callsign %s, name %s, type&cargo %d, A %f, B %f, C %f, D %f, DRAUGHT %f",
+                      ais_msg_5.mmsi.c_str(), ais_msg_5.callsign.c_str(), ais_msg_5.name.c_str(), ais_msg_5.type_and_cargo, ais_msg_5.a, ais_msg_5.b, ais_msg_5.c, ais_msg_5.d, ais_msg_5.draught);
+          }
+
+          m_last_broadc_time_ais5 = now;
+        }
+
+        if(msg->sog < 1 && (now > m_last_broadc_time_ais123s + m_args.ais123_freq_static))
+        {
+          // Broadcast Ais1_2_3 message always when vehicle is on.
+          IMC::AisInfo ais_msg_123;
+          ais_msg_123.msg_type = "1"; // or 2 or 3.
+          ais_msg_123.mmsi = m_mmsi;
+          ais_msg_123.speed = msg->sog;
+          if(ais_msg_123.speed > 1)
+            ais_msg_123.nav_status = 0; //under way using engine.
+          else
+            ais_msg_123.nav_status = 5; //moored.
+          ais_msg_123.lat = msg->lat;
+          ais_msg_123.lon = msg->lon;
+          ais_msg_123.course = msg->cog;
+
+          if(msg->lat != 0.0 && msg->lon != 0.0)
+          {
+            //rsi.setDestination(0x8803);
+            dispatch(ais_msg_123);
+            spew("AIS123 - Obstacle %s info: (lon,lat,cog,sog) %f %f %f %f",
+                      ais_msg_123.mmsi.c_str(), Angles::degrees(ais_msg_123.lon), Angles::degrees(ais_msg_123.lat), Angles::degrees(ais_msg_123.course), ais_msg_123.speed);
+          }
+
+          m_last_broadc_time_ais123s = now;
+        } else if(msg->sog > 1 && (now > m_last_broadc_time_ais123m + m_args.ais123_freq_moving))
+        {
+          // Broadcast Ais1_2_3 message always when vehicle is on.
+          IMC::AisInfo ais_msg_123;
+          ais_msg_123.msg_type = "1"; // or 2 or 3.
+          ais_msg_123.mmsi = m_mmsi;
+          ais_msg_123.speed = msg->sog;
+          if(ais_msg_123.speed > 1)
+            ais_msg_123.nav_status = 0; //under way using engine.
+          else
+            ais_msg_123.nav_status = 5; //moored.
+          ais_msg_123.lat = msg->lat;
+          ais_msg_123.lon = msg->lon;
+          ais_msg_123.course = msg->cog;
+
+          if(msg->lat != 0.0 && msg->lon != 0.0)
+          {
+            //rsi.setDestination(0x8803);
+            dispatch(ais_msg_123);
+            spew("AIS123 - Obstacle %s info: (lon,lat,cog,sog) %f %f %f %f",
+                      ais_msg_123.mmsi.c_str(), Angles::degrees(ais_msg_123.lon), Angles::degrees(ais_msg_123.lat), Angles::degrees(ais_msg_123.course), ais_msg_123.speed);
+          }
+
+          m_last_broadc_time_ais123m = now;
         }
       }
 

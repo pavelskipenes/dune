@@ -49,10 +49,24 @@ namespace Autonomy
       IMC::VehicleState* m_vstate;
       //! last received message
       IMC::TextMessage* m_last;
+      //! Current power settings.
+      IMC::PowerSettings m_pwr_settings;
       //! Transmission request id
       int m_reqid;
       //! Plan database file.
       Path m_db_file;
+      //! Speed Over Ground.
+      double m_sog;
+      //! Speed Over Ground.
+      int m_cog;
+      //! Satellites in view.
+      double m_sat;
+      // L3 sensors message.
+      IMC::ScienceSensors m_sensors_cmd;
+      // L3 turn on timer.
+      Time::Counter<float> m_timer;
+      // Complete payload message has arrived.
+      bool m_sensors_active;
 
 
       //! %Task arguments
@@ -72,7 +86,8 @@ namespace Autonomy
         m_pcs(NULL),
         m_vstate(NULL),
         m_last(NULL),
-        m_reqid(0)
+        m_reqid(0),
+        m_sensors_active(false)
       {
         param("Reply timeout", m_args.reply_timeout)
           .defaultValue("60")
@@ -82,7 +97,7 @@ namespace Autonomy
           .defaultValue("https://bit.ly/2LZ0EOc");
 
         param("Valid Commands", m_args.valid_cmds)
-          .defaultValue("abort,dislodge,dive,errors,info,force,go,help,phone,reboot,sk,start,surface");
+          .defaultValue("abort,dislodge,dive,errors,info,force,cr6,restart,go,help,phone,reboot,sk,start,surface,on,off,sensor,sensors,reports");
 
         m_db_file = m_ctx.dir_db / "Plan.db";
 
@@ -91,6 +106,8 @@ namespace Autonomy
         bind<IMC::PlanControlState>(this);
         bind<IMC::PlanControl>(this);
         bind<IMC::PlanGeneration>(this);
+        bind<IMC::PowerSettings>(this);
+        bind<IMC::GpsFix>(this);
       }
 
       void
@@ -121,6 +138,35 @@ namespace Autonomy
         std::string cmd, args;
         splitCommand(msg->text, cmd, args);
         handleCommand(msg->origin, cmd, args);
+      }
+
+      void
+      consume(const IMC::GpsFix* msg)
+      {
+        if(msg->getSource() != getSystemId())
+          return;
+
+        m_sog = msg->sog;
+        double cog = msg->cog;
+        cog = Angles::degrees(cog);
+        m_cog = (int) cog;
+      }
+
+
+      //! Consume a PowerSettings Message.
+      void
+      consume(const IMC::PowerSettings* msg)
+      {
+        std::string ent = resolveEntity(msg->getSourceEntity()).c_str();
+        if(ent.compare("Relay Power Settings") == 0)
+        {
+          m_pwr_settings.l2 = msg->l2;
+          m_pwr_settings.l3 = msg->l3;
+          m_pwr_settings.iridium = msg->iridium;
+          m_pwr_settings.modem = msg->modem;
+          m_pwr_settings.pumps = msg->pumps;
+          m_pwr_settings.vhf = msg->vhf;
+        }
       }
 
       //! Handles responses from PlanGeneration requests
@@ -266,7 +312,7 @@ namespace Autonomy
 
       //! Checks if a string is a phone number
       bool
-	  checkNumber(const std::string& str)
+	    checkNumber(const std::string& str)
       {
     	  std::string::const_iterator it = str.begin();
     	  if(String::startsWith(str,"+") && str.size() > 1)
@@ -344,6 +390,16 @@ namespace Autonomy
           handleStartCommand(origin, args, false);
         else if (cmd == "force")
           handleStartCommand(origin, args, true);
+        else if (cmd == "cr6")
+          handleCR6Command(origin, args);
+        else if (cmd == "on")
+          handleTurnOnCommand(origin, args);
+        else if (cmd == "off")
+          handleTurnOffCommand(origin, args);
+        else if (cmd == "restart")
+          handleRelaysCommand(origin, args);
+        else if (cmd == "reports")
+          handleReportsCommand(origin, args);
         else if (cmd == "abort")
           handleAbortCommand(origin, args);
         else if (cmd == "errors")
@@ -356,6 +412,10 @@ namespace Autonomy
           handleRebootCommand(origin, args);
         else if (cmd == "phone")
           handleChangeNumCommand(origin, args);
+        else if (cmd == "sensors")
+          handleL3SensorsCommand(origin, args);
+        else if (cmd == "sensor")
+          handleL3SensorCommand(origin, args);
         else if (cmd == "resume")
           handleResumeCommand(origin, args, false);
         else
@@ -379,9 +439,159 @@ namespace Autonomy
         }
       }
 
+      //! Execute command 'CR6'
+      void
+      handleCR6Command(const std::string& origin, const std::string& args)
+      {
+        // Create PowerSettings Message.
+        IMC::PowerSettings pwr_settings;
+        pwr_settings.l2 = args[0] - '0';
+        pwr_settings.l3 = args[1] - '0';
+        pwr_settings.iridium = args[2] - '0';
+        pwr_settings.modem = args[3] - '0';
+        pwr_settings.pumps = args[4] - '0';
+        pwr_settings.vhf = args[5] - '0';
+
+        spew("Updated pwrSettings: %d%d%d%d%d%d",
+                                 pwr_settings.l2, pwr_settings.l3,
+                                 pwr_settings.iridium, pwr_settings.modem,
+                                 pwr_settings.pumps, pwr_settings.vhf);
+
+        // Dispatch power settings to L1.
+        dispatch(pwr_settings, DF_LOOP_BACK);
+
+        std::stringstream ss;
+        ss << "New CR6 settings applied.";
+        reply(origin,ss.str());
+      }
+
+      //! Execute command 'RESTART'
+      void
+      handleRelaysCommand(const std::string& origin, const std::string& args)
+      {
+        IMC::PowerSettings pwr_settings;
+        pwr_settings = m_pwr_settings; // last received power settings from CR6 task.
+
+        if(args.compare("l2") == 0)
+          pwr_settings.l2 = 2;
+        else if(args.compare("l3") == 0)
+          pwr_settings.l3 = 2;
+        else if (args.compare("iridium") == 0)
+          pwr_settings.iridium = 2;
+        else if (args.compare("modem") == 0)
+          pwr_settings.modem = 2;
+        else if (args.compare("pumps") == 0)
+          pwr_settings.pumps = 2;
+        else if (args.compare("vhf") == 0)
+          pwr_settings.vhf = 2;
+
+        spew("Updated pwrSettings: %d%d%d%d%d%d",
+                                 pwr_settings.l2, pwr_settings.l3,
+                                 pwr_settings.iridium, pwr_settings.modem,
+                                 pwr_settings.pumps, pwr_settings.vhf);
+
+        // Dispatch power settings to L1.
+        dispatch(pwr_settings, DF_LOOP_BACK);
+
+        std::string relay;
+        relay = args;
+        std::stringstream ss;
+        ss << relay << " is rebooting.";
+        reply(origin,ss.str());
+      }
+
+      //! Execute command 'ON'
+      void
+      handleTurnOnCommand(const std::string& origin, const std::string& args)
+      {
+        IMC::PowerSettings pwr_settings;
+        pwr_settings = m_pwr_settings; // last received power settings from CR6 task.
+
+        if(args.compare("l2") == 0)
+          pwr_settings.l2 = 0;
+        else if(args.compare("l3") == 0)
+          pwr_settings.l3 = 0;
+        else if (args.compare("iridium") == 0)
+          pwr_settings.iridium = 0;
+        else if (args.compare("modem") == 0)
+          pwr_settings.modem = 0;
+        else if (args.compare("pumps") == 0)
+          pwr_settings.pumps = 0;
+        else if (args.compare("vhf") == 0)
+          pwr_settings.vhf = 0;
+
+        spew("Updated pwrSettings: %d%d%d%d%d%d",
+                                 pwr_settings.l2, pwr_settings.l3,
+                                 pwr_settings.iridium, pwr_settings.modem,
+                                 pwr_settings.pumps, pwr_settings.vhf);
+
+        // Dispatch power settings to L1.
+        dispatch(pwr_settings, DF_LOOP_BACK);
+
+        std::string relay;
+        relay = args;
+        std::stringstream ss;
+        ss << relay << " is turning on.";
+        reply(origin,ss.str());
+      }
+
+      //! Execute command 'OFF'
+      void
+      handleTurnOffCommand(const std::string& origin, const std::string& args)
+      {
+        IMC::PowerSettings pwr_settings;
+        pwr_settings = m_pwr_settings; // last received power settings from CR6 task.
+
+        if(args.compare("l2") == 0)
+          pwr_settings.l2 = 1;
+        else if(args.compare("l3") == 0)
+          pwr_settings.l3 = 1;
+        else if (args.compare("iridium") == 0)
+          pwr_settings.iridium = 1;
+        else if (args.compare("modem") == 0)
+          pwr_settings.modem = 1;
+        else if (args.compare("pumps") == 0)
+          pwr_settings.pumps = 1;
+        else if (args.compare("vhf") == 0)
+          pwr_settings.vhf = 1;
+
+        spew("Updated pwrSettings: %d%d%d%d%d%d",
+                                 pwr_settings.l2, pwr_settings.l3,
+                                 pwr_settings.iridium, pwr_settings.modem,
+                                 pwr_settings.pumps, pwr_settings.vhf);
+
+        // Dispatch power settings to L1.
+        dispatch(pwr_settings, DF_LOOP_BACK);
+
+        std::string relay;
+        relay = args;
+        std::stringstream ss;
+        ss << relay << " is turning off.";
+        reply(origin,ss.str());
+      }
+
+      //! Execute command 'RESTART'
+      void
+      handleReportsCommand(const std::string& origin, const std::string& args)
+      {
+        IMC::IridiumReport report;
+
+        int rep_freq = std::stoi(args);
+        report.frequency = rep_freq;
+
+        spew("Iridium Report Frequency set to %d seconds", report.frequency);
+
+        // Dispatch power settings to L1.
+        dispatch(report, DF_LOOP_BACK);
+
+        std::stringstream ss;
+        ss << "Reports Frequency set.";
+        reply(origin,ss.str());
+      }
+
       //!Execute command 'phone' for the one in args or for origin if the args is null
       void
-	  handleChangeNumCommand(const std::string& origin,const std::string& args)
+	    handleChangeNumCommand(const std::string& origin,const std::string& args)
       {
     	  std::string newNum,foo;
     	  std::stringstream ss;
@@ -429,12 +639,13 @@ namespace Autonomy
 
         if (executing)
         {
-          ss << "Executing " << m_pcs->plan_id << "::" << m_pcs->man_id << " | ETA: ";
+          ss << "On " << m_pcs->plan_id << "::" << m_pcs->man_id << " | COG: " << std::to_string(m_cog) << " | SOG: " << std::to_string(m_sog);
 
-          if (m_pcs->plan_eta != -1)
+          /*if (m_pcs->plan_eta != -1)
             ss << m_pcs->plan_eta << "s / " << std::fixed << std::setprecision(1) << m_pcs->plan_progress << "%.";
           else
             ss << "N/D.";
+          */
         }
         else if (initializing)
           ss << "Initializing " << m_pcs->plan_id << ".";
@@ -549,6 +760,173 @@ namespace Autonomy
         }
       }
 
+      //! Execute command 'SENSORS'
+      void
+      handleL3SensorsCommand(const std::string& origin, const std::string& args)
+      {
+        spew("A configuration for all sensors has arrived.");
+        // A configuration for all sensors has arrived.
+        char adcp[32], adcp_dur[32], adcp_fr[32], ctd[32], ctd_dur[32], ctd_fr[32], opt[32], opt_dur[32], opt_fr[32], tbl[32], tbl_dur[32], tbl_fr[32], eco[32], eco_dur[32], eco_fr[32];
+        std::sscanf(args.c_str(), "%s %s %s %s %s %s %s %s %s %s %s %s %s %s %s", adcp, adcp_dur, adcp_fr, ctd, ctd_dur, ctd_fr, opt, opt_dur, opt_fr, tbl, tbl_dur, tbl_fr, eco, eco_dur, eco_fr);
+
+        m_sensors_cmd.adcp = std::atoi(adcp);
+        m_sensors_cmd.adcp_dur = std::atoi(adcp_dur);
+        m_sensors_cmd.adcp_fr = std::atoi(adcp_fr);
+        m_sensors_cmd.ctd = std::atoi(ctd);
+        m_sensors_cmd.ctd_dur = std::atoi(ctd_dur);
+        m_sensors_cmd.ctd_fr = std::atoi(ctd_fr);
+        m_sensors_cmd.opt = std::atoi(opt);
+        m_sensors_cmd.opt_dur = std::atoi(opt_dur);
+        m_sensors_cmd.opt_fr = std::atoi(opt_fr);
+        m_sensors_cmd.tbl = std::atoi(tbl);
+        m_sensors_cmd.tbl_dur = std::atoi(tbl_dur);
+        m_sensors_cmd.tbl_fr = std::atoi(tbl_fr);
+        m_sensors_cmd.eco = std::atoi(eco);
+        m_sensors_cmd.eco_dur = std::atoi(eco_dur);
+        m_sensors_cmd.eco_fr = std::atoi(eco_fr);
+
+        // Set L3 vehicle destination.
+        m_sensors_cmd.setDestination(0x8804);
+
+        if(m_pwr_settings.l3 == 0)
+        {
+          spew("L3 is ON, sending sensors configurations.");
+          dispatch(m_sensors_cmd, DF_LOOP_BACK);
+          std::stringstream ss;
+          ss << "Sensors commands sent.";
+          reply(origin,ss.str());
+        }
+        else if(m_pwr_settings.l3 == 1)
+        {
+          spew("L3 is OFF, turning on..");
+          // L3 needs to be turned on.
+          IMC::PowerSettings pwr_settings;
+          pwr_settings = m_pwr_settings; // last received power settings from CR6 task.
+          // Turn on L3 and set timer. 
+          pwr_settings.l3 = 0;
+          dispatch(pwr_settings, DF_LOOP_BACK);
+          m_sensors_active = true;
+          m_timer.setTop(120); // is two minutes enough to turn on L3?
+
+          std::stringstream ss;
+          ss << "L3 is OFF, turning on and sending.";
+          reply(origin,ss.str());
+        }
+      }
+
+      //! Execute command 'SENSOR'
+      void
+      handleL3SensorCommand(const std::string& origin, const std::string& args)
+      {
+        spew("A configuration for one sensor has arrived");
+
+        char sensor[32], onoff[32], duration[32], frequency[32];
+
+        if(m_pwr_settings.l3 == 1)
+        {
+          spew("L3 is OFF, turn on first.");
+          std::stringstream ss;
+          ss << "L3 is OFF, turn on first.";
+          reply(origin,ss.str());
+        } else
+        {
+          spew("L3 is ON, sending sensor configuration..");
+          std::sscanf(args.c_str(), "%s %s %s %s", sensor, onoff, duration, frequency);
+
+          IMC::ScienceSensors sensor_cmd;
+          sensor_cmd.setDestination(0x8804);
+
+          std::stringstream ss;
+
+          if(std::strcmp(sensor,"adcp") == 0)
+          {
+            sensor_cmd.adcp = std::atoi(onoff);
+            sensor_cmd.adcp_dur = std::atoi(duration);
+            sensor_cmd.adcp_fr = std::atoi(frequency);
+            // other sensors: NO_CHANGE.
+            sensor_cmd.ctd = 3;
+            sensor_cmd.tbl = 3;
+            sensor_cmd.eco = 3;
+            sensor_cmd.opt = 3;
+
+            // Set destination entity before dispatching.
+            //sensors_cmd.setDestinationEntity("ADCP");
+            dispatch(sensor_cmd, DF_LOOP_BACK);
+
+            ss << "ADCP actions.";
+            reply(origin,ss.str());
+          } else if(std::strcmp(sensor,"ctd") == 0)
+          {
+            sensor_cmd.ctd = std::atoi(onoff);
+            sensor_cmd.ctd_dur = std::atoi(duration);
+            sensor_cmd.ctd_fr = std::atoi(frequency);
+            // other sensors: NO_CHANGE.
+            sensor_cmd.adcp = 3;
+            sensor_cmd.tbl = 3;
+            sensor_cmd.eco = 3;
+            sensor_cmd.opt = 3;
+
+            // Set destination entity before dispatching.
+            //sensors_cmd.setDestinationEntity("CTD");
+            dispatch(sensor_cmd, DF_LOOP_BACK);
+
+            ss << "CTD actions.";
+            reply(origin,ss.str());
+          } else if(std::strcmp(sensor,"tbl") == 0)
+          {
+            sensor_cmd.tbl = std::atoi(onoff);
+            sensor_cmd.tbl_dur = std::atoi(duration);
+            sensor_cmd.tbl_fr = std::atoi(frequency);
+            // other sensors: NO_CHANGE.
+            sensor_cmd.ctd = 3;
+            sensor_cmd.adcp = 3;
+            sensor_cmd.eco = 3;
+            sensor_cmd.opt = 3;
+
+            // Set destination entity before dispatching.
+            //sensors_cmd.setDestinationEntity("TBLive");
+            dispatch(sensor_cmd, DF_LOOP_BACK);
+
+            ss << "TBLive actions.";
+            reply(origin,ss.str());
+          } else if(std::strcmp(sensor,"eco") == 0)
+          {
+            sensor_cmd.eco = std::atoi(onoff);
+            sensor_cmd.eco_dur = std::atoi(duration);
+            sensor_cmd.eco_fr = std::atoi(frequency);
+            // other sensors: NO_CHANGE.
+            sensor_cmd.ctd = 3;
+            sensor_cmd.tbl = 3;
+            sensor_cmd.adcp = 3;
+            sensor_cmd.opt = 3;
+
+            // Set destination entity before dispatching.
+            //sensors_cmd.setDestinationEntity("EcoPuck");
+            dispatch(sensor_cmd, DF_LOOP_BACK);
+            
+            ss << "EcoPuck actions.";
+            reply(origin,ss.str());
+          } else if(std::strcmp(sensor,"opt") == 0)
+          {
+            sensor_cmd.opt = std::atoi(onoff);
+            sensor_cmd.opt_dur = std::atoi(duration);
+            sensor_cmd.opt_fr = std::atoi(frequency);
+            // other sensors: NO_CHANGE.
+            sensor_cmd.ctd = 3;
+            sensor_cmd.tbl = 3;
+            sensor_cmd.eco = 3;
+            sensor_cmd.adcp = 3;
+
+            // Set destination entity before dispatching.
+            //sensors_cmd.setDestinationEntity("Optode Oxygen Sensor");
+            dispatch(sensor_cmd, DF_LOOP_BACK);
+
+            ss << "Optode actions.";
+            reply(origin,ss.str());
+          }
+        }
+      }
+
       //! Execute command 'ABORT'
       void
       handleAbortCommand(const std::string& origin, const std::string& args)
@@ -593,6 +971,14 @@ namespace Autonomy
         while (!stopping())
         {
           waitForMessages(1.0);
+          if(m_sensors_active && m_timer.overflow())
+          {
+            spew("L3 is BOOTED, sending configurations..");
+            //m_sensors_cmd.setDestination(0x8804);
+            dispatch(m_sensors_cmd, DF_LOOP_BACK);
+            m_timer.reset();
+            m_sensors_active = false;
+          }
         }
       }
     };

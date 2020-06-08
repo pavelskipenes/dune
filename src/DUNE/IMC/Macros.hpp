@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 9ccf6c5bd15323270be690da48354dfd                            *
+// IMC XML MD5: f03569c742b632df430f37f79f94d0ad                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -680,6 +680,8 @@
 #define DUNE_IMC_VESSELWIND 913
 //! RelativeWind identification number.
 #define DUNE_IMC_RELATIVEWIND 914
+//! AbsoluteWind identification number.
+#define DUNE_IMC_ABSOLUTEWIND 919
 //! CurrentVelocity identification number.
 #define DUNE_IMC_CURRENTVELOCITY 915
 //! CollisionAvoidance identification number.
@@ -696,5 +698,15 @@
 #define DUNE_IMC_CURRENTPROFILECELL 1014
 //! CurrentProfile identification number.
 #define DUNE_IMC_CURRENTPROFILE 1015
+//! TBRFishTag identification number.
+#define DUNE_IMC_TBRFISHTAG 2007
+//! TBRSensor identification number.
+#define DUNE_IMC_TBRSENSOR 2008
+//! IridiumReport identification number.
+#define DUNE_IMC_IRIDIUMREPORT 2009
+//! ScienceSensors identification number.
+#define DUNE_IMC_SCIENCESENSORS 2010
+//! AisGpsFix identification number.
+#define DUNE_IMC_AISGPSFIX 920
 
 #endif

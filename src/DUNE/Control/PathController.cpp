@@ -189,8 +189,13 @@ namespace DUNE
 
       param("Maximum Track Length", m_max_track_length)
       .defaultValue("25000")
-	  .units(Units::Meter)
-	  .description("Maximum adimissible track length");
+	    .units(Units::Meter)
+	    .description("Maximum adimissible track length");
+
+      param("Minimum Waypoint Dist Switch", m_dist_switch)
+      .defaultValue("50.0")
+	    .units(Units::Meter)
+	    .description("Distance from waypoint when switch to next waypoint happens.");
 
       m_ctx.config.get("General", "Absolute Maximum Depth", "50.0", m_btd.args.depth_limit);
       m_btd.args.depth_limit -= c_depth_margin;
@@ -206,6 +211,7 @@ namespace DUNE
       bind<IMC::Distance>(this);
       bind<IMC::DesiredZ>(this);
       bind<IMC::DesiredSpeed>(this);
+      bind<IMC::PlanSpecification>(this);
     }
 
     PathController::~PathController(void)
@@ -291,6 +297,32 @@ namespace DUNE
       else
       {
         m_braking = false;
+      }
+    }
+
+    void
+    PathController::consume(const IMC::PlanSpecification* plspec)
+    {
+      std::vector<IMC::Maneuver> maneuvers_list;
+
+      std::vector<IMC::PlanManeuver*>::const_iterator itr;
+      itr = plspec->maneuvers.begin();
+
+      Math::Matrix waypoints(plspec->maneuvers.size(), 2);
+      m_ts.waypoints = waypoints;
+
+      unsigned i=0;
+      // Iterate through plan maneuvers
+      for (; itr != plspec->maneuvers.end(); ++itr)
+      {
+        // For now just to GoTos.
+        const IMC::Goto* m = static_cast<const IMC::Goto*>((*itr)->data.get());
+
+        m_ts.waypoints(i,0) = m->lat;
+        m_ts.waypoints(i,1) = m->lon;
+
+        inf("PATH CONTROLLER - PLAN WAYPOINTS: LAT LON: %0.4f %0.4f", Angles::degrees(m_ts.waypoints(i,0)), Angles::degrees(m_ts.waypoints(i,1)));
+        i=i+1;
       }
     }
 
@@ -748,7 +780,11 @@ namespace DUNE
 
         bool was_nearby = m_ts.nearby;
 
-        if (!m_ts.nearby && m_ts.eta <= 0)
+        bool is_last = false;
+        if(m_ts.waypoints(m_ts.waypoints.rows()-1,0) == m_pcs.end_lat && m_ts.waypoints(m_ts.waypoints.rows()-1,1) == m_pcs.end_lon)
+          is_last = true;
+
+        if (((!m_ts.nearby && m_ts.eta <= 0) || m_ts.range < m_dist_switch) && !is_last)
         {
           m_ts.eta = 0;
           m_ts.nearby = true;

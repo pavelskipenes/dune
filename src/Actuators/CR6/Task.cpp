@@ -24,7 +24,7 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Sølve Dahlin                                                     *
+// Author: Alberto Dallolio                                                 *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -96,6 +96,8 @@ namespace Actuators
       Arguments m_args;
       //! Timer.
       Time::Counter<float> m_timer;
+      //! Timer.
+      Time::Counter<float> m_timer_reboot;
       //! Battery Voltage.
       IMC::Voltage m_volt;
       //! Power Produced by Solar Panels.
@@ -120,6 +122,8 @@ namespace Actuators
       const char* c_blanks = " \t\r\n";
       //! Number of retries to sync task pwrSettings with pwrSettings in CR6
       int m_retries;
+      //! Waiting for reboot.
+      bool m_do_send;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
@@ -128,7 +132,8 @@ namespace Actuators
         thrust_max(100.0),
         rudder_max(45),
         rudder_cmd(0),
-        pwr_sett_rec(false)
+        pwr_sett_rec(false),
+        m_do_send(true)
       {
         param("Serial Port - Device", m_args.uart_dev)
         .defaultValue("")
@@ -174,6 +179,8 @@ namespace Actuators
         .description("User defines the applied thruster actuation / sent over serial.  Condition: Enable Thruster Controller = False.");
 
         param("Power Settings", m_args.user_pwrSettings)
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .scope(Tasks::Parameter::SCOPE_IDLE)
         .defaultValue("000000")
         .description("User-defined relays settings on L1");
 
@@ -268,7 +275,17 @@ namespace Actuators
         {
           stn_str = createNMEA();
           // spew("sent: %s", stn_str.c_str());
-          writeToUART(stn_str);
+          if(m_do_send)
+            writeToUART(stn_str);
+          else
+            spew("NOT SENDING, WAITING REBOOT");
+
+          if((m_pwr_settings.l2 == 2 || m_pwr_settings.l3 == 2 || m_pwr_settings.iridium == 2 || m_pwr_settings.modem == 2 || m_pwr_settings.pumps == 2 || m_pwr_settings.vhf == 2) && m_do_send)
+          {
+            spew("SOMETHING IS REBOOTING");
+            m_timer_reboot.setTop(5.0);
+            m_do_send = false;
+          }
         }
       }
 
@@ -417,6 +434,7 @@ namespace Actuators
 
         dispatch(params, DF_LOOP_BACK);
         spew("Power settings have been set to %s.", m_args.user_pwrSettings.c_str());
+
       }
       
       // Helper function to get a certain token from a string  
@@ -580,6 +598,12 @@ namespace Actuators
 
             readUART();    // Read
             
+          }
+
+          if(m_timer_reboot.overflow())
+          {
+            m_do_send = true;
+            m_timer_reboot.reset();
           }
 
           if(m_timer.overflow())

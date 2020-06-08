@@ -68,6 +68,26 @@ namespace Control
         // Amount of time after which a disappeared obstacle is removed from the list.
         double kill_obst;
 
+        //! Enable collision avoidance.
+        bool en_cas;
+        //! Enable collision avoidance.
+        bool en_antiground;
+
+        //! Path to DB file
+        std::string db_path;
+        //! Path to debug folder
+        std::string debug_path;
+        //! Map resolution.
+        double map_res;
+        //! DRVAL2
+        double drval2;
+        //! DRVAL2
+        double cont_size;
+        //! Course offset for contours.
+        std::vector<double> directions;
+        //! Safety distance to static obstacle.
+        double dist_to_land;
+
       };
 
       struct Task: public DUNE::Control::PathController
@@ -81,12 +101,14 @@ namespace Control
         IMC::DesiredHeading m_heading;
         //! Outgoing desired speed message.
         IMC::DesiredSpeed m_speed;
-        //! Temporary storage for IMC values
-        IMC::RemoteSensorInfo obst_temp;
         //! Vector of obstacles
-        std::vector<IMC::RemoteSensorInfo> obst_vec;
+        std::vector<IMC::AisInfo> obst_vec;
         // Create matrix with past, current and next waypoint.
         Eigen::Matrix<double,3,2> waypoints;
+        //! Timer.
+        //Time::Counter<float> m_timer;
+        //! Course offsets for contours.
+        std::vector<double> m_offsets;
         
         //! Speed offset <Output from CAS>
         double u_os;
@@ -106,39 +128,53 @@ namespace Control
         double m_timestamp_prev;
         //! Timestamp from obstacle
         double m_timestamp_obst;
-        //! Next Desired Path Latitude from PathController.
-        double m_nextpath_lat;
-        //! Next Desired Path Longitude from PathController.
-        double m_nextpath_lon;
-        //! True if Desired Path has more than one wp.
-        bool m_more_than_one;
         //! Timestamp for last update from obstacle.
         std::vector<double> m_last_update;
+        //! Enable collision avoidance.
+        bool m_enable_cas;
+        //! Enable anti-grounding.
+        bool m_enable_antiground;
+        //! True if ground is close.
+        bool m_static_obst;
+        //! Contours to cas.
+        Math::Matrix m_contours;
+        //! Safety distance to land.
+        double m_dist_to_land;
 
         //! Task arguments.
         Arguments m_args;
+
+        // Database handle.
+        //SituationalAwareness::NauticalCharts* m_nc;
+        SituationalAwareness::DepareData* m_dp;
 
 
         Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Control::PathController(name, ctx),
         u_os(0.0),
         psi_os(0.0),
-        m_lat_asv(0.0), //1.1072565
-        m_lon_asv(0.0), //0.1807216
+        m_lat_asv(0.0),
+        m_lon_asv(0.0),
         m_lat_obst(0.0),
         m_lon_obst(0.0),
         m_timestamp_new(0.0),
         m_timestamp_prev(0.0),
         m_timestamp_obst(0.0),
-        m_nextpath_lat(0.0),
-        m_nextpath_lon(0.0),
-        m_more_than_one(false)
+        m_static_obst(false)
         {
+          param("Enable Collision Avoidance", m_args.en_cas)
+          .defaultValue("true")
+          .description("Enable collision avoidance algorithm");
+
+          param("Enable Anti Grounding", m_args.en_antiground)
+          .defaultValue("true")
+          .description("Enable anti-grounding algorithm");
+          
           param("Maximum Obstacle Surveillance Range", m_args.out_of_range)
           .units(Units::Meter)
           .minimumValue("0.0")
-          .maximumValue("5000.0")
-          .defaultValue("500.0")
+          .maximumValue("100000.0")
+          .defaultValue("5000.0")
           .description("Limit for absolute value of obstacle surveillance range");
 
           param("Remove Disappeared Obstacles", m_args.kill_obst)
@@ -195,12 +231,15 @@ namespace Control
           .defaultValue("400.0")
           .description("Maximum SB_MPC Surveillance Range.");
 
-          param("Minimal Safe Distance", m_args.D_SAFE)
+          param("Minimal Safe Distance To Vessels", m_args.D_SAFE)
           .units(Units::Meter)
           .minimumValue("50.0")
-          .maximumValue("500.0")
-          .defaultValue("60.0")
-          .description("Minimal distance which is considered as safe [m].");
+          .description("Minimal distance to moving obstacle which is considered as safe [m].");
+
+          param("Minimal Safe Distance To Land", m_args.dist_to_land)
+          .units(Units::Meter)
+          .minimumValue("10.0")
+          .description("Minimal distance to static obstacle which is considered as safe [m].");
 
           param("Cost of Collisions", m_args.K_COLL)
           .minimumValue("0.0")
@@ -328,94 +367,161 @@ namespace Control
           .defaultValue("15.0")
           .description("Portions of positive angle range in degrees");
 
+          param("Digital Map Path", m_args.db_path)
+          .defaultValue("")
+          .description("Path to digital map DB file");
+
+          param("Debug Path", m_args.debug_path)
+          .defaultValue("")
+          .description("Path to where debuging files are saved");
+
+          param("Digital Map Resolution", m_args.map_res)
+          .units(Units::Meter)
+          .defaultValue("50")
+          .description("Digital Map resolution in meters");
+
+          param("DRVAL2", m_args.drval2)
+          .units(Units::Meter)
+          .defaultValue("10.0")
+          .description("Maximum (deepest) value of a depth range");
+
+          param("Contours Distance", m_args.cont_size)
+          .units(Units::Meter)
+          .defaultValue("5000.0")
+          .maximumValue("10000.0")
+          .minimumValue("10.0")
+          .description("Maximum size of contour square around vessel");
+
+          param("Course Offsets for Contours", m_args.directions)
+          .units(Units::Degree)
+          .description("Course offsets for contours surroundings");
+
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+
           // Register handler routines.
           bind<IMC::DesiredPath>(this);
-          bind<IMC::PeekDesiredPath>(this);
-          bind<IMC::RemoteSensorInfo>(this);
+          bind<IMC::AisInfo>(this);
           bind<IMC::GpsFix>(this);
         }
 
-        void
-        onUpdateParameters(void)
-        {
-          // T and DT cannot be changed online. If changed, re-create the object.
-          if(paramChanged(m_args.T) || paramChanged(m_args.DT))
-              sb_mpc.create(m_args.T, m_args.DT, m_args.T_STAT, m_args.P, m_args.Q, m_args.D_CLOSE,
-                        m_args.D_SAFE, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
-                        m_args.KAPPA, m_args.KAPPA_TC, m_args.K_P, m_args.K_CHI, m_args.K_DP, m_args.K_DCHI_SB,
-						            m_args.K_DCHI_P, m_args.K_CHI_SB, m_args.K_CHI_P, m_args.D_INIT, m_args.COURSE_RANGE, m_args.GRANULARITY,
-                        m_args.WP_R, m_args.LOS_LA_DIST, m_args.LOS_KI, m_args.GUIDANCE_STRATEGY);
-          if(paramChanged(m_args.T_STAT))
-              sb_mpc.setT_stat(m_args.T_STAT);
-          if(paramChanged(m_args.P))
-              sb_mpc.setP(m_args.P);
-          if(paramChanged(m_args.Q))
-              sb_mpc.setQ(m_args.Q);
-          if(paramChanged(m_args.D_CLOSE))
-              sb_mpc.setDClose(m_args.D_CLOSE);
-          if(paramChanged(m_args.D_SAFE))
-              sb_mpc.setDSafe(m_args.D_SAFE);
-          if(paramChanged(m_args.K_COLL))
-              sb_mpc.setKColl(m_args.K_COLL);
-          if(paramChanged(m_args.KAPPA))
-              sb_mpc.setKappa(m_args.KAPPA);
-          if(paramChanged(m_args.KAPPA_TC))
-              sb_mpc.setKappaTC(m_args.KAPPA_TC);
-          if(paramChanged(m_args.PHI_AH))
-              sb_mpc.setPhiAH(m_args.PHI_AH);
-          if(paramChanged(m_args.PHI_OT))
-              sb_mpc.setPhiOT(m_args.PHI_OT);
-          if(paramChanged(m_args.PHI_HO))
-              sb_mpc.setPhiHO(m_args.PHI_HO);
-          if(paramChanged(m_args.PHI_CR))
-              sb_mpc.setPhiCR(m_args.PHI_CR);
-          if(paramChanged(m_args.K_P))
-              sb_mpc.setKP(m_args.K_P);
-          if(paramChanged(m_args.K_DP))
-              sb_mpc.setKdP(m_args.K_DP);
-          if(paramChanged(m_args.K_CHI))
-              sb_mpc.setKChi(m_args.K_CHI);
-          if(paramChanged(m_args.K_DCHI_SB))
-              sb_mpc.setKdChiSB(m_args.K_DCHI_SB);
-          if(paramChanged(m_args.K_DCHI_P))
-              sb_mpc.setKdChiP(m_args.K_DCHI_P);
-          if(paramChanged(m_args.K_CHI_SB))
-              sb_mpc.setKChiSB(m_args.K_CHI_SB);
-          if(paramChanged(m_args.K_CHI_P))
-              sb_mpc.setKChiP(m_args.K_CHI_P);
-          if(paramChanged(m_args.D_INIT))
-              sb_mpc.setDInit(m_args.D_INIT);
-          if(paramChanged(m_args.GUIDANCE_STRATEGY))
-              sb_mpc.setGuidanceStrategy(m_args.GUIDANCE_STRATEGY);
-          if(paramChanged(m_args.WP_R))
-              sb_mpc.setWpR(m_args.WP_R);
-          if(paramChanged(m_args.LOS_LA_DIST))
-              sb_mpc.setLosLaDist(m_args.LOS_LA_DIST);
-          if(paramChanged(m_args.LOS_KI))
-              sb_mpc.setLosKi(m_args.LOS_KI);
-          if(paramChanged(m_args.COURSE_RANGE))
-              sb_mpc.setAngRange(m_args.COURSE_RANGE);
-          if(paramChanged(m_args.GRANULARITY))
-              sb_mpc.setGran(m_args.GRANULARITY);
-
-          spew("sb_mpc object values: Surveillance Range: %0.1f T: %0.1f DT: %0.1f T_STAT:%0.1f P: %0.1f Q: %0.1f DCLOSE: %0.1f DSAFE: %0.1f KCOLL: %0.1f KAPPA: %0.1f KAPPA_TC: %0.1f PHI_AH: %0.1f PHI_OT: %0.1f PHI_HO: %0.1f PHI_CR: %0.1f K_P: %0.1f K_DP: %0.1f K_CHI: %0.1f K_DCHI_SB: %0.1f K_DCHI_P: %0.1f K_CHI_SB: %0.1f K_CHI_P: %0.1f D_INIT: %0.1f GUIDANCE_STRAT: %d ACC_RAD: %0.1f LOST_DIST: %0.1f LOS_KI: %0.1f COURSE_RANGE: %0.1f GRANULARITY: %0.1f",
-                 m_args.out_of_range, m_args.T, m_args.DT, m_args.T_STAT, m_args.P, m_args.Q, m_args.D_CLOSE, m_args.D_SAFE, m_args.K_COLL, m_args.KAPPA, m_args.KAPPA_TC, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
-                 m_args.K_P, m_args.K_DP, m_args.K_CHI, m_args.K_DCHI_SB, m_args.K_DCHI_P, m_args.K_CHI_SB, m_args.K_CHI_P, m_args.D_INIT, m_args.GUIDANCE_STRATEGY, m_args.WP_R, m_args.LOS_LA_DIST, m_args.LOS_KI,
-                 m_args.COURSE_RANGE, m_args.GRANULARITY);
-        }
-
-        void
-        onResourceInitialization(void)
-        {
-          sb_mpc.create(m_args.T, m_args.DT, m_args.T_STAT, m_args.P, m_args.Q, m_args.D_CLOSE,
-                        m_args.D_SAFE, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
-                        m_args.KAPPA, m_args.KAPPA_TC, m_args.K_P, m_args.K_CHI, m_args.K_DP, m_args.K_DCHI_SB,
-						            m_args.K_DCHI_P, m_args.K_CHI_SB, m_args.K_CHI_P, m_args.D_INIT, m_args.COURSE_RANGE, m_args.GRANULARITY,
-                        m_args.WP_R, m_args.LOS_LA_DIST, m_args.LOS_KI, m_args.GUIDANCE_STRATEGY);
-
-          for (int i = 0; i < 6; i++)
+          void
+          onUpdateParameters(void)
           {
-            asv_state(i) = 0.0;
+            // T and DT cannot be changed online. If changed, re-create the object.
+            if(paramChanged(m_args.T) || paramChanged(m_args.DT))
+                sb_mpc.create(m_args.T, m_args.DT, m_args.T_STAT, m_args.P, m_args.Q, m_args.D_CLOSE,
+                          m_args.D_SAFE, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
+                          m_args.KAPPA, m_args.KAPPA_TC, m_args.K_P, m_args.K_CHI, m_args.K_DP, m_args.K_DCHI_SB,
+                          m_args.K_DCHI_P, m_args.K_CHI_SB, m_args.K_CHI_P, m_args.D_INIT, m_args.COURSE_RANGE, m_args.GRANULARITY,
+                          m_args.WP_R, m_args.LOS_LA_DIST, m_args.LOS_KI, m_args.GUIDANCE_STRATEGY);
+            if(paramChanged(m_args.T_STAT))
+                sb_mpc.setT_stat(m_args.T_STAT);
+            if(paramChanged(m_args.P))
+                sb_mpc.setP(m_args.P);
+            if(paramChanged(m_args.Q))
+                sb_mpc.setQ(m_args.Q);
+            if(paramChanged(m_args.D_CLOSE))
+                sb_mpc.setDClose(m_args.D_CLOSE);
+            if(paramChanged(m_args.D_SAFE))
+                sb_mpc.setDSafe(m_args.D_SAFE);
+            if(paramChanged(m_args.K_COLL))
+                sb_mpc.setKColl(m_args.K_COLL);
+            if(paramChanged(m_args.KAPPA))
+                sb_mpc.setKappa(m_args.KAPPA);
+            if(paramChanged(m_args.KAPPA_TC))
+                sb_mpc.setKappaTC(m_args.KAPPA_TC);
+            if(paramChanged(m_args.PHI_AH))
+                sb_mpc.setPhiAH(m_args.PHI_AH);
+            if(paramChanged(m_args.PHI_OT))
+                sb_mpc.setPhiOT(m_args.PHI_OT);
+            if(paramChanged(m_args.PHI_HO))
+                sb_mpc.setPhiHO(m_args.PHI_HO);
+            if(paramChanged(m_args.PHI_CR))
+                sb_mpc.setPhiCR(m_args.PHI_CR);
+            if(paramChanged(m_args.K_P))
+                sb_mpc.setKP(m_args.K_P);
+            if(paramChanged(m_args.K_DP))
+                sb_mpc.setKdP(m_args.K_DP);
+            if(paramChanged(m_args.K_CHI))
+                sb_mpc.setKChi(m_args.K_CHI);
+            if(paramChanged(m_args.K_DCHI_SB))
+                sb_mpc.setKdChiSB(m_args.K_DCHI_SB);
+            if(paramChanged(m_args.K_DCHI_P))
+                sb_mpc.setKdChiP(m_args.K_DCHI_P);
+            if(paramChanged(m_args.K_CHI_SB))
+                sb_mpc.setKChiSB(m_args.K_CHI_SB);
+            if(paramChanged(m_args.K_CHI_P))
+                sb_mpc.setKChiP(m_args.K_CHI_P);
+            if(paramChanged(m_args.D_INIT))
+                sb_mpc.setDInit(m_args.D_INIT);
+            if(paramChanged(m_args.GUIDANCE_STRATEGY))
+                sb_mpc.setGuidanceStrategy(m_args.GUIDANCE_STRATEGY);
+            if(paramChanged(m_args.WP_R))
+                sb_mpc.setWpR(m_args.WP_R);
+            if(paramChanged(m_args.LOS_LA_DIST))
+                sb_mpc.setLosLaDist(m_args.LOS_LA_DIST);
+            if(paramChanged(m_args.LOS_KI))
+                sb_mpc.setLosKi(m_args.LOS_KI);
+            if(paramChanged(m_args.COURSE_RANGE))
+                sb_mpc.setAngRange(m_args.COURSE_RANGE);
+            if(paramChanged(m_args.GRANULARITY))
+                sb_mpc.setGran(m_args.GRANULARITY);
+
+            if(paramChanged(m_args.en_cas))
+                m_enable_cas = m_args.en_cas;
+
+            if(paramChanged(m_args.en_antiground))
+                m_enable_antiground = m_args.en_antiground;
+
+            if(paramChanged(m_args.directions))
+              m_offsets = m_args.directions;
+
+            if(paramChanged(m_args.dist_to_land))
+              m_dist_to_land = m_args.dist_to_land;
+          }
+
+          void
+          onResourceInitialization(void)
+          {
+            sb_mpc.create(m_args.T, m_args.DT, m_args.T_STAT, m_args.P, m_args.Q, m_args.D_CLOSE,
+                          m_args.D_SAFE, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
+                          m_args.KAPPA, m_args.KAPPA_TC, m_args.K_P, m_args.K_CHI, m_args.K_DP, m_args.K_DCHI_SB,
+                          m_args.K_DCHI_P, m_args.K_CHI_SB, m_args.K_CHI_P, m_args.D_INIT, m_args.COURSE_RANGE, m_args.GRANULARITY,
+                          m_args.WP_R, m_args.LOS_LA_DIST, m_args.LOS_KI, m_args.GUIDANCE_STRATEGY);
+
+            for (int i = 0; i < 6; i++)
+            {
+              asv_state(i) = 0.0;
+            }
+
+            //m_timer.setTop(30);
+          }
+
+          //! Acquire resources.
+          void
+          onResourceAcquisition(void)
+          {
+            try {
+              m_dp = new SituationalAwareness::DepareData(m_args.db_path, m_args.map_res);
+              //m_nc = new SituationalAwareness::NauticalCharts(m_args.db_path, m_args.map_res);
+            } catch(std::runtime_error& e) {
+              inf(DTR("Problem opening charts: %s"), e.what());
+            }
+
+            m_offsets = m_args.directions;
+            m_contours.resizeAndFill(m_offsets.size(),2,0.0);
+          }
+
+          //! Release resources.
+        void
+        onResourceRelease(void)
+        {
+          try {
+            Memory::clear(m_dp);
+            //Memory::clear(m_nc);
+          }
+          catch(std::runtime_error& e) {
+            err(DTR("Could not clear Nautical charts class: %s"), e.what());
           }
         }
 
@@ -435,89 +541,149 @@ namespace Control
         }
 
         void
-        consume(const IMC::RemoteSensorInfo* msg)
+        consume(const IMC::AisInfo* msg)
         {
-          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+          trace("CAS: Receiving AisInfo");
 
-          // Check if AutoNaut is Simulator is booting before you compute displacement.
-          if(m_lat_asv == 0.0 && m_lon_asv == 0.0)
-            return;
-
-          m_timestamp_obst = msg->getTimeStamp();
-
-          // Real WGS-84 Coordinates [rad]. Static coordinates need to compensate for displacement in x/y-direction (WGS84::displace)
-          m_lat_obst = msg->lat;
-          m_lon_obst = msg->lon;
-
-          // Distance between ASV - Obstacle
-          double distance = WGS84::distance(m_lat_asv, m_lon_asv, 0, m_lat_obst, m_lon_obst, 0);
-
-          // Get data from RemoteSensorInfo tuple.
-          TupleList tuples(msg->data);
-          std::string system_name = tuples.get("NAME");
-
-          spew("Distance from obstacle %s is %0.1f",msg->id.c_str(), distance);
-          trace("Received Obstacle from AIS with MMSI: %s, NAME: %s; longitude %f and latitude %f, distance: %0.1f", msg->id.c_str(), system_name.c_str(), c_degrees_per_radian*m_lon_obst, c_degrees_per_radian*m_lat_obst, distance);
-
-          bool obs_exists = false;
-          // Obstacle vector: UPDATE/REMOVE.
-          for (unsigned int i = 0; i < obst_vec.size(); i++)
+          if(m_enable_cas)
           {
-            //spew("Update Obstacle vector: Source: %d Vector size: %d", obst_vec[i].getSource(), obst_vec.size());
-            std::string temp_id = obst_vec[i].id; //MMSI
-            if(temp_id.compare(msg->id) == 0) //s1.compare(s2)
+            // Check if AutoNaut is Simulator is booting before you compute displacement.
+            if(m_lat_asv == 0.0 && m_lon_asv == 0.0)
+              return;
+
+            m_timestamp_obst = msg->getTimeStamp();
+
+            trace("CAS - MSG TYPE: %s", msg->msg_type.c_str());
+
+            if(msg->msg_type.compare("1") == 0 || msg->msg_type.compare("2") == 0 || msg->msg_type.compare("3") == 0)
             {
-              obs_exists = true;
+              // Real WGS-84 Coordinates [rad]. Static coordinates need to compensate for displacement in x/y-direction (WGS84::displace)
+              m_lat_obst = msg->lat;
+              m_lon_obst = msg->lon;
 
-              if (distance < m_args.out_of_range)
-              { // Obstacle exists & inside range - Update
-                obst_vec[i].id = msg->id; // should have already been set!
-                obst_vec[i].lon = msg->lon;
-                obst_vec[i].lat = msg->lat;
-                obst_vec[i].heading = msg->heading;
-                obst_vec[i].data = msg->data; //callsign,name,type_and_cargo,a,b,c,d,sog.
-                m_last_update[i] = m_timestamp_obst;
+              // Distance between ASV - Obstacle
+              double distance = WGS84::distance(m_lat_asv, m_lon_asv, 0, Angles::radians(m_lat_obst), Angles::radians (m_lon_obst), 0);
 
-                trace("Obstacle with MMSI %s is CLOSER than %0.1f m and is UPDATED - OBST VECT SIZE %lu", obst_vec[i].id.c_str(), m_args.out_of_range, obst_vec.size());
-              }
-              else
+              //spew("Distance from obstacle %s is %0.1f",msg->mmsi.c_str(), distance);
+              trace("Received Obstacle from AIS with MMSI: %s, longitude %f and latitude %f, distance: %0.1f", msg->mmsi.c_str(), m_lon_obst, m_lat_obst, distance);
+
+              bool obs_exists = false;
+              // Obstacle vector: UPDATE/REMOVE.
+              for (unsigned int i = 0; i < obst_vec.size(); i++)
               {
-                // Obstacle Outside range - Remove Obstacle
-                trace("Obstacle with MMSI %s REMOVED - Outside range, obstacle vector size is now: %lu",
-                     obst_vec[i].id.c_str(), obst_vec.size()-1);
-                obst_vec.erase(obst_vec.begin() + i);
-                m_last_update.erase(m_last_update.begin() + i);
+                //spew("Update Obstacle vector: Source: %d Vector size: %d", obst_vec[i].getSource(), obst_vec.size());
+                std::string temp_mmsi = obst_vec[i].mmsi;
+                if(temp_mmsi.compare(msg->mmsi) == 0) //s1.compare(s2)
+                {
+                  obs_exists = true;
+
+                  if (distance < m_args.out_of_range)
+                  { // Obstacle exists & inside range - Update
+                    obst_vec[i].mmsi = msg->mmsi; // should have already been set!
+                    obst_vec[i].lon = msg->lon;
+                    obst_vec[i].lat = msg->lat;
+                    obst_vec[i].course = msg->course;
+                    obst_vec[i].nav_status = msg->nav_status;
+                    obst_vec[i].speed = msg->speed;
+
+                    m_last_update[i] = m_timestamp_obst;
+
+                    debug("Obstacle with MMSI %s is CLOSER than %0.1f m and is UPDATED - OBST VECT SIZE %lu - LAT %.3f, LON %.3f, COURSE %.3f, NAV_STATUS %d, SOG %.3f, distance %.3f", obst_vec[i].mmsi.c_str(), m_args.out_of_range, obst_vec.size(), Angles::degrees(obst_vec[i].lat), Angles::degrees(obst_vec[i].lon), Angles::degrees(obst_vec[i].course), obst_vec[i].nav_status, obst_vec[i].speed, distance);
+                  }
+                  else
+                  {
+                    // Obstacle Outside range - Remove Obstacle
+                    debug("Obstacle with MMSI %s REMOVED - Outside range, obstacle vector size is now: %lu",
+                        obst_vec[i].mmsi.c_str(), obst_vec.size()-1);
+                    obst_vec.erase(obst_vec.begin() + i);
+                    m_last_update.erase(m_last_update.begin() + i);
+                  }
+                }
+                if(m_timestamp_obst - m_last_update[i] > m_args.kill_obst)
+                {
+                  obs_exists = true; // but now is going to be killed!
+                  // Obstacle disappeared - Remove Obstacle
+                  debug("Obstacle with MMSI %s is DISAPPEARED and REMOVED - obstacle vector size is now: %lu",
+                      obst_vec[i].mmsi.c_str(), obst_vec.size()-1);
+                  obst_vec.erase(obst_vec.begin() + i);
+                  m_last_update.erase(m_last_update.begin() + i);
+                }
+              }
+
+              // // Obstacle vector: ADD new obstacle.
+              if (obs_exists == false && (distance < m_args.out_of_range))
+              {
+                // Create timestamp for this new vehicle.
+                m_last_update.push_back(m_timestamp_obst);
+
+                IMC::AisInfo obst_temp;
+                // Temp obstacle for storage.
+                obst_temp.mmsi = msg->mmsi;
+                obst_temp.lon = msg->lon;
+                obst_temp.lat = msg->lat;
+                obst_temp.course = msg->course;
+                obst_temp.nav_status = msg->nav_status;
+                obst_temp.speed = msg->speed;
+
+                obst_vec.push_back(obst_temp);
+                trace("New Obstacle Added from msg_type 1/2/3: MMSI %s, obstacle vector size: %lu",
+                    obst_temp.mmsi.c_str(), obst_vec.size());
+              }
+              //obs_exists = false;
+            } else if(msg->msg_type.compare("5") == 0)
+            {
+              //spew("CAS - MESSAGE TYPE 5");
+
+              // Add Static/Voyage information only to vehicles already in the list.
+              for (unsigned int i = 0; i < obst_vec.size(); i++)
+              {
+                std::string temp_mmsi = obst_vec[i].mmsi;
+                if(temp_mmsi.compare(msg->mmsi) == 0)
+                {
+                  // MMSI exists in the list, add static/voyage related data.
+                  obst_vec[i].mmsi = msg->mmsi;
+                  obst_vec[i].callsign = msg->callsign;
+                  obst_vec[i].name = msg->name;
+                  obst_vec[i].type_and_cargo = msg->type_and_cargo;
+                  obst_vec[i].a = msg->a;
+                  obst_vec[i].b = msg->b;
+                  obst_vec[i].c = msg->c;
+                  obst_vec[i].d = msg->d;
+                  obst_vec[i].draught = msg->draught;
+
+                  trace("AIS5: %s %s %s %d %.3f %.3f %.3f %.3f %.3f", obst_vec[i].mmsi.c_str(), obst_vec[i].callsign.c_str(), obst_vec[i].name.c_str(), obst_vec[i].type_and_cargo, obst_vec[i].a, obst_vec[i].b, obst_vec[i].c, obst_vec[i].d, obst_vec[i].draught);
+
+                } /*else
+                {
+                  // Create new obstacle.
+                  // Temp obstacle for storage.
+                  IMC::AisInfo obst_temp;
+                  obst_temp.mmsi = msg->mmsi;
+                  obst_temp.callsign = msg->callsign;
+                  obst_temp.name = msg->name;
+                  obst_temp.type_and_cargo = msg->type_and_cargo;
+                  obst_temp.a = msg->a;
+                  obst_temp.b = msg->b;
+                  obst_temp.c = msg->c;
+                  obst_temp.d = msg->d;
+                  obst_temp.draught = msg->draught;
+
+                  obst_vec.push_back(obst_temp);
+                  trace("New Obstacle Added from msg_type 5: MMSI %s, obstacle vector size: %lu",
+                      obst_temp.mmsi.c_str(), obst_vec.size());
+                }*/
               }
             }
-            if(m_timestamp_obst - m_last_update[i] > m_args.kill_obst)
-            {
-              obs_exists = true; // but now is going to be killed!
-              // Obstacle disappeared - Remove Obstacle
-              trace("Obstacle with MMSI %s is DISAPPEARED and REMOVED - obstacle vector size is now: %lu",
-                   obst_vec[i].id.c_str(), obst_vec.size()-1);
-              obst_vec.erase(obst_vec.begin() + i);
-              m_last_update.erase(m_last_update.begin() + i);
-            }
           }
 
-          // // Obstacle vector: ADD new obstacle.
-          if (obs_exists == false && (distance < m_args.out_of_range))
+          // Print out all considered vehicles.
+          /*if(m_enable_cas)
           {
-            // Create timestamp for this new vehicle.
-            m_last_update.push_back(m_timestamp_obst);
-            
-            // Temp obstacle for storage.
-            obst_temp.id = msg->id;
-            obst_temp.lon = msg->lon;
-            obst_temp.lat = msg->lat;
-            obst_temp.heading = msg->heading;
-            obst_temp.data = msg->data; //callsign,name,tyoe_and_cargo,a,b,c,d,sog.
-
-            obst_vec.push_back(obst_temp);
-            trace("New Obstacle Added: MMSI %s, NAME %s, obstacle vector size: %lu",
-                 obst_temp.id.c_str(), system_name.c_str(), obst_vec.size());
-          }
-          //obs_exists = false;
+            for (unsigned int i = 0; i < obst_vec.size(); i++)
+            {
+              debug("Obstacle with MMSI %s, callsign %s, name %s is CLOSER than %0.1f m - LAT %.3f, LON %.3f, COURSE %.3f, NAV_STATUS %d, SOG %.3f, TYPE/CARGO %d, LENGTH: %.3f, WIDTH:%.3f DRAUGHT:%.3f - OBST VECT SIZE %lu", obst_vec[i].mmsi.c_str(), obst_vec[i].callsign.c_str(), obst_vec[i].name.c_str(), m_args.out_of_range, Angles::degrees(obst_vec[i].lat), Angles::degrees(obst_vec[i].lon), Angles::degrees(obst_vec[i].course), obst_vec[i].nav_status, obst_vec[i].speed, obst_vec[i].type_and_cargo, obst_vec[i].a+obst_vec[i].b, obst_vec[i].c+obst_vec[i].d, obst_vec[i].draught, obst_vec.size());
+            }
+          }*/
         }
 
         //! From PathController.
@@ -530,7 +696,7 @@ namespace Control
           spew("Speed from Desired path: %0.2f", m_speed.value);
         }
 
-        void
+        /*void
         consume(const IMC::PeekDesiredPath* ppath)
         {
           m_nextpath_lat = ppath->dpath->end_lat;
@@ -538,7 +704,7 @@ namespace Control
           trace("NEXT NEXT WAYPOINT: lat %f - long %f",c_degrees_per_radian*m_nextpath_lat, c_degrees_per_radian*m_nextpath_lon);
 
           m_more_than_one = true;
-        }
+        }*/
 
         //! From GPS Task
         void
@@ -554,24 +720,44 @@ namespace Control
           asv_state(5) = 0.0; //! Assume zero.
 
           m_timestamp_new = msg->getTimeStamp();
+
+          // Retrieve contours from ENC database.
+          /*if(m_timer.overflow())
+          {
+            m_timer.reset();
+            inf("CAS: retrieving info");
+            // Retrieve contours from database and check distances from vehicle position.
+            //std::ofstream filez(m_args.debug_path+"useful_depare_single.csv");
+
+            m_contours = m_dp->getCAS(m_lat_asv, m_lon_asv, m_args.drval2, m_args.cont_size, asv_state(2), m_offsets);
+            for(int i=0; i<m_contours.rows(); i++)
+            {
+              //debug("%f %f %f %f\n", Angles::degrees(contours(i,0)), Angles::degrees(contours(i,1)), Angles::degrees(contours(i,2)), contours(i,3));
+              //std::cout << Angles::degrees(contours(i,0)) << "," << Angles::degrees(contours(i,1)) << "," << Angles::degrees(m_dp->normalize_angle(contours(i,2)-asv_state(2))) << "," << contours(i,3) << std::endl;
+              //m_contours_to_cas(i,0) = Angles::degrees(m_dp->normalize_angle(contours(i,2)-asv_state(2)));
+              //m_contours_to_cas(i,1) = contours(i,3);
+
+              if(m_contours(i,3) != 0.0 && m_contours(i,3) < m_dist_to_land) // Choose what is a safety distance to land.
+                m_static_obst = true;
+            }
+            //DepareData::DEPAREVector dep_vec = m_dp->getSquare(m_lat_asv, m_lon_asv, m_args.drval2, 5000.0);
+            //m_dp->writeCSVfile(dep_vec, m_args.debug_path + "useful_depare.csv");
+          }*/
         }
 
         void
         step(const IMC::EstimatedState& state, const TrackingState& ts)
         {
-          trace("LAST WAYPOINT COORD: lat %f - long %f",c_degrees_per_radian*ts.lat_st, c_degrees_per_radian*ts.lon_st);
-          trace("NEXT WAYPOINT COORD: lat %f - long %f",c_degrees_per_radian*ts.lat_en, c_degrees_per_radian*ts.lon_en);
-          
           //! LOS Navigation Law (called Pure Pursuit in Dune)
           m_heading.value = ts.los_angle;
           if (ts.cc)
             m_heading.value = Math::Angles::normalizeRadian(m_heading.value + state.psi - ts.course);
 
-          //! CAS: Running every 5 seconds when obstacles are nearby
-          if (obst_vec.size() > 0 && (m_timestamp_new - m_timestamp_prev) > 5.0)
+          //! CAS: Running every 5 seconds when obstacles or ground are nearby.
+          if((obst_vec.size() > 0 && (m_timestamp_new - m_timestamp_prev) > 5.0))
           {
             m_timestamp_prev = m_timestamp_new;
-            
+
             Eigen::Matrix<double, -1, 10> obst_state;
             obst_state.resize(obst_vec.size(), 10);
 
@@ -584,43 +770,38 @@ namespace Control
             {
               IMC::CollisionAvoidance cas;
 
-              // Get data from RemoteSensorInfo tuple.
-              TupleList tuples(obst_vec[i].data);
-
-              int sog = tuples.get("SOG", 0);
-              int a = tuples.get("A", 0);
-              int b = tuples.get("B", 0);
-              int c = tuples.get("C", 0);
-              int d = tuples.get("D", 0);
-
-              double sog_d = (double) sog/1000;
-              double a_d = (double) a/1000;
-              double b_d = (double) b/1000;
-              double c_d = (double) c/1000;
-              double d_d = (double) d/1000;
-
-              spew("OBSTACLE: sog= %f, a= %0.1f, b= %0.1f, c= %0.1f, d= %0.1f", sog_d, a_d, b_d, c_d, d_d);
-
               // Distance between ASV - Obstacle
               double dist_x = 0.0;
               double dist_y = 0.0;
-              WGS84::displacement(m_lat_asv, m_lon_asv, 0, obst_vec[i].lat, obst_vec[i].lon, 0, &dist_x, &dist_y);
+              WGS84::displacement(m_lat_asv, m_lon_asv, 0, Angles::radians(obst_vec[i].lat), Angles::radians(obst_vec[i].lon), 0, &dist_x, &dist_y);
 
               trace("North offset x-coordinate in NED = %0.1f, East offset y-coordinate in NED = %0.1f", dist_x, dist_y);
 
               //! Update Obstacle states to fit input of CAS (sb_mpc)
               obst_state(i, 0) = dist_x; // north
               obst_state(i, 1) = dist_y; // east
-              obst_state(i, 2) = obst_vec[i].heading; // course actually.
-              obst_state(i, 3) = sog_d; //sqrt(std::pow(obst_vec[i].u, 2) + std::pow(obst_vec[i].v, 2));
+              obst_state(i, 2) = obst_vec[i].course; // course actually.
+              obst_state(i, 3) = obst_vec[i].speed; //sqrt(std::pow(obst_vec[i].u, 2) + std::pow(obst_vec[i].v, 2));
               obst_state(i, 4) = 0.0;
-              obst_state(i, 5) = a_d;
-              obst_state(i, 6) = b_d;
-              obst_state(i, 7) = c_d;
-              obst_state(i, 8) = d_d;
+              if(obst_vec[i].a == 0.0)
+                obst_state(i, 5) = 10.0;
+              else 
+                obst_state(i, 5) = obst_vec[i].a;
+              if(obst_vec[i].b == 0.0)
+                obst_state(i, 6) = 10.0;
+              else 
+                obst_state(i, 6) = obst_vec[i].b;
+              if(obst_vec[i].c == 0.0)
+                obst_state(i, 7) = 2.0;
+              else 
+                obst_state(i, 7) = obst_vec[i].c;
+              if(obst_vec[i].d == 0.0)
+                obst_state(i, 8) = 2.0;
+              else 
+                obst_state(i, 8) = obst_vec[i].d;
               
               // Convert MMSI from string to int for CAS.
-              std::stringstream geek(obst_vec[i].id); //contains int MMSI.
+              std::stringstream geek(obst_vec[i].mmsi); //contains int MMSI.
               int mmsi = 0; 
               geek >> mmsi;
               obst_state(i, 9) = mmsi;
@@ -634,15 +815,15 @@ namespace Control
               cas.lon = obst_vec[i].lon;
               cas.x = dist_x;
               cas.y = dist_y;
-              cas.speed = sog_d;
-              cas.course = c_degrees_per_radian*obst_vec[i].heading;
+              cas.speed = obst_vec[i].speed;
+              cas.course = c_degrees_per_radian*obst_vec[i].course;
               cas.dist = distance;
-              cas.length = a_d+b_d;
-              cas.width = c_d+d_d;
+              cas.length = obst_vec[i].a+obst_vec[i].b;
+              cas.width = obst_vec[i].c+obst_vec[i].d;
               cas.o_vect = (int) obst_vec.size();
               dispatch(cas);
 
-              trace("AUTONAUT (lon,lat,cog,sog) %0.1f %0.1f %0.1f %0.1f | %d-th OBSTACLE (dist_x,dist_y,cog,sog) %0.1f %0.1f %0.1f %f", m_lat_asv, m_lon_asv, c_degrees_per_radian*asv_state(2), asv_state(3), i+1, obst_state(i,0), obst_state(i,1), c_degrees_per_radian*obst_state(i,2), obst_state(i,3));
+              //debug("AUTONAUT (lon,lat,cog,sog) %0.3f %0.3f %0.1f %0.1f | %d-th OBSTACLE (dist_x,dist_y,cog,sog) %0.1f %0.1f %0.1f %f", Angles::degrees(m_lat_asv), Angles::degrees(m_lon_asv), Angles::degrees(asv_state(2)), asv_state(3), i+1, obst_state(i,0), obst_state(i,1), c_degrees_per_radian*obst_state(i,2), obst_state(i,3));
             }
 
             // Create and fill waypoints matrix.
@@ -655,30 +836,31 @@ namespace Control
 
             // Compute displacement between AutoNaut and waypoints.
             WGS84::displacement(m_lat_asv, m_lon_asv, 0, ts.lat_st, ts.lon_st, 0, &wp0_dx, &wp0_dy);
-            WGS84::displacement(m_lat_asv, m_lon_asv, 0, ts.lat_en, ts.lon_en, 0, &wp1_dx, &wp1_dy);
+            WGS84::displacement(m_lat_asv, m_lon_asv, 0, ts.waypoints(0,0), ts.waypoints(0,1), 0, &wp1_dx, &wp1_dy);
             
-            if(m_more_than_one)
+            if(ts.waypoints.rows() > 1) //m_waypoints.rows() > 1
             {
-              WGS84::displacement(m_lat_asv, m_lon_asv, 0, m_nextpath_lat, m_nextpath_lon, 0, &wp2_dx, &wp2_dy);
+              WGS84::displacement(m_lat_asv, m_lon_asv, 0, ts.waypoints(1,0), ts.waypoints(1,1), 0, &wp2_dx, &wp2_dy);
               waypoints << wp0_dx, wp0_dy, // starting waypoint
-                           wp1_dx, wp1_dy, // waypoint we are heading too
+                           wp1_dx, wp1_dy, // waypoint we are heading to
                            wp2_dx, wp2_dy; // next waypoint
               
               trace("Displacements: wp0 (%0.1f,%0.1f) - wp1 (%0.1f,%0.1f) - wp2 (%0.1f,%0.1f)", wp0_dx, wp0_dy, wp1_dx, wp1_dy, wp2_dx, wp2_dy);
             } else
             { // otherwise send wp1 twice.
               waypoints << wp0_dx, wp0_dy, // starting waypoint
-                           wp1_dx, wp1_dy, // waypoint we are heading too
+                           wp1_dx, wp1_dy, // waypoint we are heading to
                            wp1_dx, wp1_dy; // repeat 2nd wp for sb_mpc
 
               trace("Displacements: wp0 (%0.1f,%0.1f) - wp1 (%0.1f,%0.1f)", wp0_dx, wp0_dy, wp1_dx, wp1_dy);
             }
 
-            // Create static obstacle matrix.
-            const Eigen::Matrix<double,-1,4> static_obst;
+            debug("OBSTACLE dist_x %f, dist_y %f, course %f, speed %f, a %f, b %f, c %f, d %f", obst_state(0,0), obst_state(0,1), obst_state(0,2), obst_state(0,3), obst_state(0,5), obst_state(0,6), obst_state(0,7), obst_state(0,8));
+
+            debug("Arrived Here!");
 
             //! Collision Avoidance Algorithm - Compute heading offset/(speed offset)
-            sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, static_obst, waypoints);
+            sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, m_contours);
 
             //! New desired course and course offset.
             m_heading.value += psi_os;
@@ -692,12 +874,18 @@ namespace Control
 
             dispatch(m_heading);
 
-            trace("COLLISION AVOIDANCE - Course offset: %0.1f - DESIRED COURSE:%0.1f  - Number of Obstacles: %lu", c_degrees_per_radian*psi_os, c_degrees_per_radian*m_heading.value, obst_vec.size());
-          }
-
-          // No obstacle in range	- proceed as normal
-          if (obst_vec.size() == 0 && (m_timestamp_new - m_timestamp_prev > 1.0))
+            debug("COLLISION AVOIDANCE - Course offset: %0.1f - DESIRED COURSE:%0.1f  - Number of Obstacles: %lu", c_degrees_per_radian*psi_os, c_degrees_per_radian*m_heading.value, obst_vec.size());
+          } else if(obst_vec.size() == 0 && (m_timestamp_new - m_timestamp_prev > 20.0) && m_static_obst && m_enable_antiground)
           {
+            debug("No dynamic obstacles but static obstacles!");
+            // No obstacle in range but static obstacles close: implement pure Anti-Grounding.
+            m_timestamp_prev = m_timestamp_new;
+            dispatch(m_heading);
+
+          } else if (obst_vec.size() == 0 && (m_timestamp_new - m_timestamp_prev > 1.0) && !m_static_obst)
+          {
+            debug("No static nor dynamic obstacles!");
+            //spew("Desired Speed: %f", m_speed.value);
             m_timestamp_prev = m_timestamp_new;
             dispatch(m_heading);
           }
