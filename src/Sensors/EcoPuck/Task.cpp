@@ -132,16 +132,16 @@ namespace Sensors
         .description("Amount of seconds to wait for data before reporting an error");
 
         param("CDOM -- Dark Counts", m_args.dom_dc)
-        .defaultValue("41")
+        .defaultValue("62")
         .description("Signal output of the meter in clean water with black tape over detector");
 
         param("CDOM -- Scale Factor", m_args.dom_sf)
-        .defaultValue("0.0896")
+        .defaultValue("0.0916")
         .description("Scale factor is used to derive instrument output concentration"
                      " from the raw signal output of the fluorometer");
 
         param("Chlorophyll -- Dark Counts", m_args.chl_dc)
-        .defaultValue("44")
+        .defaultValue("49")
         .description("Signal output of the meter in clean water with black tape over detector");
 
         param("Chlorophyll -- Scale Factor", m_args.chl_sf)

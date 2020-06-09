@@ -54,6 +54,8 @@ namespace Sensors
       std::string io_dev;
       //! UART baud rate.
       unsigned uart_baud;
+      //! Salnity entity label.
+      std::string elabel_salinity;
 
       //! ADCP position.
       std::vector<float> pos;
@@ -114,6 +116,8 @@ namespace Sensors
       Counter<double> m_duration;
       //! Intervals between samplings.
       Counter<double> m_intervals;
+      //! Salinity entity id.
+      unsigned m_salinity_eid;
       //! Configuration parameters.
       Arguments m_args;
       
@@ -260,12 +264,16 @@ namespace Sensors
         param("Number of Beams", m_args.nbeam)
         .defaultValue("3")
         .minimumValue("1")
-        .maximumValue("4")
+        .maximumValue("5")
         .description("Number of Beams");
 
         param("Bandwidth", m_args.bandwidth)
         .defaultValue("BROAD")
         .description("Bandwidth selection. (“NARROW”, “BROAD”)");
+
+        param("Entity Label - Salinity", m_args.elabel_salinity)
+        .defaultValue("SBE49FastCAT CTD Salinity")
+        .description("Entity label of the CTD");
 
         bind<IMC::Salinity>(this);
         bind<IMC::ScienceSensors>(this);
@@ -314,12 +322,26 @@ namespace Sensors
       onEntityReservation(void)
       {
         m_entities.clear();
-        for (unsigned i = 0; i < c_beam_count; i++)
+        for (unsigned i = 0; i < m_args.nbeam; i++)
           m_entities.push_back(reserveEntity(String::str("%s - Beam %u", getEntityLabel(), i)));
 
         m_entity = reserveEntity("ADCP Filtered");
       }
 
+      //! Resolve entity identifiers.
+      void
+      onEntityResolution(void)
+      {
+        try
+        {
+          m_salinity_eid = resolveEntity(m_args.elabel_salinity);
+        }
+        catch (...)
+        {
+          m_salinity_eid = std::numeric_limits<unsigned>::max();
+        }
+      }
+      
       //! Acquire resources.
       void
       onResourceAcquisition(void)
@@ -388,7 +410,7 @@ namespace Sensors
 
         if (isParserOn())
         {
-          m_parser->set( m_args.ncells, m_args.cellsize, m_args.blank );
+          m_parser->set( m_args.ncells, m_args.cellsize, m_args.blank, m_args.nbeam);
         }
         else
           return false;
@@ -474,6 +496,9 @@ namespace Sensors
         if (msg->getSource() != getSystemId())
           return;
 
+        if (msg->getSourceEntity() != m_salinity_eid)
+          return;
+
         if (isConnected())
         {
           m_driver->setSalinity(msg->value);
@@ -519,7 +544,7 @@ namespace Sensors
 
 
         m_parser = new Parser( this, m_data_h, m_args.pos, m_args.ang, m_entities, m_entity,
-                               m_args.ncells, m_args.cellsize, m_args.blank );
+                               m_args.ncells, m_args.cellsize, m_args.blank, m_args.nbeam );
       }
 
       void

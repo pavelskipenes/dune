@@ -87,6 +87,10 @@ namespace Sensors
       std::string cmd;
       //! Temperature entity label.
       std::string elabel_temp;
+      //! Depth entity label.
+      std::string elabel_depth;
+      //! Salnity entity label.
+      std::string elabel_salinity;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -117,6 +121,10 @@ namespace Sensors
       std::string m_line;
       //! Temperature entity id.
       unsigned m_temp_eid;
+      //! Depth entity id.
+      unsigned m_depth_eid;
+      //! Salinity entity id.
+      unsigned m_salinity_eid;
       //! Science sensors commands from L2.
       IMC::ScienceSensors m_science;
       //! Sampling duration timer.
@@ -165,8 +173,16 @@ namespace Sensors
         .description("Measurement command string identifier");
 
         param("Entity Label - Temperature", m_args.elabel_temp)
-        .defaultValue("Depth Sensor")
-        .description("Entity label of the IMU");
+        .defaultValue("SBE49FastCAT CTD Temperature")
+        .description("Entity label of the CTD");
+
+        param("Entity Label - Depth", m_args.elabel_depth)
+        .defaultValue("SBE49FastCAT CTD Depth")
+        .description("Entity label of the CTD");
+
+        param("Entity Label - Salinity", m_args.elabel_salinity)
+        .defaultValue("SBE49FastCAT CTD Salinity")
+        .description("Entity label of the CTD");
 
         bind<IMC::Salinity>(this);
         bind<IMC::Temperature>(this);
@@ -239,6 +255,24 @@ namespace Sensors
         catch (...)
         {
           m_temp_eid = std::numeric_limits<unsigned>::max();
+        }
+
+        try
+        {
+          m_depth_eid = resolveEntity(m_args.elabel_depth);
+        }
+        catch (...)
+        {
+          m_depth_eid = std::numeric_limits<unsigned>::max();
+        }
+
+        try
+        {
+          m_salinity_eid = resolveEntity(m_args.elabel_salinity);
+        }
+        catch (...)
+        {
+          m_salinity_eid = std::numeric_limits<unsigned>::max();
         }
       }
 
@@ -315,8 +349,10 @@ namespace Sensors
         if (msg->getSource() != getSystemId())
           return;
 
-        m_depth = msg->value;
+        if (msg->getSourceEntity() != m_depth_eid)
+          return;
 
+        m_depth = msg->value;
         spew("Depth Consumed from CTD: %f", m_depth);
       }
 
@@ -326,10 +362,14 @@ namespace Sensors
         if (msg->getSource() != getSystemId())
           return;
 
+        if (msg->getSourceEntity() != m_salinity_eid)
+          return;
+
         if (msg->value < 0)
           return;
 
         m_salinity = msg->value;
+        spew("Salinity Consumed from CTD: %f", m_salinity);
       }
 
       void
@@ -342,6 +382,7 @@ namespace Sensors
           return;
 
         m_temperature = msg->value;
+        spew("Temperature Consumed from CTD: %f", m_temperature);
       }
 
       //! Wake Up device.

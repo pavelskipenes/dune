@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: f03569c742b632df430f37f79f94d0ad                            *
+// IMC XML MD5: 15a453bf8cd23a70e3e712d94358e1ce                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -28266,28 +28266,87 @@ namespace DUNE
       IMC::toJSON(os__, "beam4", beam4, nindent__);
     }
 
+    ADCPBeam::ADCPBeam(void)
+    {
+      m_header.mgid = 1016;
+      clear();
+    }
+
+    void
+    ADCPBeam::clear(void)
+    {
+      vel = 0;
+      amp = 0;
+      cor = 0;
+    }
+
+    bool
+    ADCPBeam::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::ADCPBeam& other__ = static_cast<const ADCPBeam&>(msg__);
+      if (vel != other__.vel) return false;
+      if (amp != other__.amp) return false;
+      if (cor != other__.cor) return false;
+      return true;
+    }
+
+    int
+    ADCPBeam::validate(void) const
+    {
+      if (cor < 0 || cor > 100) return false;
+      return true;
+    }
+
+    uint8_t*
+    ADCPBeam::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(vel, ptr__);
+      ptr__ += IMC::serialize(amp, ptr__);
+      ptr__ += IMC::serialize(cor, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    ADCPBeam::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(vel, bfr__, size__);
+      bfr__ += IMC::deserialize(amp, bfr__, size__);
+      bfr__ += IMC::deserialize(cor, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    ADCPBeam::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(vel, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(amp, bfr__, size__);
+      bfr__ += IMC::deserialize(cor, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    ADCPBeam::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "vel", vel, nindent__);
+      IMC::toJSON(os__, "amp", amp, nindent__);
+      IMC::toJSON(os__, "cor", cor, nindent__);
+    }
+
     CurrentProfileCell::CurrentProfileCell(void)
     {
       m_header.mgid = 1014;
       clear();
+      beams.setParent(this);
     }
 
     void
     CurrentProfileCell::clear(void)
     {
       cellposition = 0;
-      x = 0;
-      y = 0;
-      z1 = 0;
-      z2 = 0;
-      amp0 = 0;
-      amp1 = 0;
-      amp2 = 0;
-      amp3 = 0;
-      cor0 = 0;
-      cor1 = 0;
-      cor2 = 0;
-      cor3 = 0;
+      beams.clear();
     }
 
     bool
@@ -28295,28 +28354,13 @@ namespace DUNE
     {
       const IMC::CurrentProfileCell& other__ = static_cast<const CurrentProfileCell&>(msg__);
       if (cellposition != other__.cellposition) return false;
-      if (x != other__.x) return false;
-      if (y != other__.y) return false;
-      if (z1 != other__.z1) return false;
-      if (z2 != other__.z2) return false;
-      if (amp0 != other__.amp0) return false;
-      if (amp1 != other__.amp1) return false;
-      if (amp2 != other__.amp2) return false;
-      if (amp3 != other__.amp3) return false;
-      if (cor0 != other__.cor0) return false;
-      if (cor1 != other__.cor1) return false;
-      if (cor2 != other__.cor2) return false;
-      if (cor3 != other__.cor3) return false;
+      if (beams != other__.beams) return false;
       return true;
     }
 
     int
     CurrentProfileCell::validate(void) const
     {
-      if (cor0 < 0 || cor0 > 100) return false;
-      if (cor1 < 0 || cor1 > 100) return false;
-      if (cor2 < 0 || cor2 > 100) return false;
-      if (cor3 < 0 || cor3 > 100) return false;
       return true;
     }
 
@@ -28325,18 +28369,7 @@ namespace DUNE
     {
       uint8_t* ptr__ = bfr__;
       ptr__ += IMC::serialize(cellposition, ptr__);
-      ptr__ += IMC::serialize(x, ptr__);
-      ptr__ += IMC::serialize(y, ptr__);
-      ptr__ += IMC::serialize(z1, ptr__);
-      ptr__ += IMC::serialize(z2, ptr__);
-      ptr__ += IMC::serialize(amp0, ptr__);
-      ptr__ += IMC::serialize(amp1, ptr__);
-      ptr__ += IMC::serialize(amp2, ptr__);
-      ptr__ += IMC::serialize(amp3, ptr__);
-      ptr__ += IMC::serialize(cor0, ptr__);
-      ptr__ += IMC::serialize(cor1, ptr__);
-      ptr__ += IMC::serialize(cor2, ptr__);
-      ptr__ += IMC::serialize(cor3, ptr__);
+      ptr__ += beams.serialize(ptr__);
       return ptr__;
     }
 
@@ -28345,18 +28378,7 @@ namespace DUNE
     {
       const uint8_t* start__ = bfr__;
       bfr__ += IMC::deserialize(cellposition, bfr__, size__);
-      bfr__ += IMC::deserialize(x, bfr__, size__);
-      bfr__ += IMC::deserialize(y, bfr__, size__);
-      bfr__ += IMC::deserialize(z1, bfr__, size__);
-      bfr__ += IMC::deserialize(z2, bfr__, size__);
-      bfr__ += IMC::deserialize(amp0, bfr__, size__);
-      bfr__ += IMC::deserialize(amp1, bfr__, size__);
-      bfr__ += IMC::deserialize(amp2, bfr__, size__);
-      bfr__ += IMC::deserialize(amp3, bfr__, size__);
-      bfr__ += IMC::deserialize(cor0, bfr__, size__);
-      bfr__ += IMC::deserialize(cor1, bfr__, size__);
-      bfr__ += IMC::deserialize(cor2, bfr__, size__);
-      bfr__ += IMC::deserialize(cor3, bfr__, size__);
+      bfr__ += beams.deserialize(bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -28365,18 +28387,7 @@ namespace DUNE
     {
       const uint8_t* start__ = bfr__;
       bfr__ += IMC::reverseDeserialize(cellposition, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(x, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(y, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(z1, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(z2, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(amp0, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(amp1, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(amp2, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(amp3, bfr__, size__);
-      bfr__ += IMC::deserialize(cor0, bfr__, size__);
-      bfr__ += IMC::deserialize(cor1, bfr__, size__);
-      bfr__ += IMC::deserialize(cor2, bfr__, size__);
-      bfr__ += IMC::deserialize(cor3, bfr__, size__);
+      bfr__ += beams.reverseDeserialize(bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -28384,18 +28395,37 @@ namespace DUNE
     CurrentProfileCell::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
     {
       IMC::toJSON(os__, "cellposition", cellposition, nindent__);
-      IMC::toJSON(os__, "x", x, nindent__);
-      IMC::toJSON(os__, "y", y, nindent__);
-      IMC::toJSON(os__, "z1", z1, nindent__);
-      IMC::toJSON(os__, "z2", z2, nindent__);
-      IMC::toJSON(os__, "amp0", amp0, nindent__);
-      IMC::toJSON(os__, "amp1", amp1, nindent__);
-      IMC::toJSON(os__, "amp2", amp2, nindent__);
-      IMC::toJSON(os__, "amp3", amp3, nindent__);
-      IMC::toJSON(os__, "cor0", cor0, nindent__);
-      IMC::toJSON(os__, "cor1", cor1, nindent__);
-      IMC::toJSON(os__, "cor2", cor2, nindent__);
-      IMC::toJSON(os__, "cor3", cor3, nindent__);
+      beams.toJSON(os__, "beams", nindent__);
+    }
+
+    void
+    CurrentProfileCell::setTimeStampNested(double value__)
+    {
+      beams.setTimeStamp(value__);
+    }
+
+    void
+    CurrentProfileCell::setSourceNested(uint16_t value__)
+    {
+      beams.setSource(value__);
+    }
+
+    void
+    CurrentProfileCell::setSourceEntityNested(uint8_t value__)
+    {
+      beams.setSourceEntity(value__);
+    }
+
+    void
+    CurrentProfileCell::setDestinationNested(uint16_t value__)
+    {
+      beams.setDestination(value__);
+    }
+
+    void
+    CurrentProfileCell::setDestinationEntityNested(uint8_t value__)
+    {
+      beams.setDestinationEntity(value__);
     }
 
     CurrentProfile::CurrentProfile(void)
@@ -28408,6 +28438,9 @@ namespace DUNE
     void
     CurrentProfile::clear(void)
     {
+      beams = 0;
+      cells = 0;
+      coord_sys = 0;
       prof.clear();
     }
 
@@ -28415,6 +28448,9 @@ namespace DUNE
     CurrentProfile::fieldsEqual(const Message& msg__) const
     {
       const IMC::CurrentProfile& other__ = static_cast<const CurrentProfile&>(msg__);
+      if (beams != other__.beams) return false;
+      if (cells != other__.cells) return false;
+      if (coord_sys != other__.coord_sys) return false;
       if (prof != other__.prof) return false;
       return true;
     }
@@ -28429,6 +28465,9 @@ namespace DUNE
     CurrentProfile::serializeFields(uint8_t* bfr__) const
     {
       uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(beams, ptr__);
+      ptr__ += IMC::serialize(cells, ptr__);
+      ptr__ += IMC::serialize(coord_sys, ptr__);
       ptr__ += prof.serialize(ptr__);
       return ptr__;
     }
@@ -28437,6 +28476,9 @@ namespace DUNE
     CurrentProfile::deserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(beams, bfr__, size__);
+      bfr__ += IMC::deserialize(cells, bfr__, size__);
+      bfr__ += IMC::deserialize(coord_sys, bfr__, size__);
       bfr__ += prof.deserialize(bfr__, size__);
       return bfr__ - start__;
     }
@@ -28445,6 +28487,9 @@ namespace DUNE
     CurrentProfile::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(beams, bfr__, size__);
+      bfr__ += IMC::deserialize(cells, bfr__, size__);
+      bfr__ += IMC::deserialize(coord_sys, bfr__, size__);
       bfr__ += prof.reverseDeserialize(bfr__, size__);
       return bfr__ - start__;
     }
@@ -28452,6 +28497,9 @@ namespace DUNE
     void
     CurrentProfile::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
     {
+      IMC::toJSON(os__, "beams", beams, nindent__);
+      IMC::toJSON(os__, "cells", cells, nindent__);
+      IMC::toJSON(os__, "coord_sys", coord_sys, nindent__);
       prof.toJSON(os__, "prof", nindent__);
     }
 

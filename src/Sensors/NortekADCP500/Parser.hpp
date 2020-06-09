@@ -25,7 +25,7 @@ namespace Sensors
     using DUNE_NAMESPACES;
 
     //! Number of distance measurements.
-    static const unsigned c_beam_count = 4;
+    //static const unsigned c_beam_count = 4;
     //! Beam width.
     static const float c_beam_width = 1.0f;
     //! Beam offset.
@@ -50,9 +50,9 @@ namespace Sensors
       //! @param[in] entity filtered dvl entity.
       Parser( Tasks::Task *task, IO::Handle *handle, std::vector<float> &pos,
               std::vector<float> &ang, std::vector<unsigned> &entities, unsigned entity,
-              uint16_t cp_ncells, float cp_csize, float cp_blank ) :
+              uint16_t cp_ncells, float cp_csize, float cp_blank, int num_beams ) :
           m_task( task ),
-          m_cp_parser( task, cp_ncells, cp_csize, cp_blank, c_beam_count ),
+          m_cp_parser( task, cp_ncells, cp_csize, cp_blank, num_beams ),
           m_handle( handle ),
           m_filter( nullptr ),
           m_state( ST_SYNC ),
@@ -61,9 +61,10 @@ namespace Sensors
           m_data_size( 0 ),
           m_checksum( 0 ),
           m_status( 0 ),
-          m_type( RT_NONE )
+          m_type( RT_NONE ),
+          m_num_beams(num_beams)
       {
-        m_filter = new BeamFilter( m_task, c_beam_count, c_beam_width, c_beam_offset,
+        m_filter = new BeamFilter( m_task, num_beams, c_beam_width, c_beam_offset,
                                    c_beam_angle, pos, ang, BeamFilter::ANTICLOCKWISE );
 
         m_filter->setSourceEntities( entities );
@@ -79,9 +80,10 @@ namespace Sensors
       }
 
       //! Set variable data settings
-      void set( uint16_t cp_ncells, float cp_csize, float cp_blank)
+      void set( uint16_t cp_ncells, float cp_csize, float cp_blank, int num_beams)
       {
-        m_cp_parser.set( cp_ncells, cp_csize, cp_blank, c_beam_count );
+        m_cp_parser.set( cp_ncells, cp_csize, cp_blank, num_beams );
+        m_num_beams = m_num_beams;
       }
 
       //! Read data.
@@ -353,18 +355,6 @@ namespace Sensors
         {
           m_cp.setTimeStamp( m_timestamp );
           m_task->dispatch( m_cp, DF_KEEP_TIME );
-
-          // Debug: Trace the obtained data
-          int i = 0;
-          for (auto const& it : m_cp.prof) {
-            m_task->trace("Amplitudes for cell %d: amp0: %.2f | amp1: %.2f | amp2: %.2f | amp3: %.2f", 
-                          i, it->amp0, it->amp1, it->amp2,
-                          it->amp3);
-            m_task->trace("Correlations for cell %d: cor0: %d | cor1: %d | cor2: %d | cor3: %d", 
-                          i, it->cor0, it->cor1, it->cor2,
-                          it->cor3);
-            i++;
-          }
         }
       }
 
@@ -441,7 +431,7 @@ namespace Sensors
         if ( m_type != RT_BOTTOM_TRACK )
           return;
 
-        for ( unsigned i = 0; i < c_beam_count; i++ )
+        for ( unsigned i = 0; i < m_num_beams; i++ )
         {
           float altitude;
           std::memcpy( &altitude, &m_bfr[c_hdr_size + IND_BEAM_D + i * 4], 4 );
@@ -650,6 +640,8 @@ namespace Sensors
       uint32_t m_status;
       //! Return data type.
       ReturnType m_type;
+      //! Number of beams.
+      int m_num_beams;
       //! Log file.
       std::ofstream m_log_file;
       //! Log root.

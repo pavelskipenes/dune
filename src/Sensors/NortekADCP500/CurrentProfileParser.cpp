@@ -166,21 +166,24 @@ namespace Sensors
       //! Insert into IMC message
       msg_cp.prof.clear();
       IMC::CurrentProfileCell cp_cell;
+      //! Current profile message
+      IMC::ADCPBeam beam;
+
+      msg_cp.beams = m_nbeams;
+      msg_cp.cells = m_ncells;
+
       for ( size_t c = 0; c < m_ncells; ++c )
       {
         cp_cell.cellposition = m_blank + m_csize * c;
-        cp_cell.x = m_cp_vel[0][c] * m_vel_scale; // m/s
-        cp_cell.y = m_cp_vel[1][c] * m_vel_scale;
-        cp_cell.z1 = m_cp_vel[2][c] * m_vel_scale;
-        cp_cell.z2 = m_cp_vel[3][c] * m_vel_scale;
-        cp_cell.cor0 = m_cp_cor[0][c]; // 0-100 %
-        cp_cell.cor1 = m_cp_cor[1][c];
-        cp_cell.cor2 = m_cp_cor[2][c];
-        cp_cell.cor3 = m_cp_cor[3][c];
-        cp_cell.amp0 = m_cp_amp[0][c] * c_amp_scale; // dB
-        cp_cell.amp1 = m_cp_amp[1][c] * c_amp_scale;
-        cp_cell.amp2 = m_cp_amp[2][c] * c_amp_scale;
-        cp_cell.amp3 = m_cp_amp[3][c] * c_amp_scale;
+        cp_cell.beams.clear();
+
+        for(size_t b = 0; b < m_nbeams; ++b)
+        {          
+          beam.vel = m_cp_vel[b][c] * m_vel_scale; // m/s
+          beam.cor = m_cp_cor[b][c]; // 0-100 %
+          beam.amp = m_cp_amp[b][c] * c_amp_scale; // dB
+          cp_cell.beams.push_back(beam);
+        }
 
         msg_cp.prof.push_back( cp_cell ); // push_back makes copy
 

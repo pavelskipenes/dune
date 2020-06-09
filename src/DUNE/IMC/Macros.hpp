@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: f03569c742b632df430f37f79f94d0ad                            *
+// IMC XML MD5: 15a453bf8cd23a70e3e712d94358e1ce                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -698,6 +698,8 @@
 #define DUNE_IMC_CURRENTPROFILECELL 1014
 //! CurrentProfile identification number.
 #define DUNE_IMC_CURRENTPROFILE 1015
+//! ADCPBeam identification number.
+#define DUNE_IMC_ADCPBEAM 1016
 //! TBRFishTag identification number.
 #define DUNE_IMC_TBRFISHTAG 2007
 //! TBRSensor identification number.

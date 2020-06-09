@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: f03569c742b632df430f37f79f94d0ad                            *
+// IMC XML MD5: 15a453bf8cd23a70e3e712d94358e1ce                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -26607,36 +26607,79 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
+    //! ADCP Beam Measurements.
+    class ADCPBeam: public Message
+    {
+    public:
+      //! Water Velocity.
+      fp32_t vel;
+      //! Amplitude.
+      fp32_t amp;
+      //! Correlation.
+      uint8_t cor;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 1016;
+      }
+
+      ADCPBeam(void);
+
+      ADCPBeam*
+      clone(void) const
+      {
+        return new ADCPBeam(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return ADCPBeam::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "ADCPBeam";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 9;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
     //! Current Profile Cell.
     class CurrentProfileCell: public Message
     {
     public:
       //! Cell Position.
       fp32_t cellposition;
-      //! Vel X.
-      fp32_t x;
-      //! Vel Y.
-      fp32_t y;
-      //! Vel Z1.
-      fp32_t z1;
-      //! Vel Z2.
-      fp32_t z2;
-      //! Amp 0.
-      fp32_t amp0;
-      //! Amp 1.
-      fp32_t amp1;
-      //! Amp 2.
-      fp32_t amp2;
-      //! Amp 3.
-      fp32_t amp3;
-      //! Cor 0.
-      uint8_t cor0;
-      //! Cor 1.
-      uint8_t cor1;
-      //! Cor 2.
-      uint8_t cor2;
-      //! Cor 3.
-      uint8_t cor3;
+      //! Beams Measurements.
+      MessageList<ADCPBeam> beams;
 
       static uint16_t
       getIdStatic(void)
@@ -26685,17 +26728,54 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 40;
+        return 4;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return beams.getSerializationSize();
       }
 
       void
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+
+    protected:
+      void
+      setTimeStampNested(double value__);
+
+      void
+      setSourceNested(uint16_t value__);
+
+      void
+      setSourceEntityNested(uint8_t value__);
+
+      void
+      setDestinationNested(uint16_t value__);
+
+      void
+      setDestinationEntityNested(uint8_t value__);
     };
 
     //! Current Profile.
     class CurrentProfile: public Message
     {
     public:
+      //! Coordinate System.
+      enum CoordinateSystemBits
+      {
+        //! xyz.
+        UTF_XYZ = 0x01,
+        //! beams.
+        UTF_BEAMS = 0x02
+      };
+
+      //! Number of Beams.
+      uint8_t beams;
+      //! Number of Cells.
+      uint8_t cells;
+      //! Coordinate System.
+      uint8_t coord_sys;
       //! Profile.
       MessageList<CurrentProfileCell> prof;
 
@@ -26746,7 +26826,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 0;
+        return 3;
       }
 
       unsigned
