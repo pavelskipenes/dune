@@ -226,7 +226,8 @@ namespace Sensors
           m_gpio->setValue(1);
           // Sensor is not active.
           m_active = false;
-          //requestDeactivation();
+          m_intervals.setTop(0.0);
+          m_duration.setTop(0.0);
         }
 
         // If sensor is off and Neptus wants to turn it on.
@@ -241,8 +242,6 @@ namespace Sensors
           {
             // Sensor is active.
             m_active = true;
-            //requestActivation();
-            //Delay::wait(2.0);
             start();
           }
           else

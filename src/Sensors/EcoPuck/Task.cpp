@@ -179,6 +179,8 @@ namespace Sensors
           // Sensor is not active.
           m_active = false;
           trace("onUpdateParameters ECOPuck OFF");
+          m_intervals.setTop(0.0);
+          m_duration.setTop(0.0);
         }
 
         // If sensor is off and Neptus wants to turn it on.

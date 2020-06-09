@@ -294,6 +294,8 @@ namespace Sensors
           // Sensor is not active.
           m_active = false;
           trace("onUpdateParameters ADCP OFF");
+          m_intervals.setTop(0.0);
+          m_duration.setTop(0.0);
         }
 
         // If sensor is off and Neptus wants to turn it on.
@@ -631,7 +633,7 @@ namespace Sensors
             trace("ECOPuck finished sampling: turning OFF");
             
             if(m_science.eco_fr > 0.0) //Samplings are periodical, not just one.
-              m_intervals.setTop(m_science.eco_fr);
+              m_intervals.setTop(m_science.adcp_fr);
           }
 
           // If sensor is inactive and sleeping period expires.
@@ -647,7 +649,7 @@ namespace Sensors
               m_active = true;
               trace("Periodical: ADCP ON");
               m_duration.reset();
-              m_duration.setTop(m_science.eco_dur);
+              m_duration.setTop(m_science.adcp_dur);
             }
             else
             {
