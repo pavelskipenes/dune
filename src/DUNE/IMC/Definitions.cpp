@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 15a453bf8cd23a70e3e712d94358e1ce                            *
+// IMC XML MD5: 0a76bfc0317d1fc588b25a655365160f                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -28829,6 +28829,9 @@ namespace DUNE
       eco = 0;
       eco_dur = 0;
       eco_fr = 0;
+      par = 0;
+      par_dur = 0;
+      par_fr = 0;
     }
 
     bool
@@ -28850,6 +28853,9 @@ namespace DUNE
       if (eco != other__.eco) return false;
       if (eco_dur != other__.eco_dur) return false;
       if (eco_fr != other__.eco_fr) return false;
+      if (par != other__.par) return false;
+      if (par_dur != other__.par_dur) return false;
+      if (par_fr != other__.par_fr) return false;
       return true;
     }
 
@@ -28878,6 +28884,9 @@ namespace DUNE
       ptr__ += IMC::serialize(eco, ptr__);
       ptr__ += IMC::serialize(eco_dur, ptr__);
       ptr__ += IMC::serialize(eco_fr, ptr__);
+      ptr__ += IMC::serialize(par, ptr__);
+      ptr__ += IMC::serialize(par_dur, ptr__);
+      ptr__ += IMC::serialize(par_fr, ptr__);
       return ptr__;
     }
 
@@ -28900,6 +28909,9 @@ namespace DUNE
       bfr__ += IMC::deserialize(eco, bfr__, size__);
       bfr__ += IMC::deserialize(eco_dur, bfr__, size__);
       bfr__ += IMC::deserialize(eco_fr, bfr__, size__);
+      bfr__ += IMC::deserialize(par, bfr__, size__);
+      bfr__ += IMC::deserialize(par_dur, bfr__, size__);
+      bfr__ += IMC::deserialize(par_fr, bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -28922,6 +28934,9 @@ namespace DUNE
       bfr__ += IMC::deserialize(eco, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(eco_dur, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(eco_fr, bfr__, size__);
+      bfr__ += IMC::deserialize(par, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(par_dur, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(par_fr, bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -28943,6 +28958,235 @@ namespace DUNE
       IMC::toJSON(os__, "eco", eco, nindent__);
       IMC::toJSON(os__, "eco_dur", eco_dur, nindent__);
       IMC::toJSON(os__, "eco_fr", eco_fr, nindent__);
+      IMC::toJSON(os__, "par", par, nindent__);
+      IMC::toJSON(os__, "par_dur", par_dur, nindent__);
+      IMC::toJSON(os__, "par_fr", par_fr, nindent__);
+    }
+
+    ScienceSensorsReply::ScienceSensorsReply(void)
+    {
+      m_header.mgid = 2011;
+      clear();
+    }
+
+    void
+    ScienceSensorsReply::clear(void)
+    {
+      adcp = 0;
+      adcp_dur = 0;
+      adcp_fr = 0;
+      ctd = 0;
+      ctd_dur = 0;
+      ctd_fr = 0;
+      opt = 0;
+      opt_dur = 0;
+      opt_fr = 0;
+      tbl = 0;
+      tbl_dur = 0;
+      tbl_fr = 0;
+      eco = 0;
+      eco_dur = 0;
+      eco_fr = 0;
+      par = 0;
+      par_dur = 0;
+      par_fr = 0;
+    }
+
+    bool
+    ScienceSensorsReply::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::ScienceSensorsReply& other__ = static_cast<const ScienceSensorsReply&>(msg__);
+      if (adcp != other__.adcp) return false;
+      if (adcp_dur != other__.adcp_dur) return false;
+      if (adcp_fr != other__.adcp_fr) return false;
+      if (ctd != other__.ctd) return false;
+      if (ctd_dur != other__.ctd_dur) return false;
+      if (ctd_fr != other__.ctd_fr) return false;
+      if (opt != other__.opt) return false;
+      if (opt_dur != other__.opt_dur) return false;
+      if (opt_fr != other__.opt_fr) return false;
+      if (tbl != other__.tbl) return false;
+      if (tbl_dur != other__.tbl_dur) return false;
+      if (tbl_fr != other__.tbl_fr) return false;
+      if (eco != other__.eco) return false;
+      if (eco_dur != other__.eco_dur) return false;
+      if (eco_fr != other__.eco_fr) return false;
+      if (par != other__.par) return false;
+      if (par_dur != other__.par_dur) return false;
+      if (par_fr != other__.par_fr) return false;
+      return true;
+    }
+
+    int
+    ScienceSensorsReply::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    ScienceSensorsReply::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(adcp, ptr__);
+      ptr__ += IMC::serialize(adcp_dur, ptr__);
+      ptr__ += IMC::serialize(adcp_fr, ptr__);
+      ptr__ += IMC::serialize(ctd, ptr__);
+      ptr__ += IMC::serialize(ctd_dur, ptr__);
+      ptr__ += IMC::serialize(ctd_fr, ptr__);
+      ptr__ += IMC::serialize(opt, ptr__);
+      ptr__ += IMC::serialize(opt_dur, ptr__);
+      ptr__ += IMC::serialize(opt_fr, ptr__);
+      ptr__ += IMC::serialize(tbl, ptr__);
+      ptr__ += IMC::serialize(tbl_dur, ptr__);
+      ptr__ += IMC::serialize(tbl_fr, ptr__);
+      ptr__ += IMC::serialize(eco, ptr__);
+      ptr__ += IMC::serialize(eco_dur, ptr__);
+      ptr__ += IMC::serialize(eco_fr, ptr__);
+      ptr__ += IMC::serialize(par, ptr__);
+      ptr__ += IMC::serialize(par_dur, ptr__);
+      ptr__ += IMC::serialize(par_fr, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    ScienceSensorsReply::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(adcp, bfr__, size__);
+      bfr__ += IMC::deserialize(adcp_dur, bfr__, size__);
+      bfr__ += IMC::deserialize(adcp_fr, bfr__, size__);
+      bfr__ += IMC::deserialize(ctd, bfr__, size__);
+      bfr__ += IMC::deserialize(ctd_dur, bfr__, size__);
+      bfr__ += IMC::deserialize(ctd_fr, bfr__, size__);
+      bfr__ += IMC::deserialize(opt, bfr__, size__);
+      bfr__ += IMC::deserialize(opt_dur, bfr__, size__);
+      bfr__ += IMC::deserialize(opt_fr, bfr__, size__);
+      bfr__ += IMC::deserialize(tbl, bfr__, size__);
+      bfr__ += IMC::deserialize(tbl_dur, bfr__, size__);
+      bfr__ += IMC::deserialize(tbl_fr, bfr__, size__);
+      bfr__ += IMC::deserialize(eco, bfr__, size__);
+      bfr__ += IMC::deserialize(eco_dur, bfr__, size__);
+      bfr__ += IMC::deserialize(eco_fr, bfr__, size__);
+      bfr__ += IMC::deserialize(par, bfr__, size__);
+      bfr__ += IMC::deserialize(par_dur, bfr__, size__);
+      bfr__ += IMC::deserialize(par_fr, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    ScienceSensorsReply::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(adcp, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(adcp_dur, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(adcp_fr, bfr__, size__);
+      bfr__ += IMC::deserialize(ctd, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(ctd_dur, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(ctd_fr, bfr__, size__);
+      bfr__ += IMC::deserialize(opt, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(opt_dur, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(opt_fr, bfr__, size__);
+      bfr__ += IMC::deserialize(tbl, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(tbl_dur, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(tbl_fr, bfr__, size__);
+      bfr__ += IMC::deserialize(eco, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(eco_dur, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(eco_fr, bfr__, size__);
+      bfr__ += IMC::deserialize(par, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(par_dur, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(par_fr, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    ScienceSensorsReply::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "adcp", adcp, nindent__);
+      IMC::toJSON(os__, "adcp_dur", adcp_dur, nindent__);
+      IMC::toJSON(os__, "adcp_fr", adcp_fr, nindent__);
+      IMC::toJSON(os__, "ctd", ctd, nindent__);
+      IMC::toJSON(os__, "ctd_dur", ctd_dur, nindent__);
+      IMC::toJSON(os__, "ctd_fr", ctd_fr, nindent__);
+      IMC::toJSON(os__, "opt", opt, nindent__);
+      IMC::toJSON(os__, "opt_dur", opt_dur, nindent__);
+      IMC::toJSON(os__, "opt_fr", opt_fr, nindent__);
+      IMC::toJSON(os__, "tbl", tbl, nindent__);
+      IMC::toJSON(os__, "tbl_dur", tbl_dur, nindent__);
+      IMC::toJSON(os__, "tbl_fr", tbl_fr, nindent__);
+      IMC::toJSON(os__, "eco", eco, nindent__);
+      IMC::toJSON(os__, "eco_dur", eco_dur, nindent__);
+      IMC::toJSON(os__, "eco_fr", eco_fr, nindent__);
+      IMC::toJSON(os__, "par", par, nindent__);
+      IMC::toJSON(os__, "par_dur", par_dur, nindent__);
+      IMC::toJSON(os__, "par_fr", par_fr, nindent__);
+    }
+
+    PAR::PAR(void)
+    {
+      m_header.mgid = 2012;
+      clear();
+    }
+
+    void
+    PAR::clear(void)
+    {
+      value = 0;
+    }
+
+    bool
+    PAR::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::PAR& other__ = static_cast<const PAR&>(msg__);
+      if (value != other__.value) return false;
+      return true;
+    }
+
+    int
+    PAR::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    PAR::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(value, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    PAR::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(value, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    PAR::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(value, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    fp64_t
+    PAR::getValueFP(void) const
+    {
+      return static_cast<fp64_t>(value);
+    }
+
+    void
+    PAR::setValueFP(fp64_t val)
+    {
+      value = static_cast<fp32_t>(val);
+    }
+
+    void
+    PAR::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "value", value, nindent__);
     }
 
     AisGpsFix::AisGpsFix(void)

@@ -127,10 +127,10 @@ namespace Sensors
       void
       onEntityReservation(void)
       {
-        m_pressure.setSourceEntity(reserveEntity("Weather Station Pressure"));
-        m_temperature.setSourceEntity(reserveEntity("Weather Station Temperature"));
-        m_vessel_wind.setSourceEntity(reserveEntity("Weather Station Vessel Wind"));
-        m_relative_wind.setSourceEntity(reserveEntity("Weather Station Relative Wind"));
+        //m_pressure.setSourceEntity(reserveEntity("Weather Station"));
+        //m_temperature.setSourceEntity(reserveEntity("Weather Station"));
+        //m_vessel_wind.setSourceEntity(reserveEntity("Weather Station"));
+        //m_relative_wind.setSourceEntity(reserveEntity("Weather Station"));
       }
 
       //! Acquire resources.
@@ -161,10 +161,7 @@ namespace Sensors
 
       void
       consume(const IMC::GpsFix* msg)
-      {
-        if (msg->getDestination() != getSystemId())
-          return;
-        
+      {        
         m_sog = msg->sog;
         m_cog = msg->cog;
       }
@@ -269,7 +266,7 @@ namespace Sensors
             m_vessel_wind.angle = angle;
             m_vessel_wind.reference = ref;
             m_vessel_wind.speed = speed * 0.514;  // From knots to m/s
-            dispatch(m_vessel_wind);
+            //dispatch(m_vessel_wind);
             spew("Vessel wind dir. and speed - Angle: %.1f deg | Ref: %s | Speed: %.1f m/s", angle, ref.c_str(), speed);
           }
           // Relative wind direction and speed
@@ -288,10 +285,14 @@ namespace Sensors
             dispatch(m_relative_wind);
             spew("Relative wind ang. and speed - Angle: %.1f deg | Speed: %.1f m/s", m_relative_wind.angle, m_relative_wind.speed);
 
+            if(m_cog<0)
+                m_cog = Angles::radians(360.0) + m_cog;
+
             if(m_sog < 0.1) // m/s
             {
               // Relative and true winds can be considered equal.
-              m_abs_wind.dir = normalize_angle(Angles::degrees(m_cog) + m_relative_wind.angle);
+              m_abs_wind.dir = normalize_angle_360(m_cog + Angles::radians(m_relative_wind.angle));
+              m_abs_wind.dir = Angles::degrees(m_abs_wind.dir);
               m_abs_wind.speed = m_relative_wind.speed;
             }
             else
@@ -305,17 +306,21 @@ namespace Sensors
                 true_wind_dir = -std::acos((m_relative_wind.speed*std::cos(m_relative_wind.angle) - m_sog)/true_wind_speed);
 
               m_abs_wind.speed = true_wind_speed;
-              m_abs_wind.dir = normalize_angle(Angles::degrees(m_cog) + m_relative_wind.angle);
+              m_abs_wind.dir = normalize_angle_360(m_cog + Angles::radians(true_wind_dir));
+              m_abs_wind.dir = Angles::degrees(m_abs_wind.dir);
             }
+
+            spew("COG:%f, RWA:%f, AWA:%f",Angles::degrees(m_cog),m_relative_wind.angle,m_abs_wind.dir);
             dispatch(m_abs_wind);
           }
         }
       }
 
-      double normalize_angle(double angle)
+      double normalize_angle_360(double angle)
       {
-        while(angle <= -M_PI) angle += 2*M_PI;
-        while (angle > M_PI) angle -= 2*M_PI;
+        angle = std::fmod(angle,2*M_PI);
+        if (angle < 0)
+          angle += 2*M_PI;
         return angle;
       }
 

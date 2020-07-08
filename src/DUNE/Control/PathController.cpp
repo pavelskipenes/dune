@@ -188,7 +188,7 @@ namespace DUNE
       .description("Admissible altitude when doing depth control");
 
       param("Maximum Track Length", m_max_track_length)
-      .defaultValue("25000")
+      .defaultValue("500000")
 	    .units(Units::Meter)
 	    .description("Maximum adimissible track length");
 

@@ -47,6 +47,8 @@ namespace Autonomy
       IMC::PlanControlState* m_pcs;
       //! last received VehicleState
       IMC::VehicleState* m_vstate;
+      //! last received VehicleState from L3
+      IMC::VehicleState* m_vstate_l3;
       //! last received message
       IMC::TextMessage* m_last;
       //! Current power settings.
@@ -61,13 +63,46 @@ namespace Autonomy
       int m_cog;
       //! Satellites in view.
       double m_sat;
-      // L3 sensors message.
+      //! L3 sensors message.
       IMC::ScienceSensors m_sensors_cmd;
-      // L3 turn on timer.
-      Time::Counter<float> m_timer;
-      // Complete payload message has arrived.
-      bool m_sensors_active;
-
+      //! L3 sensors status message.
+      IMC::ScienceSensorsReply m_sensors_status;
+      //! Level 3 entity list.
+      bool m_l3_el;
+      //! Vehicle lat location.
+      double m_lat;
+      //! Vehicle lon location.
+      double m_lon;
+      //! Vehicle Desired Heading.
+      int m_des_heading;
+      //! Vehicle Rudder Angle.
+      int m_rudder;
+      //! Vehicle Thruster Actuation.
+      int m_thruster;
+      //! Absolute wind speed.
+      double m_abswind_speed;
+      //! Absolute wind direction.
+      int m_abswind_dir;
+      //! L3 entities.
+      int m_opt_ent,m_ctd_ent,m_adcp_ent,m_eco_ent,m_par_ent,m_tbl_ent,m_opt_temp_ent,m_ctd_temp_ent;
+      //! L3 data timestamp vectors.
+      std::string m_opt_tmst,m_ctd_tmst,m_adcp_tmst,m_eco_tmst,m_eco_tmst_ISO,m_tbl_tmst,m_gpsfix_tmst,m_par_tmst,m_par_tmst_ISO;
+      //! Iridium-ready L3 science messages.
+      IMC::Temperature m_temp_l3_ctd,m_temp_l3_opt,m_temp_l2;
+      IMC::AirSaturation m_airsat;
+      IMC::Chlorophyll m_chl;
+      IMC::CurrentProfile m_cp;
+      IMC::Depth m_depth;
+      IMC::DissolvedOrganicMatter m_dom;
+      IMC::DissolvedOxygen m_dox;
+      IMC::Pressure m_pres;
+      IMC::Salinity m_sal;
+      IMC::SoundSpeed m_ss;
+      IMC::TBRFishTag m_ftag;
+      IMC::TBRSensor m_tblive;
+      IMC::Turbidity m_turb;
+      IMC::Conductivity m_cond;
+      IMC::PAR m_par;
 
       //! %Task arguments
       struct Arguments
@@ -85,10 +120,11 @@ namespace Autonomy
         DUNE::Tasks::Task(name, ctx),
         m_pcs(NULL),
         m_vstate(NULL),
+        m_vstate_l3(NULL),
         m_last(NULL),
         m_reqid(0),
-        m_sensors_active(false)
-      {
+        m_l3_el(false)
+        {
         param("Reply timeout", m_args.reply_timeout)
           .defaultValue("60")
           .minimumValue("30");
@@ -97,7 +133,7 @@ namespace Autonomy
           .defaultValue("https://bit.ly/2LZ0EOc");
 
         param("Valid Commands", m_args.valid_cmds)
-          .defaultValue("abort,dislodge,dive,errors,info,force,cr6,restart,go,help,phone,reboot,sk,start,surface,on,off,sensor,sensors,reports");
+          .defaultValue("abort,dislodge,dive,errors,info,force,cr6,restart,go,help,phone,reboot,sk,start,surface,on,off,sensor,sensors,reports,navstat,adcp,ctd,ecopuck,tblive,optode");
 
         m_db_file = m_ctx.dir_db / "Plan.db";
 
@@ -108,6 +144,27 @@ namespace Autonomy
         bind<IMC::PlanGeneration>(this);
         bind<IMC::PowerSettings>(this);
         bind<IMC::GpsFix>(this);
+        bind<IMC::DesiredHeading>(this);
+        bind<IMC::SetServoPosition>(this);
+        bind<IMC::SetThrusterActuation>(this);
+        bind<IMC::AbsoluteWind>(this);
+        bind<IMC::ScienceSensorsReply>(this);
+        bind<IMC::Temperature>(this);
+        bind<IMC::AirSaturation>(this);
+        bind<IMC::Chlorophyll>(this);
+        bind<IMC::CurrentProfile>(this);
+        bind<IMC::Depth>(this);
+        bind<IMC::DissolvedOrganicMatter>(this);
+        bind<IMC::DissolvedOxygen>(this);
+        bind<IMC::Pressure>(this);
+        bind<IMC::Salinity>(this);
+        bind<IMC::SoundSpeed>(this);
+        bind<IMC::TBRFishTag>(this);
+        bind<IMC::TBRSensor>(this);
+        bind<IMC::Turbidity>(this);
+        bind<IMC::Conductivity>(this);
+        bind<IMC::PAR>(this);
+        bind<IMC::EntityList>(this);
       }
 
       void
@@ -125,7 +182,258 @@ namespace Autonomy
       void
       consume(const IMC::VehicleState * msg)
       {
-        Memory::replace(m_vstate, msg->clone());
+        if(msg->getSource() == getSystemId())
+          Memory::replace(m_vstate, msg->clone()); // L2 vehicle state.
+        else
+          Memory::replace(m_vstate_l3, msg->clone()); // L3 vehicle state.
+      }
+
+      void
+      consume(const IMC::EntityList* msg)
+      {
+        if(msg->getSource() == 0x8804)
+        {
+          // L3 entities arrived.
+          Utils::TupleList tuples(msg->list);
+          m_opt_ent = tuples.get("Optode4835",0);
+          m_adcp_ent = tuples.get("Nortek500",0);
+          m_ctd_ent = tuples.get("SBE49FastCAT CTD",0);
+          m_tbl_ent = tuples.get("TBLive",0);
+          m_eco_ent = tuples.get("EcoPuck",0);
+          m_par_ent = tuples.get("EcoPAR",0);
+
+          spew("EntityList from L3 received!");
+
+          m_l3_el = true;
+        }
+      }
+
+      void
+      consume(const IMC::ScienceSensorsReply * msg)
+      {
+        //spew("A) IMC::ScienceSensors arrived in L2, from %d",msg->getSourceEntity());
+        if(msg->getSource() != getSystemId() && msg->getDestination() == getSystemId() && m_l3_el)
+        {
+          //spew("B) IMC::ScienceSensors arrived in L2, from %d",msg->getSourceEntity());
+          // Received from L3.
+          if(msg->getSourceEntity() == m_opt_ent)
+          {
+            m_sensors_status.opt = msg->opt;
+            m_sensors_status.opt_dur = msg->opt_dur;
+            m_sensors_status.opt_fr = msg->opt_fr;
+            spew("IMC::ScienceSensors arrived from OPTODE: %d %d %d",m_sensors_status.opt,m_sensors_status.opt_dur,m_sensors_status.opt_fr);
+          } else if(msg->getSourceEntity() == m_eco_ent)
+          {
+            m_sensors_status.eco = msg->eco;
+            m_sensors_status.eco_dur = msg->eco_dur;
+            m_sensors_status.eco_fr = msg->eco_fr;
+            spew("IMC::ScienceSensors arrived from ECOPUCK: %d %d %d",m_sensors_status.eco,m_sensors_status.eco_dur,m_sensors_status.eco_fr);
+          } else if(msg->getSourceEntity() == m_adcp_ent)
+          {
+            m_sensors_status.adcp = msg->adcp;
+            m_sensors_status.adcp_dur = msg->adcp_dur;
+            m_sensors_status.adcp_fr = msg->adcp_fr;
+            spew("IMC::ScienceSensors arrived from ADCP: %d %d %d",m_sensors_status.adcp,m_sensors_status.adcp_dur,m_sensors_status.adcp_fr);
+          } else if(msg->getSourceEntity() ==  m_tbl_ent)
+          {
+            //spew("IMC::ScienceSensors arrived from TBLIVE");
+            m_sensors_status.tbl = msg->tbl;
+            m_sensors_status.tbl_dur = msg->tbl_dur;
+            m_sensors_status.tbl_fr = msg->tbl_fr;
+          } else if(msg->getSourceEntity() == m_ctd_ent)
+          {
+            m_sensors_status.ctd = msg->ctd;
+            m_sensors_status.ctd_dur = msg->ctd_dur;
+            m_sensors_status.ctd_fr = msg->ctd_fr;
+            spew("IMC::ScienceSensors arrived from CTD: %d %d %d",m_sensors_status.ctd,m_sensors_status.ctd_dur,m_sensors_status.ctd_fr);
+          } else if(msg->getSourceEntity() == m_par_ent)
+          {
+            m_sensors_status.par = msg->par;
+            m_sensors_status.par_dur = msg->par_dur;
+            m_sensors_status.par_fr = msg->par_fr;
+            spew("IMC::ScienceSensors arrived from ECOPAR: %d %d %d",m_sensors_status.par,m_sensors_status.par_dur,m_sensors_status.par_fr);
+          } else
+          {
+            war("IMC::ScienceSensors from L3 - Entity NOT FOUND");
+          }
+        }
+      }
+
+      void
+      consume(const IMC::Temperature * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          // Received from L3.
+          // Distinguish between CTD and OPT.
+          if(msg->getSourceEntity() == m_opt_ent)
+            m_temp_l3_opt = *msg;
+          else if(msg->getSourceEntity() == m_ctd_ent)
+            m_temp_l3_ctd = *msg;
+          else
+            war("IMC::Temperature from L3 - Entity NOT FOUND");
+
+        } else
+        {
+          // Received from L2.
+          m_temp_l2 = *msg;
+        }
+      }
+
+      void
+      consume(const IMC::AirSaturation * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          // Received from L3.
+          m_airsat = *msg;
+        }
+      }
+
+      void
+      consume(const IMC::Chlorophyll * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          // Received from L3.
+          m_chl = *msg;
+
+          //spew("IMC::Chlorophyll message arrived in L2!");
+        }
+      }
+
+      void
+      consume(const IMC::CurrentProfile * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          m_adcp_tmst = Time::Format::getTimeDateISO(msg->getTimeStamp());
+          // Received from L3.
+
+        }
+      }
+
+      void
+      consume(const IMC::DissolvedOrganicMatter * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          m_eco_tmst_ISO = Time::Format::getTimeDateISO(msg->getTimeStamp());
+          m_eco_tmst = msg->getTimeStamp();
+          // Received from L3.
+          m_dom = *msg;
+
+          //spew("IMC::DissolvedOrganicMatter message arrived in L2!");
+          //spew("ECOPUCK timestamp %s",m_eco_tmst_ISO.c_str());
+        }
+      }
+
+      void
+      consume(const IMC::Depth * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          // Received from L3.
+          m_depth = *msg;
+        }
+      }
+
+      void
+      consume(const IMC::DissolvedOxygen * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          m_opt_tmst = Time::Format::getTimeDateISO(msg->getTimeStamp());
+          // Received from L3.
+          m_dox = *msg;
+        }
+      }
+
+      void
+      consume(const IMC::Pressure * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          // Received from L3.
+          m_pres = *msg;
+          m_pres.value = (int) m_pres.value;
+        }
+      }
+
+      void
+      consume(const IMC::Salinity * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          m_ctd_tmst = Time::Format::getTimeDateISO(msg->getTimeStamp());
+          // Received from L3.
+          m_sal = *msg;
+        }
+      }
+
+      void
+      consume(const IMC::Conductivity * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          // Received from L3.
+          m_cond = *msg;
+        }
+      }
+
+      void
+      consume(const IMC::PAR * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          m_par_tmst_ISO = Time::Format::getTimeDateISO(msg->getTimeStamp());
+          m_par_tmst = msg->getTimeStamp();
+          // Received from L3.
+          m_par = *msg;
+        }
+      }
+
+      void
+      consume(const IMC::SoundSpeed * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          // Received from L3.
+          m_ss = *msg;
+        }
+      }
+
+      void
+      consume(const IMC::TBRFishTag * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          // Received from L3.
+          m_ftag = *msg;
+        }
+      }
+
+      void
+      consume(const IMC::TBRSensor * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          m_tbl_tmst = Time::Format::getTimeDateISO(msg->getTimeStamp());
+          // Received from L3.
+          m_tblive = *msg;
+        }
+      }
+
+      void
+      consume(const IMC::Turbidity * msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          // Received from L3.
+          m_turb = *msg;
+
+          //spew("IMC::Turbidity message arrived in L2!");
+        }
       }
 
       void
@@ -141,6 +449,39 @@ namespace Autonomy
       }
 
       void
+      consume(const IMC::DesiredHeading* msg)
+      {
+        double des_heading = msg->value;
+        m_des_heading = (int) Angles::degrees(des_heading);
+        spew("Des Heading %d", m_des_heading);
+      }
+
+      void
+      consume(const IMC::SetServoPosition* msg)
+      {
+        double rudder = msg->value;
+        m_rudder = (int) Angles::degrees(rudder);
+        spew("Rudder %d", m_rudder);
+      }
+
+      void
+      consume(const IMC::SetThrusterActuation* msg)
+      {
+        double thruster_act = msg->value;
+        m_thruster = (int) thruster_act*100;
+        spew("Thruster %d", m_thruster);
+      }
+
+      void
+      consume(const IMC::AbsoluteWind* msg)
+      {
+        m_abswind_speed = msg->speed;
+        double wind_dir = msg->dir;
+        m_abswind_dir = (int) wind_dir; // already in degrees.
+
+      }
+
+      void
       consume(const IMC::GpsFix* msg)
       {
         if(msg->getSource() != getSystemId())
@@ -150,6 +491,12 @@ namespace Autonomy
         double cog = msg->cog;
         cog = Angles::degrees(cog);
         m_cog = (int) cog;
+
+        m_lat = Angles::degrees(msg->lat);
+        m_lon = Angles::degrees(msg->lon);
+
+        m_gpsfix_tmst = Time::Format::getTimeDateISO(msg->getTimeStamp());
+
       }
 
 
@@ -404,10 +751,14 @@ namespace Autonomy
           handleAbortCommand(origin, args);
         else if (cmd == "errors")
           handleErrorsCommand(origin);
+        else if (cmd == "errors_l3")
+          handleErrors_l3Command(origin);
         else if (cmd == "info")
           handleInfoCommand(origin);
         else if (cmd == "help")
           handleHelpCommand(origin);
+        else if (cmd == "navstat")
+          handleNavstatCommand(origin);
         else if (cmd == "reboot")
           handleRebootCommand(origin, args);
         else if (cmd == "phone")
@@ -417,7 +768,21 @@ namespace Autonomy
         else if (cmd == "sensor")
           handleL3SensorCommand(origin, args);
         else if (cmd == "resume")
-          handleResumeCommand(origin, args, false);
+          handleResumeCommand(origin, args);
+        else if (cmd == "ctd")
+          handleCTDReportCommand(origin, args);
+        else if (cmd == "optode")
+          handleOptodeReportCommand(origin, args);
+        else if (cmd == "ecopuck")
+          handleEcoPuckReportCommand(origin, args);
+        else if (cmd == "tblive")
+          handleTBLiveReportCommand(origin, args);
+        else if (cmd == "adcp")
+          handleADCPReportCommand(origin, args);
+        else if (cmd == "ecopar")
+          handleEcoPARReportCommand(origin,args);
+        else if (cmd == "radiation")
+          handleRadiationReportCommand(origin,args);
         else
           handlePlanGeneratorCommand(origin, cmd, args);
       }
@@ -436,6 +801,23 @@ namespace Autonomy
           }
           else
             reply(origin, "Vehicle has no reported errors.");
+        }
+      }
+
+      //! Execute command 'ERRORS_L3'
+      void
+      handleErrors_l3Command(const std::string& origin)
+      {
+        std::stringstream ss;
+
+        if (m_vstate_l3 != NULL)
+        {
+          if (m_vstate_l3->error_count > 0) {
+            ss << (int) m_vstate_l3->error_count << " errors: " << m_vstate_l3->error_ents;
+            reply(origin, ss.str());
+          }
+          else
+            reply(origin, "L3 has no reported errors.");
         }
       }
 
@@ -507,32 +889,86 @@ namespace Autonomy
         IMC::PowerSettings pwr_settings;
         pwr_settings = m_pwr_settings; // last received power settings from CR6 task.
 
-        if(args.compare("l2") == 0)
+        std::string relay;
+        relay = args;
+        std::stringstream ss;
+
+        if(args.compare("l2") == 0 && pwr_settings.l2 == 0)
+        {
+          ss << relay << " is already on.";
+          reply(origin,ss.str());
+        } else if(args.compare("l2") == 0 && pwr_settings.l2 == 1)
+        {
           pwr_settings.l2 = 0;
-        else if(args.compare("l3") == 0)
+          // Dispatch power settings to L1.
+          dispatch(pwr_settings, DF_LOOP_BACK);
+          ss << relay << " is turning on.";
+          reply(origin,ss.str());
+        } else if(args.compare("l3") == 0 && pwr_settings.l3 == 0)
+        {
+          ss << relay << " is already on.";
+          reply(origin,ss.str());
+        } else if(args.compare("l3") == 0 && pwr_settings.l3 == 1)
+        {
           pwr_settings.l3 = 0;
-        else if (args.compare("iridium") == 0)
+          // Dispatch power settings to L1.
+          dispatch(pwr_settings, DF_LOOP_BACK);
+          ss << relay << " is turning on.";
+          reply(origin,ss.str());
+        } else if(args.compare("iridium") == 0 && pwr_settings.iridium == 0)
+        {
+          ss << relay << " is already on.";
+          reply(origin,ss.str());
+        } else if(args.compare("iridium") == 0 && pwr_settings.iridium == 1)
+        {
           pwr_settings.iridium = 0;
-        else if (args.compare("modem") == 0)
+          // Dispatch power settings to L1.
+          dispatch(pwr_settings, DF_LOOP_BACK);
+          ss << relay << " is turning on.";
+          reply(origin,ss.str());
+        } else if(args.compare("modem") == 0 && pwr_settings.modem == 0)
+        {
+          ss << relay << " is already on.";
+          reply(origin,ss.str());
+        } else if(args.compare("modem") == 0 && pwr_settings.modem == 1)
+        {
           pwr_settings.modem = 0;
-        else if (args.compare("pumps") == 0)
+          // Dispatch power settings to L1.
+          dispatch(pwr_settings, DF_LOOP_BACK);
+          ss << relay << " is turning on.";
+          reply(origin,ss.str());
+        } else if(args.compare("pumps") == 0 && pwr_settings.pumps == 0)
+        {
+          ss << relay << " is already on.";
+          reply(origin,ss.str());
+        } else if(args.compare("pumps") == 0 && pwr_settings.pumps == 1)
+        {
           pwr_settings.pumps = 0;
-        else if (args.compare("vhf") == 0)
+          // Dispatch power settings to L1.
+          dispatch(pwr_settings, DF_LOOP_BACK);
+          ss << relay << " is turning on.";
+          reply(origin,ss.str());
+        } else if(args.compare("vhf") == 0 && pwr_settings.vhf == 0)
+        {
+          ss << relay << " is already on.";
+          reply(origin,ss.str());
+        } else if(args.compare("vhf") == 0 && pwr_settings.vhf == 1)
+        {
           pwr_settings.vhf = 0;
+          // Dispatch power settings to L1.
+          dispatch(pwr_settings, DF_LOOP_BACK);
+          ss << relay << " is turning on.";
+          reply(origin,ss.str());
+        } else
+        {
+          ss  << "Invalid command!";
+          reply(origin,ss.str());
+        }
 
         spew("Updated pwrSettings: %d%d%d%d%d%d",
                                  pwr_settings.l2, pwr_settings.l3,
                                  pwr_settings.iridium, pwr_settings.modem,
                                  pwr_settings.pumps, pwr_settings.vhf);
-
-        // Dispatch power settings to L1.
-        dispatch(pwr_settings, DF_LOOP_BACK);
-
-        std::string relay;
-        relay = args;
-        std::stringstream ss;
-        ss << relay << " is turning on.";
-        reply(origin,ss.str());
       }
 
       //! Execute command 'OFF'
@@ -639,7 +1075,9 @@ namespace Autonomy
 
         if (executing)
         {
-          ss << "On " << m_pcs->plan_id << "::" << m_pcs->man_id << " | COG: " << std::to_string(m_cog) << " | SOG: " << std::to_string(m_sog);
+          std::string m_sog_str = std::to_string(m_sog);
+          std::string m_sog_reduced = m_sog_str.substr(0,m_sog_str.size()-5);
+          ss << "On " << m_pcs->plan_id << "::" << m_pcs->man_id << "/c:" << std::to_string(m_cog) << "/s:" << m_sog_reduced;
 
           /*if (m_pcs->plan_eta != -1)
             ss << m_pcs->plan_eta << "s / " << std::fixed << std::setprecision(1) << m_pcs->plan_progress << "%.";
@@ -657,6 +1095,374 @@ namespace Autonomy
           ss << "Failed to exec " << m_pcs->plan_id <<": " << m_vstate->last_error << ".";
 
         reply(origin, ss.str());
+      }
+
+      //! Execute command 'NAVSTAT'
+      void
+      handleNavstatCommand(const std::string& origin)
+      {
+        std::stringstream ss;
+        bool executing = m_pcs->state == PlanControlState::PCS_EXECUTING;
+        if (m_pcs == NULL || m_vstate == NULL || !executing)
+        {
+          war("Not replying as no state messages are available.");
+          ss << "Vehicle is not executing!";
+          reply(origin,ss.str());
+        } else
+        {
+          std::string m_lat_str = std::to_string(m_lat);
+          std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+          std::string m_lon_str = std::to_string(m_lon);
+          std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+          std::string m_sog_str = std::to_string(m_sog);
+          std::string m_sog_reduced = m_sog_str.substr(0,m_sog_str.size()-5);
+          std::string m_aws_str = std::to_string(m_abswind_speed);
+          std::string m_aws_reduced = m_aws_str.substr(0,m_aws_str.size()-5);
+
+          ss << "(NAV) " << m_gpsfix_tmst << "/" << m_lat_reduced << " " << m_lon_reduced << "/C:" << std::to_string(m_cog) << "/dC:" << std::to_string(m_des_heading);
+          ss << "/r:" << std::to_string(m_rudder) << "/th:" << std::to_string(m_thruster) << "/S:" << m_sog_reduced;
+          ss << "/aws:" << m_aws_reduced << "/awd:" << std::to_string(m_abswind_dir);
+          reply(origin, ss.str());
+        }
+      }
+
+      //! Execute command 'CTD'
+      void
+      handleCTDReportCommand(const std::string& origin, const std::string& args)
+      {
+        std::stringstream ss;
+        if(m_pwr_settings.l3 == 1)
+        {
+          ss << "L3 is off!";
+          reply(origin,ss.str());
+        } else if(!m_l3_el)
+        {
+          ss << "DUNE L3 is damaged!";
+          reply(origin,ss.str());
+        } else
+        {
+          if(args.compare("report") == 0)
+          {
+            if(m_sensors_status.ctd == 0 || (m_sensors_status.ctd == 1 && m_sensors_status.ctd_dur != 0.0))
+            {
+              std::string m_lat_str = std::to_string(m_lat);
+              std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+              std::string m_lon_str = std::to_string(m_lon);
+              std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+              
+              std::string m_temp_ctd_s = std::to_string(m_temp_l3_ctd.value);
+              std::string m_temp_ctd_reduced = m_temp_ctd_s.substr(0,m_temp_ctd_s.size()-4);
+              std::string m_cond_s = std::to_string(m_cond.value);
+              std::string m_cond_reduced = m_cond_s.substr(0,m_cond_s.size()-4);
+              std::string m_sal_s = std::to_string(m_sal.value);
+              std::string m_sal_reduced = m_sal_s.substr(0,m_sal_s.size()-4);
+              std::string m_ss_s = std::to_string(m_ss.value);
+              std::string m_ss_reduced = m_ss_s.substr(0,m_ss_s.size()-4);
+              std::string m_depth_s = std::to_string(m_depth.value);
+              std::string m_depth_reduced = m_depth_s.substr(0,m_depth_s.size()-4);
+              std::string m_pres_s = std::to_string(m_pres.value);
+              std::string m_pres_reduced = m_pres_s.substr(0,m_pres_s.size()-7);
+
+              if(m_sensors_status.ctd == 0)
+                ss << "(CTD) ";
+              else if(m_sensors_status.ctd == 1 && m_sensors_status.ctd_dur != 0.0)
+                ss << "(CTD-P) ";
+
+              ss << m_ctd_tmst << "/" << m_lat_reduced << " " << m_lon_reduced << "/S:" << m_sal_reduced << "/C:" << m_cond_reduced << "/T:" << m_temp_ctd_reduced << "/SS:" << m_ss_reduced << "/D:" << m_depth_reduced << "/P:" << m_pres_reduced;
+              reply(origin,ss.str());
+            } else
+            {
+              ss << "CTD is not sampling!";
+              reply(origin,ss.str());
+            }
+          } else
+          {
+            ss << "Be more specific!";
+            reply(origin,ss.str());
+          }
+        }
+      }
+
+      //! Execute command 'OPTODE'
+      void
+      handleOptodeReportCommand(const std::string& origin, const std::string& args)
+      {
+        std::stringstream ss;
+        if(m_pwr_settings.l3 == 1)
+        {
+          ss << "L3 is off!";
+          reply(origin,ss.str());
+        } else if(!m_l3_el)
+        {
+          ss << "DUNE L3 is damaged!";
+          reply(origin,ss.str());
+        } else
+        {
+          if(args.compare("report") == 0)
+          {
+            if(m_sensors_status.opt == 0 || (m_sensors_status.opt == 1 && m_sensors_status.opt_dur != 0.0))
+            {
+              std::string m_lat_str = std::to_string(m_lat);
+              std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+              std::string m_lon_str = std::to_string(m_lon);
+              std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+              
+              std::string m_temp_opt_s = std::to_string(m_temp_l3_opt.value);
+              std::string m_temp_opt_reduced = m_temp_opt_s.substr(0,m_temp_opt_s.size()-4);
+              std::string m_airsat_s = std::to_string(m_airsat.value);
+              std::string m_airsat_reduced = m_airsat_s.substr(0,m_airsat_s.size()-4);
+              std::string m_dox_s = std::to_string(m_dox.value);
+              std::string m_dox_reduced = m_dox_s.substr(0,m_dox_s.size()-4);
+
+              if(m_sensors_status.opt == 0)
+                ss << "(OPT) ";
+              else if(m_sensors_status.opt == 1 && m_sensors_status.opt_dur != 0.0)
+                ss << "(OPT-P) ";
+
+              ss << m_opt_tmst << "/" << m_lat_reduced << " " << m_lon_reduced << "/T:" << m_temp_opt_reduced << "/AS:" << m_airsat_reduced << "/DOX:" << m_dox_reduced;
+              reply(origin,ss.str());
+            } else
+            {
+              ss << "Optode is not sampling!";
+              reply(origin,ss.str());
+            }
+          } else
+          {
+            ss << "Be more specific!";
+            reply(origin,ss.str());
+          }
+        }
+        
+      }
+
+      //! Execute command 'ECOPUCK'
+      void
+      handleEcoPuckReportCommand(const std::string& origin, const std::string& args)
+      {
+        std::stringstream ss;
+        if(m_pwr_settings.l3 == 1)
+        {
+          ss << "L3 is off!";
+          reply(origin,ss.str());
+        } else if(!m_l3_el)
+        {
+          ss << "DUNE L3 is damaged!";
+          reply(origin,ss.str());
+        } else
+        {
+          if(args.compare("report") == 0)
+          {
+            if((m_sensors_status.eco == 0) || (m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0.0))
+            {
+              std::string m_lat_str = std::to_string(m_lat);
+              std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+              std::string m_lon_str = std::to_string(m_lon);
+              std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+              std::string m_dom_s = std::to_string(m_dom.value);
+              std::string m_dom_reduced = m_dom_s.substr(0,m_dom_s.size()-4);
+              std::string m_turb_s = std::to_string(m_turb.value);
+              std::string m_turb_reduced = m_turb_s.substr(0,m_turb_s.size()-2);
+              std::string m_chl_s = std::to_string(m_chl.value);
+              std::string m_chl_reduced = m_chl_s.substr(0,m_chl_s.size()-2);
+
+              if(m_sensors_status.eco == 0)
+                ss << "(ECO) ";
+              else if(m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0.0)
+                ss << "(ECO-P) ";
+
+              ss << m_eco_tmst_ISO << "/" << m_lat_reduced << " " << m_lon_reduced << "/FDOM:" << m_dom_reduced << "/TU:" << m_turb_reduced << "/CHLA:" << m_chl_reduced;
+              reply(origin,ss.str());
+            } else
+            {
+              ss << "EcoPuck is not sampling!";
+              reply(origin,ss.str());
+            }
+          } else
+          {
+            ss << "Be more specific!";
+            reply(origin,ss.str());
+          }
+        }
+      }
+
+      //! Execute command 'RADIATION'
+      void
+      handleRadiationReportCommand(const std::string& origin, const std::string& args)
+      {
+        std::stringstream ss;
+        if(m_pwr_settings.l3 == 1)
+        {
+          ss << "L3 is off!";
+          reply(origin,ss.str());
+        } else if(!m_l3_el)
+        {
+          ss << "DUNE L3 is damaged!";
+          reply(origin,ss.str());
+        } else
+        {
+          if(args.compare("report") == 0)
+          {
+            if(((m_sensors_status.par == 0) || (m_sensors_status.par == 1 && m_sensors_status.par_dur != 0.0)) && ((m_sensors_status.eco == 0) || (m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0.0)))
+            {
+              std::string m_lat_str = std::to_string(m_lat);
+              std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+              std::string m_lon_str = std::to_string(m_lon);
+              std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+              std::string m_dom_s = std::to_string(m_dom.value);
+              std::string m_dom_reduced = m_dom_s.substr(0,m_dom_s.size()-4);
+              std::string m_turb_s = std::to_string(m_turb.value);
+              std::string m_turb_reduced = m_turb_s.substr(0,m_turb_s.size()-4);
+              std::string m_chl_s = std::to_string(m_chl.value);
+              std::string m_chl_reduced = m_chl_s.substr(0,m_chl_s.size()-4);
+              std::string m_par_s = std::to_string(m_par.value);
+              std::string m_par_reduced = m_par_s.substr(0,m_par_s.size()-4);
+
+              ss << "(RAD) " << m_lat_reduced << " " << m_lon_reduced << "/" << m_par_tmst_ISO << "/PAR:" << m_par_reduced << "/" << m_eco_tmst_ISO << "/FDOM:" << m_dom_reduced << "/TU:" << m_turb_reduced << "/CHLA:" << m_chl_reduced;
+              reply(origin,ss.str());
+            } else if(((m_sensors_status.par == 0) || (m_sensors_status.par == 1 && m_sensors_status.par_dur != 0.0)) && ((m_sensors_status.eco == 1 && m_sensors_status.eco_dur == 0.0)))
+            {
+              ss << "EcoPuck is off";
+              reply(origin,ss.str());
+            } else if(((m_sensors_status.eco == 0) || (m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0.0)) && ((m_sensors_status.par == 1 && m_sensors_status.par_dur == 0.0)))
+            {
+              ss << "EcoPAR is off";
+              reply(origin,ss.str());
+            } else if(((m_sensors_status.eco == 1 && m_sensors_status.eco_dur == 0.0)) && ((m_sensors_status.par == 1 && m_sensors_status.par_dur == 0.0)))
+            {
+              ss << "EcoPuck and EcoPAR are off";
+              reply(origin,ss.str());
+            }
+          } else
+          {
+            ss << "Be more specific!";
+            reply(origin,ss.str());
+          }
+        }
+      }
+
+      //! Execute command 'ECOPAR'
+      void
+      handleEcoPARReportCommand(const std::string& origin, const std::string& args)
+      {
+        std::stringstream ss;
+        if(m_pwr_settings.l3 == 1)
+        {
+          ss << "L3 is off!";
+          reply(origin,ss.str());
+        } else if(!m_l3_el)
+        {
+          ss << "DUNE L3 is damaged!";
+          reply(origin,ss.str());
+        } else
+        {
+          if(args.compare("report") == 0)
+          {
+            if((m_sensors_status.par == 0) || (m_sensors_status.par == 1 && m_sensors_status.par_dur != 0.0))
+            {
+              std::string m_lat_str = std::to_string(m_lat);
+              std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+              std::string m_lon_str = std::to_string(m_lon);
+              std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+              std::string m_par_s = std::to_string(m_par.value);
+              std::string m_par_reduced = m_par_s.substr(0,m_par_s.size()-4);
+              
+              if(m_sensors_status.par == 0)
+                ss << "(PAR) ";
+              else if(m_sensors_status.par == 1 && m_sensors_status.par_dur != 0.0)
+                ss << "(PAR-P) ";
+
+              ss << m_par_tmst_ISO << "/" << m_lat_reduced << " " << m_lon_reduced << "/PAR:" << m_par_reduced;
+              reply(origin,ss.str());
+            } else
+            {
+              ss << "EcoPAR is not sampling!";
+              reply(origin,ss.str());
+            }
+          } else
+          {
+            ss << "Be more specific!";
+            reply(origin,ss.str());
+          }
+        }
+      }
+
+      //! Execute command 'TBLIVE'
+      void
+      handleTBLiveReportCommand(const std::string& origin, const std::string& args)
+      {
+        std::stringstream ss;
+        if(m_pwr_settings.l3 == 1)
+        {
+          ss << "L3 is off!";
+          reply(origin,ss.str());
+        } else if(!m_l3_el)
+        {
+          ss << "DUNE L3 is damaged!";
+          reply(origin,ss.str());
+        } else
+        {
+          if(args.compare("report") == 0)
+          {
+            if(m_sensors_status.tbl == 0 || (m_sensors_status.tbl == 1 && m_sensors_status.tbl_dur != 0.0))
+            {
+              std::string m_lat_str = std::to_string(m_lat);
+              std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+              std::string m_lon_str = std::to_string(m_lon);
+              std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+              
+              std::string m_sn_s = std::to_string(m_tblive.serial_no);
+              std::string m_temp_tbl_s = std::to_string(m_tblive.temperature);
+              std::string m_temp_tbl_reduced = m_temp_tbl_s.substr(0,m_temp_tbl_s.size()-4);
+              std::string m_anl_s = std::to_string(m_tblive.avg_noise_level);
+              std::string m_pnl_s = std::to_string(m_tblive.peak_noise_level);
+              std::string m_rlf_s = std::to_string(m_tblive.recv_listen_freq);
+              std::string m_rma_s = std::to_string(m_tblive.recv_mem_addr);
+
+              if(m_sensors_status.tbl == 0)
+                ss << "(TBL) ";
+              else if(m_sensors_status.tbl == 1 && m_sensors_status.tbl_dur != 0.0)
+                ss << "(TBL-P) ";
+
+              ss << m_tbl_tmst << "/" << m_lat_reduced << " " << m_lon_reduced << "/SN:" << m_sn_s << "/T:" << m_temp_tbl_reduced << "/ANL:" << m_anl_s << "/PNL:" << m_pnl_s << "/RLF:" << m_rlf_s << "/RMA:" << m_rma_s;
+              reply(origin,ss.str());
+            } else
+            {
+              ss << "TBLive is not sampling!";
+              reply(origin,ss.str());
+            }
+          } else
+          {
+            ss << "Be more specific!";
+            reply(origin,ss.str());
+          }
+        }
+      }
+
+      //! Execute command 'ADCP'
+      void
+      handleADCPReportCommand(const std::string& origin, const std::string& args)
+      {
+        // TO BE DEFINED.
+
+        /*
+        if(m_pwr_settings.l3 == 1)
+        {
+          ss << "L3 is off!";
+          reply(origin,ss.str());
+        } else
+        {
+          if(args.compare("report") == 0)
+          {
+            Time::BrokenDown bdt;
+            std::stringstream ss;
+            ss << "(ADCP) " << std::to_string(bdt.hour) << ":" << std::to_string(bdt.minutes) << ":" << std::to_string(bdt.seconds) << std::to_string(m_lat) << " " << std::to_string(m_lon);
+          } else
+          {
+            std::stringstream ss;
+            ss << "Be more specific!";
+            reply(origin,ss.str());
+          }
+        }*/
       }
 
       //! Execute command 'REBOOT'
@@ -765,32 +1571,37 @@ namespace Autonomy
       handleL3SensorsCommand(const std::string& origin, const std::string& args)
       {
         spew("A configuration for all sensors has arrived.");
-        // A configuration for all sensors has arrived.
-        char adcp[32], adcp_dur[32], adcp_fr[32], ctd[32], ctd_dur[32], ctd_fr[32], opt[32], opt_dur[32], opt_fr[32], tbl[32], tbl_dur[32], tbl_fr[32], eco[32], eco_dur[32], eco_fr[32];
-        std::sscanf(args.c_str(), "%s %s %s %s %s %s %s %s %s %s %s %s %s %s %s", adcp, adcp_dur, adcp_fr, ctd, ctd_dur, ctd_fr, opt, opt_dur, opt_fr, tbl, tbl_dur, tbl_fr, eco, eco_dur, eco_fr);
-
-        m_sensors_cmd.adcp = std::atoi(adcp);
-        m_sensors_cmd.adcp_dur = std::atoi(adcp_dur);
-        m_sensors_cmd.adcp_fr = std::atoi(adcp_fr);
-        m_sensors_cmd.ctd = std::atoi(ctd);
-        m_sensors_cmd.ctd_dur = std::atoi(ctd_dur);
-        m_sensors_cmd.ctd_fr = std::atoi(ctd_fr);
-        m_sensors_cmd.opt = std::atoi(opt);
-        m_sensors_cmd.opt_dur = std::atoi(opt_dur);
-        m_sensors_cmd.opt_fr = std::atoi(opt_fr);
-        m_sensors_cmd.tbl = std::atoi(tbl);
-        m_sensors_cmd.tbl_dur = std::atoi(tbl_dur);
-        m_sensors_cmd.tbl_fr = std::atoi(tbl_fr);
-        m_sensors_cmd.eco = std::atoi(eco);
-        m_sensors_cmd.eco_dur = std::atoi(eco_dur);
-        m_sensors_cmd.eco_fr = std::atoi(eco_fr);
-
-        // Set L3 vehicle destination.
-        m_sensors_cmd.setDestination(0x8804);
 
         if(m_pwr_settings.l3 == 0)
         {
           spew("L3 is ON, sending sensors configurations.");
+
+          // A configuration for all sensors has arrived.
+          char adcp[32], adcp_dur[32], adcp_fr[32], ctd[32], ctd_dur[32], ctd_fr[32], opt[32], opt_dur[32], opt_fr[32], tbl[32], tbl_dur[32], tbl_fr[32], eco[32], eco_dur[32], eco_fr[32], par[32], par_dur[32], par_fr[32];
+          std::sscanf(args.c_str(), "%s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s", adcp, adcp_dur, adcp_fr, ctd, ctd_dur, ctd_fr, opt, opt_dur, opt_fr, tbl, tbl_dur, tbl_fr, eco, eco_dur, eco_fr, par, par_dur, par_fr);
+
+          m_sensors_cmd.adcp = std::atoi(adcp);
+          m_sensors_cmd.adcp_dur = std::atoi(adcp_dur);
+          m_sensors_cmd.adcp_fr = std::atoi(adcp_fr);
+          m_sensors_cmd.ctd = std::atoi(ctd);
+          m_sensors_cmd.ctd_dur = std::atoi(ctd_dur);
+          m_sensors_cmd.ctd_fr = std::atoi(ctd_fr);
+          m_sensors_cmd.opt = std::atoi(opt);
+          m_sensors_cmd.opt_dur = std::atoi(opt_dur);
+          m_sensors_cmd.opt_fr = std::atoi(opt_fr);
+          m_sensors_cmd.tbl = std::atoi(tbl);
+          m_sensors_cmd.tbl_dur = std::atoi(tbl_dur);
+          m_sensors_cmd.tbl_fr = std::atoi(tbl_fr);
+          m_sensors_cmd.eco = std::atoi(eco);
+          m_sensors_cmd.eco_dur = std::atoi(eco_dur);
+          m_sensors_cmd.eco_fr = std::atoi(eco_fr);
+          m_sensors_cmd.par = std::atoi(par);
+          m_sensors_cmd.par_dur = std::atoi(par_dur);
+          m_sensors_cmd.par_fr = std::atoi(par_fr);
+
+          // Set L3 vehicle destination.
+          m_sensors_cmd.setSource(getSystemId());
+          m_sensors_cmd.setDestination(0x8804);
           dispatch(m_sensors_cmd, DF_LOOP_BACK);
           std::stringstream ss;
           ss << "Sensors commands sent.";
@@ -798,18 +1609,8 @@ namespace Autonomy
         }
         else if(m_pwr_settings.l3 == 1)
         {
-          spew("L3 is OFF, turning on..");
-          // L3 needs to be turned on.
-          IMC::PowerSettings pwr_settings;
-          pwr_settings = m_pwr_settings; // last received power settings from CR6 task.
-          // Turn on L3 and set timer. 
-          pwr_settings.l3 = 0;
-          dispatch(pwr_settings, DF_LOOP_BACK);
-          m_sensors_active = true;
-          m_timer.setTop(120); // is two minutes enough to turn on L3?
-
           std::stringstream ss;
-          ss << "L3 is OFF, turning on and sending.";
+          ss << "L3 is OFF, turn on first.";
           reply(origin,ss.str());
         }
       }
@@ -828,101 +1629,228 @@ namespace Autonomy
           std::stringstream ss;
           ss << "L3 is OFF, turn on first.";
           reply(origin,ss.str());
+        } else if(!m_l3_el)
+        {
+          std::stringstream ss;
+          ss << "DUNE L3 is damaged!";
+          reply(origin,ss.str());
         } else
         {
           spew("L3 is ON, sending sensor configuration..");
           std::sscanf(args.c_str(), "%s %s %s %s", sensor, onoff, duration, frequency);
 
-          IMC::ScienceSensors sensor_cmd;
-          sensor_cmd.setDestination(0x8804);
-
           std::stringstream ss;
 
           if(std::strcmp(sensor,"adcp") == 0)
           {
-            sensor_cmd.adcp = std::atoi(onoff);
-            sensor_cmd.adcp_dur = std::atoi(duration);
-            sensor_cmd.adcp_fr = std::atoi(frequency);
-            // other sensors: NO_CHANGE.
-            sensor_cmd.ctd = 3;
-            sensor_cmd.tbl = 3;
-            sensor_cmd.eco = 3;
-            sensor_cmd.opt = 3;
+            IMC::ScienceSensors sensor_cmd;
+            m_sensors_cmd.setSource(getSystemId());
+            sensor_cmd.setDestination(0x8804);
+            int adcp_onoff = std::atoi(onoff);
+            if((m_sensors_status.adcp == 0 && adcp_onoff == 0) || (m_sensors_status.adcp == 1 && m_sensors_status.adcp_dur != 0 && adcp_onoff == 0))
+            {
+              ss << "ADCP is already ON.";
+              reply(origin,ss.str());
+            } else if(m_sensors_status.adcp == 1 && m_sensors_status.adcp_dur == 0 && adcp_onoff == 1)
+            {
+              ss << "ADCP is already OFF.";
+              reply(origin,ss.str());
+            } else
+            {
+              sensor_cmd.adcp = adcp_onoff;
+              sensor_cmd.adcp_dur = std::atoi(duration);
+              sensor_cmd.adcp_fr = std::atoi(frequency);
+              // other sensors: NO_CHANGE.
+              sensor_cmd.ctd = 3;
+              sensor_cmd.tbl = 3;
+              sensor_cmd.eco = 3;
+              sensor_cmd.opt = 3;
+              sensor_cmd.par = 3;
 
-            // Set destination entity before dispatching.
-            //sensors_cmd.setDestinationEntity("ADCP");
-            dispatch(sensor_cmd, DF_LOOP_BACK);
+              // Set destination entity before dispatching.
+              //sensors_cmd.setDestinationEntity("ADCP");
+              dispatch(sensor_cmd, DF_LOOP_BACK);
 
-            ss << "ADCP actions.";
-            reply(origin,ss.str());
+              ss << "ADCP actions.";
+              reply(origin,ss.str());
+
+              spew("Sending IMC::ScienceSensors to L3");
+            }
           } else if(std::strcmp(sensor,"ctd") == 0)
           {
-            sensor_cmd.ctd = std::atoi(onoff);
-            sensor_cmd.ctd_dur = std::atoi(duration);
-            sensor_cmd.ctd_fr = std::atoi(frequency);
-            // other sensors: NO_CHANGE.
-            sensor_cmd.adcp = 3;
-            sensor_cmd.tbl = 3;
-            sensor_cmd.eco = 3;
-            sensor_cmd.opt = 3;
+            IMC::ScienceSensors sensor_cmd;
+            m_sensors_cmd.setSource(getSystemId());
+            sensor_cmd.setDestination(0x8804);
+            int ctd_onoff = std::atoi(onoff);
+            if((m_sensors_status.ctd == 0 && ctd_onoff == 0) || (m_sensors_status.ctd == 1 && m_sensors_status.ctd_dur != 0 && ctd_onoff == 0))
+            {
+              ss << "CTD is already ON.";
+              reply(origin,ss.str());
+            } else if(m_sensors_status.ctd == 1 && m_sensors_status.ctd_dur == 0 && ctd_onoff == 1)
+            {
+              ss << "CTD is already OFF.";
+              reply(origin,ss.str());
+            } else
+            {
+              sensor_cmd.ctd = ctd_onoff;
+              sensor_cmd.ctd_dur = std::atoi(duration);
+              sensor_cmd.ctd_fr = std::atoi(frequency);
+              // other sensors: NO_CHANGE.
+              sensor_cmd.adcp = 3;
+              sensor_cmd.tbl = 3;
+              sensor_cmd.eco = 3;
+              sensor_cmd.opt = 3;
+              sensor_cmd.par = 3;
 
-            // Set destination entity before dispatching.
-            //sensors_cmd.setDestinationEntity("CTD");
-            dispatch(sensor_cmd, DF_LOOP_BACK);
+              // Set destination entity before dispatching.
+              //sensors_cmd.setDestinationEntity("ADCP");
+              dispatch(sensor_cmd, DF_LOOP_BACK);
 
-            ss << "CTD actions.";
-            reply(origin,ss.str());
+              ss << "CTD actions.";
+              reply(origin,ss.str());
+
+              spew("Sending IMC::ScienceSensors to L3");
+            }
           } else if(std::strcmp(sensor,"tbl") == 0)
           {
-            sensor_cmd.tbl = std::atoi(onoff);
-            sensor_cmd.tbl_dur = std::atoi(duration);
-            sensor_cmd.tbl_fr = std::atoi(frequency);
-            // other sensors: NO_CHANGE.
-            sensor_cmd.ctd = 3;
-            sensor_cmd.adcp = 3;
-            sensor_cmd.eco = 3;
-            sensor_cmd.opt = 3;
+            IMC::ScienceSensors sensor_cmd;
+            m_sensors_cmd.setSource(getSystemId());
+            sensor_cmd.setDestination(0x8804);
+            int tbl_onoff = std::atoi(onoff);
+            if((m_sensors_status.tbl == 0 && tbl_onoff == 0) || (m_sensors_status.tbl == 1 && m_sensors_status.tbl_dur != 0 && tbl_onoff == 0))
+            {
+              ss << "TBLive is already ON.";
+              reply(origin,ss.str());
+            } else if(m_sensors_status.tbl == 1 && m_sensors_status.tbl_dur == 0 && tbl_onoff == 1)
+            {
+              ss << "TBLive is already OFF.";
+              reply(origin,ss.str());
+            } else
+            {
+              sensor_cmd.tbl = tbl_onoff;
+              sensor_cmd.tbl_dur = std::atoi(duration);
+              sensor_cmd.tbl_fr = std::atoi(frequency);
+              // other sensors: NO_CHANGE.
+              sensor_cmd.adcp = 3;
+              sensor_cmd.ctd = 3;
+              sensor_cmd.eco = 3;
+              sensor_cmd.opt = 3;
+              sensor_cmd.par = 3;
 
-            // Set destination entity before dispatching.
-            //sensors_cmd.setDestinationEntity("TBLive");
-            dispatch(sensor_cmd, DF_LOOP_BACK);
+              // Set destination entity before dispatching.
+              //sensors_cmd.setDestinationEntity("ADCP");
+              dispatch(sensor_cmd, DF_LOOP_BACK);
 
-            ss << "TBLive actions.";
-            reply(origin,ss.str());
+              ss << "TBLive actions.";
+              reply(origin,ss.str());
+
+              spew("Sending IMC::ScienceSensors to L3");
+            }
           } else if(std::strcmp(sensor,"eco") == 0)
           {
-            sensor_cmd.eco = std::atoi(onoff);
-            sensor_cmd.eco_dur = std::atoi(duration);
-            sensor_cmd.eco_fr = std::atoi(frequency);
-            // other sensors: NO_CHANGE.
-            sensor_cmd.ctd = 3;
-            sensor_cmd.tbl = 3;
-            sensor_cmd.adcp = 3;
-            sensor_cmd.opt = 3;
+            IMC::ScienceSensors sensor_cmd;
+            m_sensors_cmd.setSource(getSystemId());
+            sensor_cmd.setDestination(0x8804);
+            int eco_onoff = std::atoi(onoff);
+            if((m_sensors_status.eco == 0 && eco_onoff == 0) || (m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0 && eco_onoff == 0))
+            {
+              ss << "EcoPuck is already ON.";
+              reply(origin,ss.str());
+            } else if(m_sensors_status.eco == 1 && m_sensors_status.eco_dur == 0 && eco_onoff == 1)
+            {
+              ss << "EcoPuck is already OFF.";
+              reply(origin,ss.str());
+            } else
+            {
+              sensor_cmd.eco = eco_onoff;
+              sensor_cmd.eco_dur = std::atoi(duration);
+              sensor_cmd.eco_fr = std::atoi(frequency);
+              // other sensors: NO_CHANGE.
+              sensor_cmd.adcp = 3;
+              sensor_cmd.ctd = 3;
+              sensor_cmd.tbl = 3;
+              sensor_cmd.opt = 3;
+              sensor_cmd.par = 3;
 
-            // Set destination entity before dispatching.
-            //sensors_cmd.setDestinationEntity("EcoPuck");
-            dispatch(sensor_cmd, DF_LOOP_BACK);
-            
-            ss << "EcoPuck actions.";
-            reply(origin,ss.str());
+              // Set destination entity before dispatching.
+              //sensors_cmd.setDestinationEntity("ADCP");
+              dispatch(sensor_cmd, DF_LOOP_BACK);
+
+              ss << "EcoPuck actions.";
+              reply(origin,ss.str());
+
+              spew("Sending IMC::ScienceSensors to L3");
+            }
           } else if(std::strcmp(sensor,"opt") == 0)
           {
-            sensor_cmd.opt = std::atoi(onoff);
-            sensor_cmd.opt_dur = std::atoi(duration);
-            sensor_cmd.opt_fr = std::atoi(frequency);
-            // other sensors: NO_CHANGE.
-            sensor_cmd.ctd = 3;
-            sensor_cmd.tbl = 3;
-            sensor_cmd.eco = 3;
-            sensor_cmd.adcp = 3;
+            IMC::ScienceSensors sensor_cmd;
+            m_sensors_cmd.setSource(getSystemId());
+            sensor_cmd.setDestination(0x8804);
+            int opt_onoff = std::atoi(onoff);
+            if((m_sensors_status.opt == 0 && opt_onoff == 0) || (m_sensors_status.opt == 1 && m_sensors_status.opt_dur != 0 && opt_onoff == 0))
+            {
+              ss << "Optode is already ON.";
+              reply(origin,ss.str());
+            } else if(m_sensors_status.opt == 1 && m_sensors_status.opt_dur == 0 && opt_onoff == 1)
+            {
+              ss << "Optode is already OFF.";
+              reply(origin,ss.str());
+            } else
+            {
+              sensor_cmd.opt = opt_onoff;
+              sensor_cmd.opt_dur = std::atoi(duration);
+              sensor_cmd.opt_fr = std::atoi(frequency);
+              // other sensors: NO_CHANGE.
+              sensor_cmd.adcp = 3;
+              sensor_cmd.ctd = 3;
+              sensor_cmd.tbl = 3;
+              sensor_cmd.eco = 3;
+              sensor_cmd.par = 3;
 
-            // Set destination entity before dispatching.
-            //sensors_cmd.setDestinationEntity("Optode Oxygen Sensor");
-            dispatch(sensor_cmd, DF_LOOP_BACK);
+              // Set destination entity before dispatching.
+              //sensors_cmd.setDestinationEntity("ADCP");
+              dispatch(sensor_cmd, DF_LOOP_BACK);
 
-            ss << "Optode actions.";
-            reply(origin,ss.str());
+              ss << "Optode actions.";
+              reply(origin,ss.str());
+
+              spew("Sending IMC::ScienceSensors to L3");
+            }
+          } else if(std::strcmp(sensor,"par") == 0)
+          {
+            IMC::ScienceSensors sensor_cmd;
+            m_sensors_cmd.setSource(getSystemId());
+            sensor_cmd.setDestination(0x8804);
+            int par_onoff = std::atoi(onoff);
+            if((m_sensors_status.par == 0 && par_onoff == 0) || (m_sensors_status.par == 1 && m_sensors_status.par_dur != 0 && par_onoff == 0))
+            {
+              ss << "EcoPAR is already ON.";
+              reply(origin,ss.str());
+            } else if(m_sensors_status.par == 1 && m_sensors_status.par_dur == 0 && par_onoff == 1)
+            {
+              ss << "EcoPAR is already OFF.";
+              reply(origin,ss.str());
+            } else
+            {
+              sensor_cmd.par = par_onoff;
+              sensor_cmd.par_dur = std::atoi(duration);
+              sensor_cmd.par_fr = std::atoi(frequency);
+              // other sensors: NO_CHANGE.
+              sensor_cmd.adcp = 3;
+              sensor_cmd.ctd = 3;
+              sensor_cmd.tbl = 3;
+              sensor_cmd.eco = 3;
+              sensor_cmd.opt = 3;
+
+              // Set destination entity before dispatching.
+              //sensors_cmd.setDestinationEntity("ADCP");
+              dispatch(sensor_cmd, DF_LOOP_BACK);
+
+              ss << "EcoPAR actions.";
+              reply(origin,ss.str());
+
+              spew("Sending IMC::ScienceSensors to L3");
+            }
           }
         }
       }
@@ -971,14 +1899,6 @@ namespace Autonomy
         while (!stopping())
         {
           waitForMessages(1.0);
-          if(m_sensors_active && m_timer.overflow())
-          {
-            spew("L3 is BOOTED, sending configurations..");
-            //m_sensors_cmd.setDestination(0x8804);
-            dispatch(m_sensors_cmd, DF_LOOP_BACK);
-            m_timer.reset();
-            m_sensors_active = false;
-          }
         }
       }
     };

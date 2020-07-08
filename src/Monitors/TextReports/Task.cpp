@@ -47,6 +47,8 @@ namespace Monitors
       std::string elabel_system;
       //! Thruster power entity label.
       std::string elabel_thruster;
+      //! Temperature entity label.
+      std::string elabel_temp;
       //! Reports periodicity
       unsigned report_periodicity;
     };
@@ -59,6 +61,8 @@ namespace Monitors
       int m_system_power_eid;
       //! Yaw entity eid.
       int m_thruster_power_eid;
+      //! Yaw entity eid.
+      int m_temp_eid;
       //! Emergency message.
       std::string m_emsg;
       //! Fuel level.
@@ -89,6 +93,8 @@ namespace Monitors
       double m_system_power;
       //! Thruster power.
       double m_thruster_power;
+      //! External Temperature.
+      double m_ext_temp;
       //! Communications timer.
       Counter<double> m_timer;
       //! Task arguments.
@@ -100,13 +106,16 @@ namespace Monitors
         m_req(0)
       {
         param("Entity Label - Panels Power", m_args.elabel_panels)
-        .description("Entity label of 'GpsFix' and 'GroundVelocity' messages");
+        .description("Entity label of 'Power' message");
 
         param("Entity Label - System Power", m_args.elabel_system)
-        .description("Entity label of 'EulerAngles' and 'AngularVelocity' messages");
+        .description("Entity label of 'Power' message");
 
         param("Entity Label - Thruster Power", m_args.elabel_thruster)
-        .description("Entity label of 'EulerAngles' messages (field 'psi')");
+        .description("Entity label of 'Power' messages (field 'psi')");
+
+        param("Entity Label - Temperature", m_args.elabel_temp)
+        .description("Entity label of 'Temperature'");
 
         paramActive(Tasks::Parameter::SCOPE_IDLE,
                     Tasks::Parameter::VISIBILITY_USER);
@@ -126,6 +135,7 @@ namespace Monitors
         bind<IMC::PowerSettings>(this);
         bind<IMC::Power>(this);
         bind<IMC::IridiumReport>(this);
+        bind<IMC::Temperature>(this);
 
         m_fuel = -1.0;
         m_fuel_conf = -1.0;
@@ -171,6 +181,15 @@ namespace Monitors
         {
           m_thruster_power_eid = 0;
         }
+
+        try
+        {
+          m_temp_eid = resolveEntity(m_args.elabel_temp);
+        }
+        catch (...)
+        {
+          m_temp_eid = 0;
+        }
       }
 
       //! From Actuators/CR6
@@ -183,6 +202,13 @@ namespace Monitors
           m_system_power = msg->value;
         else if(msg->getSourceEntity() == m_thruster_power_eid)
           m_thruster_power = msg->value;
+      }
+
+      void
+      consume(const IMC::Temperature* msg)
+      {
+        if(msg->getSourceEntity() == m_temp_eid)
+          m_ext_temp = msg->value;
       }
 
       //! From Actuators/CR6
@@ -243,13 +269,21 @@ namespace Monitors
       {
         if (msg->validity & IMC::GpsFix::GFV_VALID_POS)
         {
-          int lat_deg;
-          double lat_min;
-          Angles::convertDecimalToDM(Angles::degrees(msg->lat), lat_deg, lat_min);
+          //int lat_deg;
+          //double lat_min;
+          //Angles::convertDecimalToDM(Angles::degrees(msg->lat), lat_deg, lat_min);
 
-          int lon_deg;
-          double lon_min;
-          Angles::convertDecimalToDM(Angles::degrees(msg->lon), lon_deg, lon_min);
+          //int lon_deg;
+          //double lon_min;
+          //Angles::convertDecimalToDM(Angles::degrees(msg->lon), lon_deg, lon_min);
+
+          double m_lat = Angles::degrees(msg->lat);
+          double m_lon = Angles::degrees(msg->lon);
+
+          std::string m_lat_str = std::to_string(m_lat);
+          std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+          std::string m_lon_str = std::to_string(m_lon);
+          std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
 
           m_sog = msg->sog;
           m_cog = msg->cog;
@@ -260,12 +294,24 @@ namespace Monitors
 
           Time::BrokenDown bdt;
 
-          m_emsg = String::str(
-              "%02u:%02u:%02u / %d %f,%d %f / b:%d c:%d s:%.2f sat:%d pp:%d cp:%d / s:%c / %d%d%d%d%d%d",
-              bdt.hour, bdt.minutes, bdt.seconds, lat_deg, //getSystemName(), 
-              lat_min, lon_deg, lon_min, (int)m_bat_voltage, (int)m_cog,
-              m_sog, m_sat, (int)m_panels_power, (int)consumed_power, vehicleStateChar(m_vstate), m_pwr_settings.l2, m_pwr_settings.l3, m_pwr_settings.iridium, m_pwr_settings.modem, m_pwr_settings.pumps, m_pwr_settings.vhf);
+          std::string m_emsg_first = String::str(
+              "%02u:%02u:%02u/", bdt.hour, bdt.minutes, bdt.seconds);
 
+          std::string m_emsg_second = String::str(
+              "/b:%d/c:%d/s:%.2f/sat:%d/pp:%d/cp:%d/t:%d/s:%c/%d%d%d%d%d%d",
+              (int)m_bat_voltage, (int)m_cog,
+              m_sog, m_sat, (int)m_panels_power, (int)consumed_power, (int)m_ext_temp, vehicleStateChar(m_vstate), m_pwr_settings.l2, m_pwr_settings.l3, m_pwr_settings.iridium, m_pwr_settings.modem, m_pwr_settings.pumps, m_pwr_settings.vhf);
+
+          m_emsg = m_emsg_first + m_lat_reduced + "," + m_lon_reduced + m_emsg_second;
+
+
+
+          /*m_emsg = String::str(
+              "%02u:%02u:%02u/%f,%f/b:%d/c:%d/s:%.2f/sat:%d/pp:%d/cp:%d/t:%d/s:%c/%d%d%d%d%d%d",
+              bdt.hour, bdt.minutes, bdt.seconds, m_lat, //getSystemName(), 
+              m_lon, (int)m_bat_voltage, (int)m_cog,
+              m_sog, m_sat, (int)m_panels_power, (int)consumed_power, (int)m_ext_temp, vehicleStateChar(m_vstate), m_pwr_settings.l2, m_pwr_settings.l3, m_pwr_settings.iridium, m_pwr_settings.modem, m_pwr_settings.pumps, m_pwr_settings.vhf);
+          */
           //m_emsg += m_in_mission ? String::str(" / p:%d", (int)m_progress) : "";
         }
       }
