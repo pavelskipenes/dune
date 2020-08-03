@@ -283,7 +283,7 @@ namespace Supervisors
 
         double lat_center = *min_lat;
         double lon_center = *min_lon;
-        WGS84::displace((north_distance+500)/2.0,(east_distance+500)/2.0,&lat_center,&lon_center);
+        WGS84::displace((north_distance/2.0)+1000,(east_distance/2.0)+1000,&lat_center,&lon_center);
 
         //std::vector<PointsOfInterest::LocationVector> features_location(m_features.size());
         //std::vector<PointsOfInterest::LocationVector> features_location;
@@ -316,7 +316,7 @@ namespace Supervisors
           std::string directory = m_args.debug_path + "dune_transect_" + std::to_string(j) + ".csv";
           std::pair<NauticalCharts::DepthVector, LocationData::LocationVector> transectcheck= m_nc->checkTransect(waypoints(j-1,0), waypoints(j-1,1), waypoints(j,0), waypoints(j,1));
           m_nc->writeCSVfile(transectcheck.first, directory);
-          spew("%lu", transectcheck.second.size());
+          spew("Unsafe points from DEPTHMAP %lu", transectcheck.second.size());
           if(transectcheck.second.size() !=0) {
             war(DTR("Transect is NOT safe!"));
             //inf("Aborted because of grounding (depthmap based)");
@@ -345,6 +345,9 @@ namespace Supervisors
           // Check if there are features close to the transect.
           for(int k=0; k<features_lat.size(); k++)
           {
+            //if((features_lat[k] > waypoints(j-1,0) && features_lat[k] < waypoints(j,0)) && (features_lon[k] > waypoints(j-1,1) && features_lon[k] < waypoints(j,1)))
+            //{
+            spew("Static obstacle can be analyzed in this transect.");
             // Points need to be transformed wrt center.
             double lat_start;
             double lon_start;
@@ -355,9 +358,12 @@ namespace Supervisors
             WGS84::displacement(lat_center,lon_center,0.0,features_lat[k], features_lon[k],0.0,&features_lat[k], &features_lon[k],&dummy_depth);
             WGS84::displacement(lat_center,lon_center,0.0,waypoints(j-1,0), waypoints(j-1,1),0.0,&lat_start,&lon_start,&dummy_depth);
             WGS84::displacement(lat_center,lon_center,0.0,waypoints(j,0), waypoints(j,1),0.0,&lat_end,&lon_end,&dummy_depth);
+
             // Points need to be referenced to geometrical center.
             double d = distPoint2line(features_lat[k], features_lon[k], lat_start, lon_start, lat_end, lon_end);
             spew("DISTANCE: %f",d);
+            //} else
+            //  spew("Static obstacle cannot be analyzed in this transect.");
           }
         }
       }

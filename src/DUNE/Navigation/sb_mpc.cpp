@@ -938,7 +938,7 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
 
 			// Calculating d_safe: bug fix: *DEG2RAD applied where missing!
 
-			d_safe_i = d_safe + obst_vect[k]->getL()/2; // obstacle size determines init d_safe
+			d_safe_i = d_safe + obst_vect[k]->getL()/2; // obstacle size determines initial d_safe
 
 			if (phi < PHI_AH_*DEG2RAD){ // obst ahead
 				d_safe_i = d_safe + asv->getL()/2;
