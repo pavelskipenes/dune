@@ -461,7 +461,7 @@ namespace Autonomy
       {
         double rudder = msg->value;
         m_rudder = (int) Angles::degrees(rudder);
-        spew("Rudder %d", m_rudder);
+        spew("Rudder from IMC BUS %d", m_rudder);
       }
 
       void
@@ -469,7 +469,7 @@ namespace Autonomy
       {
         double thruster_act = msg->value;
         m_thruster = (int) thruster_act*100;
-        spew("Thruster %d", m_thruster);
+        spew("Thruster from IMC BUS %d", m_thruster);
       }
 
       void
@@ -783,6 +783,8 @@ namespace Autonomy
           handleEcoPARReportCommand(origin,args);
         else if (cmd == "radiation")
           handleRadiationReportCommand(origin,args);
+        else if (cmd == "actuation")
+          handleActuationCommand(origin,args);
         else
           handlePlanGeneratorCommand(origin, cmd, args);
       }
@@ -1004,6 +1006,54 @@ namespace Autonomy
         std::stringstream ss;
         ss << relay << " is turning off.";
         reply(origin,ss.str());
+      }
+
+      //! Execute command 'ACTUATION'
+      void
+      handleActuationCommand(const std::string& origin, const std::string& args)
+      {
+        IMC::SetServoPosition servo;
+        IMC::SetThrusterActuation thruster;
+        std::stringstream ss;
+        char rudder[32], thrust[32];
+
+        if (m_pcs == NULL || m_vstate == NULL)
+        {
+          war("Not replying as no state messages are available.");
+          return;
+        }
+
+        //bool ready = m_pcs->last_outcome == PlanControlState::LPO_NONE &&
+        //    (m_pcs->state == PlanControlState::PCS_READY);
+
+        bool executing = m_pcs->state == PlanControlState::PCS_EXECUTING;
+
+        // For now, this is done when vehicle is NOT EXECUTING.
+        if(!executing)
+        {
+          std::sscanf(args.c_str(), "%s %s", rudder, thrust);
+          int rud = std::atoi(rudder);
+          int th = std::atoi(thrust);
+
+          double rud_d = (double) rud;
+          double th_d = (double) th/100.0;
+          
+          servo.value = rud_d;
+          thruster.value = th_d;
+
+          spew("Rudder from Iridium %f", rud_d);
+          spew("Thruster from Iridium %f", th_d);
+
+          dispatch(servo);
+          dispatch(thruster);
+
+          ss << "Actuating..";
+          reply(origin,ss.str());
+        } else
+        {
+          ss << "Vehicle is executing!";
+          reply(origin,ss.str());
+        }
       }
 
       //! Execute command 'RESTART'

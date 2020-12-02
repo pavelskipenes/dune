@@ -51,7 +51,7 @@ namespace Navigation
         //! IMU entity label.
         std::string elabel_imu;
         //! Yaw entity label.
-        std::string elabel_yaw;
+        //std::string elabel_yaw;
         //! Convert height to geoid height (MSL)
         bool convert_msl;
       };
@@ -63,7 +63,7 @@ namespace Navigation
         //! IMU entity eid.
         int m_imu_eid;
         //! Yaw entity eid.
-        int m_yaw_eid;
+        //int m_yaw_eid;
         //! Height offset.
         float m_offset;
         //! Offset flag.
@@ -82,13 +82,13 @@ namespace Navigation
         {
           // Define configuration parameters.
           param("Entity Label - GPS", m_args.elabel_gps)
-          .description("Entity label of 'GpsFix' and 'GroundVelocity' messages");
+          .description("Entity label of 'EulerAngles', 'GpsFix' and 'GroundVelocity' messages");
 
           param("Entity Label - IMU", m_args.elabel_imu)
-          .description("Entity label of 'EulerAngles' and 'AngularVelocity' messages");
+          .description("Entity label of 'AngularVelocity' messages");
 
-          param("Entity Label - Yaw", m_args.elabel_yaw)
-          .description("Entity label of 'EulerAngles' messages (field 'psi')");
+          //param("Entity Label - Yaw", m_args.elabel_yaw)
+          //.description("Entity label of 'EulerAngles' messages (field 'psi')");
 
           param("Convert Height to Geoid Height", m_args.convert_msl)
           .defaultValue("false")
@@ -139,14 +139,14 @@ namespace Navigation
             m_imu_eid = 0;
           }
 
-          try
+          /*try
           {
             m_yaw_eid = resolveEntity(m_args.elabel_yaw);
           }
           catch (...)
           {
             m_yaw_eid = 0;
-          }
+          }*/
         }
 
         void
@@ -164,25 +164,27 @@ namespace Navigation
           {
             m_estate.p = msg->x;
             m_estate.q = msg->y;
-          }
-
-          if (msg->getSourceEntity() == m_yaw_eid)
-          {
             m_estate.r = msg->z;
           }
+
+          /*if (msg->getSourceEntity() == m_yaw_eid)
+          {
+            m_estate.r = msg->z;
+          }*/
         }
 
         void
         consume(const IMC::EulerAngles* msg)
         {
-          if (msg->getSourceEntity() == m_imu_eid)
+          if (msg->getSourceEntity() == m_gps_eid)
           {
             m_estate.phi = msg->phi;
             m_estate.theta = msg->theta;
+            m_estate.psi = msg->psi;
           }
 
-          if (msg->getSourceEntity() == m_yaw_eid)
-            m_estate.psi = msg->psi;
+          //if (msg->getSourceEntity() == m_yaw_eid)
+          //  m_estate.psi = msg->psi;
         }
 
         void
@@ -220,14 +222,14 @@ namespace Navigation
           m_estate.vy = std::sin(msg->cog) * msg->sog;
           m_estate.u = msg->sog;
 
-          if (msg->getSourceEntity() == m_imu_eid)
+          /*if (msg->getSourceEntity() == m_imu_eid)
           {
             m_estate.phi = 0.0;
             m_estate.theta = 0.0;
-          }
+          }*/
 
-          if (msg->getSourceEntity() == m_yaw_eid)
-            m_estate.psi = msg->cog;
+          //if (msg->getSourceEntity() == m_yaw_eid)
+          //  m_estate.psi = msg->cog;
 
           dispatch(m_estate);
         }

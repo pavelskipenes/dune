@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 0a76bfc0317d1fc588b25a655365160f                            *
+// IMC XML MD5: 18d3ce67b956c6c457605f6791618e28                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -28345,7 +28345,7 @@ namespace DUNE
     void
     CurrentProfileCell::clear(void)
     {
-      cellposition = 0;
+      pos = 0;
       beams.clear();
     }
 
@@ -28353,7 +28353,7 @@ namespace DUNE
     CurrentProfileCell::fieldsEqual(const Message& msg__) const
     {
       const IMC::CurrentProfileCell& other__ = static_cast<const CurrentProfileCell&>(msg__);
-      if (cellposition != other__.cellposition) return false;
+      if (pos != other__.pos) return false;
       if (beams != other__.beams) return false;
       return true;
     }
@@ -28368,7 +28368,7 @@ namespace DUNE
     CurrentProfileCell::serializeFields(uint8_t* bfr__) const
     {
       uint8_t* ptr__ = bfr__;
-      ptr__ += IMC::serialize(cellposition, ptr__);
+      ptr__ += IMC::serialize(pos, ptr__);
       ptr__ += beams.serialize(ptr__);
       return ptr__;
     }
@@ -28377,7 +28377,7 @@ namespace DUNE
     CurrentProfileCell::deserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
-      bfr__ += IMC::deserialize(cellposition, bfr__, size__);
+      bfr__ += IMC::deserialize(pos, bfr__, size__);
       bfr__ += beams.deserialize(bfr__, size__);
       return bfr__ - start__;
     }
@@ -28386,7 +28386,7 @@ namespace DUNE
     CurrentProfileCell::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
-      bfr__ += IMC::reverseDeserialize(cellposition, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(pos, bfr__, size__);
       bfr__ += beams.reverseDeserialize(bfr__, size__);
       return bfr__ - start__;
     }
@@ -28394,7 +28394,7 @@ namespace DUNE
     void
     CurrentProfileCell::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
     {
-      IMC::toJSON(os__, "cellposition", cellposition, nindent__);
+      IMC::toJSON(os__, "pos", pos, nindent__);
       beams.toJSON(os__, "beams", nindent__);
     }
 
@@ -29335,6 +29335,88 @@ namespace DUNE
       IMC::toJSON(os__, "vdop", vdop, nindent__);
       IMC::toJSON(os__, "hacc", hacc, nindent__);
       IMC::toJSON(os__, "vacc", vacc, nindent__);
+    }
+
+    SingleCurrentCell::SingleCurrentCell(void)
+    {
+      m_header.mgid = 2013;
+      clear();
+    }
+
+    void
+    SingleCurrentCell::clear(void)
+    {
+      lat = 0;
+      lon = 0;
+      depth.clear();
+      vel.clear();
+      dir.clear();
+    }
+
+    bool
+    SingleCurrentCell::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::SingleCurrentCell& other__ = static_cast<const SingleCurrentCell&>(msg__);
+      if (lat != other__.lat) return false;
+      if (lon != other__.lon) return false;
+      if (depth != other__.depth) return false;
+      if (vel != other__.vel) return false;
+      if (dir != other__.dir) return false;
+      return true;
+    }
+
+    int
+    SingleCurrentCell::validate(void) const
+    {
+      if (lat < -1.5707963267948966 || lat > 1.5707963267948966) return false;
+      if (lon < -3.141592653589793 || lon > 3.141592653589793) return false;
+      return true;
+    }
+
+    uint8_t*
+    SingleCurrentCell::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(lat, ptr__);
+      ptr__ += IMC::serialize(lon, ptr__);
+      ptr__ += IMC::serialize(depth, ptr__);
+      ptr__ += IMC::serialize(vel, ptr__);
+      ptr__ += IMC::serialize(dir, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    SingleCurrentCell::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(lat, bfr__, size__);
+      bfr__ += IMC::deserialize(lon, bfr__, size__);
+      bfr__ += IMC::deserialize(depth, bfr__, size__);
+      bfr__ += IMC::deserialize(vel, bfr__, size__);
+      bfr__ += IMC::deserialize(dir, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    SingleCurrentCell::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(lat, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(lon, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(depth, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(vel, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(dir, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    SingleCurrentCell::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "lat", lat, nindent__);
+      IMC::toJSON(os__, "lon", lon, nindent__);
+      IMC::toJSON(os__, "depth", depth, nindent__);
+      IMC::toJSON(os__, "vel", vel, nindent__);
+      IMC::toJSON(os__, "dir", dir, nindent__);
     }
   }
 }

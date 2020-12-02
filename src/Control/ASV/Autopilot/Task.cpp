@@ -48,9 +48,9 @@ namespace Control
         //! Ramp actuation limit when the value is rising in actuation per second
         float act_ramp;
         //! PID gains for heading controller during turn.
-        std::vector<float> yaw_gains_turn;
+        std::vector<float> course_gains_turn;
         //! PID gains for heading controller during transect.
-        std::vector<float> yaw_gains_trans;
+        std::vector<float> course_gains_trans;
         //! Log the size of each PID parcel
         bool log_parcels;
         //! Filter activation variables.
@@ -68,7 +68,7 @@ namespace Control
         //! Band-stop filter scaling.
         double bsf_scaling;
         //! Desired turning rate.
-        float desired_yaw_der;
+        float desired_course_der;
         //! External filter frequency.
         double ext_filter_freq;
         //! Desired Course percentage increase.
@@ -95,14 +95,14 @@ namespace Control
       {
         //! GPS entity eid.
         int m_gps_eid;
-        //! YAW PID controller
-        DiscretePID m_yaw_pid;
-        //! Control Parcels for yaw controller
+        //! Course PID controller
+        DiscretePID m_course_pid;
+        //! Control Parcels for course controller
         IMC::ControlParcel m_parcel;
         //! Desired course used by PID.
-        float m_desired_yaw;
+        float m_desired_course;
         //! Previous Desired course used by PID.
-        float m_desired_yaw_prev;
+        float m_desired_course_prev;
         //! Time of last estimated state message.
         Delta m_delta;        
         //! Current rudder position/actuation.
@@ -151,6 +151,8 @@ namespace Control
         bool m_en_gain_sch;
         //! Thrust during assistance.
         double m_thrust_assistance;
+        //! Check if vehicle is in service
+        bool m_service;
         //! Task arguments.
         Arguments m_args;
 
@@ -164,7 +166,8 @@ namespace Control
           m_turning_filt(false),
           m_turning(false),
           m_des_head_arrived(false),
-          m_en_gain_sch(false)
+          m_en_gain_sch(false),
+          m_service(true)
         {
           param("Enable Gain Scheduling", m_args.en_gain_sch)
           .defaultValue("true")
@@ -194,15 +197,15 @@ namespace Control
           .defaultValue("1.0")
           .description("Maximum Rudder Command");
 
-          param("Yaw PID Gains Transect", m_args.yaw_gains_trans)
+          param("Course PID Gains Transect", m_args.course_gains_trans)
           .defaultValue("")
           .size(3)
-          .description("PID gains for YAW controller during straight line");
+          .description("PID gains for Course controller during straight line");
 
-          param("Yaw PID Gains Turning", m_args.yaw_gains_turn)
+          param("Course PID Gains Turning", m_args.course_gains_turn)
           .defaultValue("")
           .size(3)
-          .description("PID gains for YAW controller during turn");
+          .description("PID gains for Course controller during turn");
 
           param("Ramp Actuation Limit", m_args.act_ramp)
           .defaultValue("0.0")
@@ -277,7 +280,7 @@ namespace Control
           .defaultValue("30")
           .description("Minimum desired course change that triggers low-pass filtring.");
 
-          param("Desired turning rate", m_args.desired_yaw_der)
+          param("Desired turning rate", m_args.desired_course_der)
           .defaultValue("0.0")
           .minimumValue("0.0")
           .maximumValue("5.0")
@@ -288,29 +291,30 @@ namespace Control
 
           // Register handler routines.
           bind<IMC::Abort>(this);
-          bind<IMC::EstimatedState>(this);
+          //bind<IMC::EstimatedState>(this);
           bind<IMC::DesiredHeading>(this);
           bind<IMC::ControlLoops>(this);
           bind<IMC::EstimatedFreq>(this);
           bind<IMC::AngularVelocity>(this);
           bind<IMC::GpsFix>(this);
+          bind<IMC::VehicleState>(this);
         }
 
         void
         onUpdateParameters(void)
         {
 
-          if (paramChanged(m_args.yaw_gains_trans) ||
+          if (paramChanged(m_args.course_gains_trans) ||
               paramChanged(m_args.log_parcels))
           {
             reset();
-            setup(m_args.yaw_gains_trans);
+            setup(m_args.course_gains_trans);
           }
 
-          if (paramChanged(m_args.yaw_gains_turn))
+          if (paramChanged(m_args.course_gains_turn))
           {
             reset();
-            setup(m_args.yaw_gains_turn);
+            setup(m_args.course_gains_turn);
           }
 
           if(paramChanged(m_args.ext_filter_type))
@@ -355,6 +359,7 @@ namespace Control
             m_gps_eid = 0;
           }
         }
+        
 
         //! Reserve entities.
         void
@@ -385,7 +390,7 @@ namespace Control
         void
         reset(void)
         {
-          m_yaw_pid.reset();
+          m_course_pid.reset();
 
           m_act.id = 0;
           m_act.value = 0.0;
@@ -399,16 +404,16 @@ namespace Control
         void
         setup(std::vector<float> gains)
         {
-          m_yaw_pid.setGains(gains);
-          m_yaw_pid.setOutputLimits(-m_args.act_max, m_args.act_max);	// Anti-windup
+          m_course_pid.setGains(gains);
+          m_course_pid.setOutputLimits(-m_args.act_max, m_args.act_max);	// Anti-windup
           //float ki_sat = 1/gains[1];
-          //m_yaw_pid.setIntegralLimits(ki_sat);
+          //m_course_pid.setIntegralLimits(ki_sat);
 
           debug("SETTING GAINS: %0.3f, %0.3f, %0.3f", gains[0], gains[1], gains[2]);
 
           if (m_args.log_parcels)
           {
-            m_yaw_pid.enableParcels(this, &m_parcel);
+            m_course_pid.enableParcels(this, &m_parcel);
           }
         }
 
@@ -424,6 +429,12 @@ namespace Control
         }
 
         void
+        consume(const IMC::VehicleState* msg)
+        {
+          m_service = (msg->op_mode == IMC::VehicleState::VS_SERVICE);
+        }
+
+        void
         consume(const IMC::Abort* msg)
         {
           if (msg->getSource() != getSystemId())
@@ -432,6 +443,8 @@ namespace Control
           // Redundancy, in case everything else fails
           reset();
           debug("disabling");
+
+          m_service = true;
         }
 
         void
@@ -466,49 +479,83 @@ namespace Control
         }
 
         void
-        consume(const IMC::EstimatedState* msg)
+        consume(const IMC::GpsFix* msg)
         {
-		      // Controller not active use current yaw.
-          if (!isActive())
+          if(msg->getSource() != getSystemId() || msg->getSourceEntity() != m_gps_eid)
+            return;
+
+          // Compute Time Delta.
+          m_tstep = m_delta.getDelta();
+
+          if(!m_des_head_arrived)
           {
-            m_desired_yaw = msg->psi;
+            debug("!m_des_head_arrived");
+          }
+
+          if(m_service)
+          {
+            debug("m_service");
+          }
+
+          if(!m_des_head_arrived || m_service)
+          {
+            dispatchRudder(0, m_tstep);
+            debug("Dispatching a 0 rudder angle");
+            reset();
             return;
           }
 
-          /*if(m_desired_yaw == 0.0000)
+          m_sog = msg->sog;
+
+          // If Navigation/CAS does not provide a desired course, use current course as desired.
+          /*if(!m_des_head_arrived)
+          {
+            m_desired_course_prev = msg->cog;
+            trace("DES COURSE PREV %.3f", Angles::degrees(m_desired_course_prev));
+          }*/
+
+		      // Controller not active use current course.
+          /*if (!isActive())
+          {
+            m_desired_course = msg->cog;
+            return;
+          }*/
+
+          /*if(m_desired_course == 0.0000)
           {
             trace("PATH CONTROLLER NOT READY");
             return;
           }*/
 
-          // Compute Time Delta.
-          m_tstep = m_delta.getDelta();
           // Check if we have a valid time delta.
           if (m_tstep < 0.0)
             return;
 
+          debug("AutoNaut COG %0.3f, Desired Course %0.3f",Angles::degrees(msg->cog), Angles::degrees(m_desired_course));
+
           // Course Error (From IMC::DesiredHeading)
-          float err_yaw = Angles::normalizeRadian(m_desired_yaw - msg->psi);
-          debug("COURSE ERROR: %f", Angles::degrees(err_yaw));
+          float err_course = Angles::normalizeRadian(m_desired_course - msg->cog);
+          debug("COURSE ERROR: %f", Angles::degrees(err_course));
 
           // Derivative Error.
-          float err_yaw_der = m_args.desired_yaw_der - m_angvel.z; //m_angvel.z may need to be filtered?
+          float err_course_der = m_args.desired_course_der - m_angvel.z; //m_angvel.z may need to be filtered?
 
-          // Yaw Controller (PID controller) 
-          float rudder_cmd = m_yaw_pid.step(m_tstep, err_yaw, err_yaw_der);
+          // Course Controller (PID controller) 
+          float rudder_cmd = m_course_pid.step(m_tstep, err_course, err_course_der);
           m_act.value = rudder_cmd;
 
-		      //spew("AutoNaut - Rudder_cmd/m_act: %0.3f  Desired heading: %0.3f", m_act.value, c_degrees_per_radian*m_desired_yaw);			
+		      //spew("AutoNaut - Rudder_cmd/m_act: %0.3f  Desired heading: %0.3f", m_act.value, c_degrees_per_radian*m_desired_course);			
           dispatchRudder(m_act.value, m_tstep);
           //debug("Commanded Rudder Angle %ld", trimValue(roundToInteger(m_act.value*45*10), -45, 45));
 
           // Dispatch thrust command.
           dispatchThrust();
 
-          m_des_course_rate.value = m_args.desired_yaw_der;
+          m_des_course_rate.value = m_args.desired_course_der;
           dispatch(m_des_course_rate);
         }
 
+        //! IMC::DesiredHeading contains a desired course over ground.
         void
         consume(const IMC::DesiredHeading* msg)
         {
@@ -517,12 +564,12 @@ namespace Control
 
           m_des_head_arrived = true;
 
-          m_desired_yaw = msg->value;
-          debug("DES_COURSE FROM PC: %0.3f  ", Angles::degrees(m_desired_yaw));
-          //trace("NORMALIZED DES_COURSE FROM PC: %0.3f  ", Angles::degrees(m_desired_yaw));
+          m_desired_course = msg->value;
+          debug("DES_COURSE FROM PC: %0.3f  ", Angles::degrees(m_desired_course));
+          //trace("NORMALIZED DES_COURSE FROM PC: %0.3f  ", Angles::degrees(m_desired_course));
 
           // Check if waypoint switch has occurred with significant reference change.
-          double course_diff = std::fabs(m_desired_yaw - m_desired_yaw_prev);
+          double course_diff = std::fabs(m_desired_course - m_desired_course_prev);
           trace("COURSE DIFF: %f", Angles::degrees(course_diff));
           double course_diff_norm = std::fabs(normalize_angle(course_diff));
           debug("NORMALIZED COURSE DIFF: %f", Angles::degrees(course_diff_norm));
@@ -539,26 +586,26 @@ namespace Control
               //! Reset Heading Controller.
               reset();
               //! Re-configure PID if adaptive autopilot is chosen.
-              setup(m_args.yaw_gains_turn);
+              setup(m_args.course_gains_turn);
             }
             m_turning_filt = true;
 
-            if(m_desired_yaw > m_desired_yaw_prev)
+            if(m_desired_course > m_desired_course_prev)
             {
-              if(m_desired_yaw_prev<0)
+              if(m_desired_course_prev<0)
               {
-                m_desired_yaw = m_desired_yaw_prev - (course_diff_norm*offset);
-                debug("Negative Chopping! DECREASE -%f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_yaw));
+                m_desired_course = m_desired_course_prev - (course_diff_norm*offset);
+                debug("Negative Chopping! DECREASE -%f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_course));
               }
               else
               {
-                m_desired_yaw = m_desired_yaw_prev + (course_diff_norm*offset);
-                debug("Negative Chopping! DECREASE %f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_yaw));
+                m_desired_course = m_desired_course_prev + (course_diff_norm*offset);
+                debug("Negative Chopping! DECREASE %f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_course));
               }
-            } else if(m_desired_yaw < m_desired_yaw_prev)
+            } else if(m_desired_course < m_desired_course_prev)
             {
-              m_desired_yaw = normalize_angle(m_desired_yaw_prev + (course_diff_norm*offset));
-              debug("Positive Chopping! INCREASE %f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_yaw));
+              m_desired_course = normalize_angle(m_desired_course_prev + (course_diff_norm*offset));
+              debug("Positive Chopping! INCREASE %f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_course));
             }
           } else if(m_chopping && course_diff_norm > Angles::radians(m_args.course_thr) && course_diff<Angles::radians(180))
           {
@@ -567,19 +614,19 @@ namespace Control
               //! Reset Heading Controller.
               reset();
               //! Re-configure PID if adaptive autopilot is chosen.
-              setup(m_args.yaw_gains_turn);
+              setup(m_args.course_gains_turn);
             }
             m_turning_filt = true;
 
-            if(m_desired_yaw > m_desired_yaw_prev)
+            if(m_desired_course > m_desired_course_prev)
             {
-              m_desired_yaw = m_desired_yaw_prev + (course_diff_norm*offset);
-              debug("Positive Chopping! INCREASE %f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_yaw));
+              m_desired_course = m_desired_course_prev + (course_diff_norm*offset);
+              debug("Positive Chopping! INCREASE %f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_course));
             }
-            else if(m_desired_yaw < m_desired_yaw_prev)
+            else if(m_desired_course < m_desired_course_prev)
             {
-              m_desired_yaw = m_desired_yaw_prev - (course_diff_norm*offset);
-              debug("Negative Chopping! DECREASE %f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_yaw));
+              m_desired_course = m_desired_course_prev - (course_diff_norm*offset);
+              debug("Negative Chopping! DECREASE %f - COURSE INSTEAD: %f", Angles::degrees(course_diff_norm*offset), Angles::degrees(m_desired_course));
             }
           } else if(course_diff_norm < Angles::radians(m_args.course_thr))
           {
@@ -589,13 +636,13 @@ namespace Control
               //! Reset Heading Controller.
               reset();
               //! Re-configure PID if adaptive autopilot is chosen.
-              setup(m_args.yaw_gains_trans);
+              setup(m_args.course_gains_trans);
             }
             m_turning_filt = false;
             m_turning = false;
             trace("NOT TURNING!");
           }
-          m_desired_yaw_prev = m_desired_yaw;
+          m_desired_course_prev = m_desired_course;
         }
 
         double normalize_angle(double angle)
@@ -715,7 +762,7 @@ namespace Control
           //spew("AutoNaut - Rudder dispatched: %0.3f  ", m_act.value);
         }
 
-        void
+        /*void
         consume(const IMC::GpsFix* msg)
         {
           if(msg->getSource() != getSystemId() || msg->getSourceEntity() != m_gps_eid)
@@ -725,11 +772,11 @@ namespace Control
 
           if(!m_des_head_arrived)
           {
-            m_desired_yaw_prev = msg->cog;
-            trace("DES COURSE PREV %.3f", Angles::degrees(m_desired_yaw_prev));
+            m_desired_course_prev = msg->cog;
+            trace("DES COURSE PREV %.3f", Angles::degrees(m_desired_course_prev));
           }
             
-        }
+        }*/
 
         //! Dispatch to bus SetThrusterActuation message
         void

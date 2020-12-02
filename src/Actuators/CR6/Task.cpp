@@ -526,7 +526,7 @@ namespace Actuators
         Memory::clear(m_uart);
       }
 
-      //! From SpeedController
+      //! From Autopilot or TextActions.
       void
       consume(const IMC::SetThrusterActuation* msg)
       {
@@ -534,10 +534,10 @@ namespace Actuators
         thruster_act = roundToInteger(msg->value * 100);
         thruster_act = trimValue(thruster_act, -thrust_max, thrust_max);
 
-        spew("SetThrusterActuation value: %d", thruster_act);
+        spew("CR6 SetThrusterActuation value: %d", thruster_act);
       }
 
-      //! From HeadingController
+      //! From Autopilot or TextActions.
       void
       consume(const IMC::SetServoPosition* msg)
       {
@@ -545,7 +545,7 @@ namespace Actuators
         rudder_cmd = roundToInteger(msg->value * m_args.scale*10);
         rudder_cmd = trimValue(rudder_cmd, -rudder_max, rudder_max);
 
-        spew("ServoPosition value: %d", rudder_cmd);
+        spew("CR6 ServoPosition value: %d", rudder_cmd);
       }
 
       //! Consume a PowerSettings Message.

@@ -93,6 +93,7 @@ namespace DUNE
     {
       std::string tablename = "DEPARE";
       std::string c_stmt = "select Lat, Lon, DRVAL1, DRVAL2 from " + tablename + " where " + makeSquareWhereClause(Lat, Lon, half_size) + ";";
+      std::cout << Angles::degrees(Lat) << " " << Angles::degrees(Lon);
       std::cout << c_stmt;
       DepareData::DEPAREVector returnMap;
       try{
@@ -214,22 +215,24 @@ namespace DUNE
       {
         ranges(i,0) = normalize_angle(cog + Angles::radians(directions[i] - offset));
         ranges(i,1) = normalize_angle(cog + Angles::radians(directions[i] + offset));
-        //std::cout << Angles::degrees(ranges(i,0)) << " " << Angles::degrees(ranges(i,1)) << std::endl;
+        //std::cout << "range 1 " << Angles::degrees(ranges(i,0)) << " range 2 " << Angles::degrees(ranges(i,1)) << std::endl;
       }
 
       for(DepareData::DEPAREVector::iterator itr = dep_vec.begin(); itr != dep_vec.end(); ++itr)
       {
         double bearing, range;
         WGS84::getNEBearingAndRange(vessel_lat, vessel_lon, itr->Lat, itr->Lon, &bearing, &range);
+        //std::cout << " bearing " << Angles::degrees(bearing) << " range " << range << std::endl;
 
         for(int j=0; j<ranges.rows(); j++)
         {
-          if(bearing>=ranges(j,0) && bearing<=ranges(j,1) && range<ret(j,3))
+          if(bearing>=ranges(j,0) && bearing<=ranges(j,1) && range<size)
           {
             ret(j,0)=itr->Lat;
             ret(j,1)=itr->Lon;
-            ret(j,2)= Angles::degrees(normalize_angle(bearing-cog)); //bearing;
+            ret(j,2)=Angles::degrees(bearing); //bearing; normalize_angle(bearing-cog)
             ret(j,3)=range;
+            //std::cout << "Lat " << itr->Lat << " Lon " << itr->Lon << " bearing " << Angles::degrees(normalize_angle(bearing-cog)) << " range " << range;
           }
         }
       }

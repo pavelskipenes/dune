@@ -106,7 +106,7 @@ namespace Control
         // Create matrix with past, current and next waypoint.
         Eigen::Matrix<double,3,2> waypoints;
         //! Timer.
-        //Time::Counter<float> m_timer;
+        Time::Counter<float> m_timer;
         //! Course offsets for contours.
         std::vector<double> m_offsets;
         
@@ -494,7 +494,7 @@ namespace Control
               asv_state(i) = 0.0;
             }
 
-            //m_timer.setTop(30);
+            m_timer.setTop(10);
           }
 
           //! Acquire resources.
@@ -553,7 +553,7 @@ namespace Control
 
             m_timestamp_obst = msg->getTimeStamp();
 
-            trace("CAS - MSG TYPE: %s", msg->msg_type.c_str());
+            //trace("CAS - MSG TYPE: %s", msg->msg_type.c_str());
 
             if(msg->msg_type.compare("1") == 0 || msg->msg_type.compare("2") == 0 || msg->msg_type.compare("3") == 0)
             {
@@ -562,7 +562,7 @@ namespace Control
               m_lon_obst = msg->lon;
 
               // Distance between ASV - Obstacle
-              double distance = WGS84::distance(m_lat_asv, m_lon_asv, 0, Angles::radians(m_lat_obst), Angles::radians (m_lon_obst), 0);
+              double distance = WGS84::distance(m_lat_asv, m_lon_asv, 0, m_lat_obst, m_lon_obst, 0);
 
               //spew("Distance from obstacle %s is %0.1f",msg->mmsi.c_str(), distance);
               trace("Received Obstacle from AIS with MMSI: %s, longitude %f and latitude %f, distance: %0.1f", msg->mmsi.c_str(), m_lon_obst, m_lat_obst, distance);
@@ -721,37 +721,51 @@ namespace Control
 
           m_timestamp_new = msg->getTimeStamp();
 
+          Math::Matrix m_contours_to_cas;
+
           // Retrieve contours from ENC database.
-          /*if(m_timer.overflow())
+          if(m_timer.overflow())
           {
             m_timer.reset();
             inf("CAS: retrieving info");
             // Retrieve contours from database and check distances from vehicle position.
             //std::ofstream filez(m_args.debug_path+"useful_depare_single.csv");
 
+            debug("%f %f %f %f\n", Angles::degrees(m_lat_asv), Angles::degrees(m_lon_asv), m_args.cont_size, asv_state(2));
+            //std::cout << m_offsets;
+
             m_contours = m_dp->getCAS(m_lat_asv, m_lon_asv, m_args.drval2, m_args.cont_size, asv_state(2), m_offsets);
+            debug("matrix size %d %d",m_contours.rows(),m_contours.columns());
+            debug("point 1 %f %f",m_contours(0,0),m_contours(0,1));
+
+
             for(int i=0; i<m_contours.rows(); i++)
             {
               //debug("%f %f %f %f\n", Angles::degrees(contours(i,0)), Angles::degrees(contours(i,1)), Angles::degrees(contours(i,2)), contours(i,3));
-              //std::cout << Angles::degrees(contours(i,0)) << "," << Angles::degrees(contours(i,1)) << "," << Angles::degrees(m_dp->normalize_angle(contours(i,2)-asv_state(2))) << "," << contours(i,3) << std::endl;
-              //m_contours_to_cas(i,0) = Angles::degrees(m_dp->normalize_angle(contours(i,2)-asv_state(2)));
-              //m_contours_to_cas(i,1) = contours(i,3);
+              std::cout << Angles::degrees(m_contours(i,0)) << "," << Angles::degrees(m_contours(i,1)) << "," << m_contours(i,2) << "," << m_contours(i,3) << std::endl;
 
               if(m_contours(i,3) != 0.0 && m_contours(i,3) < m_dist_to_land) // Choose what is a safety distance to land.
+              {
                 m_static_obst = true;
+                m_contours_to_cas(i,0) = m_contours(i,2);
+                m_contours_to_cas(i,1) = m_contours(i,3);
+              }             
             }
-            //DepareData::DEPAREVector dep_vec = m_dp->getSquare(m_lat_asv, m_lon_asv, m_args.drval2, 5000.0);
-            //m_dp->writeCSVfile(dep_vec, m_args.debug_path + "useful_depare.csv");
-          }*/
+            DepareData::DEPAREVector dep_vec = m_dp->getSquare(m_lat_asv, m_lon_asv, m_args.drval2, 5000.0);
+            m_dp->writeCSVfile(dep_vec, m_args.debug_path + "useful_depare.csv");
+          }
         }
 
         void
         step(const IMC::EstimatedState& state, const TrackingState& ts)
         {
-          //! LOS Navigation Law (called Pure Pursuit in Dune)
+          //if (ts.cc)
+          //  m_heading.value = Math::Angles::normalizeRadian(m_heading.value + state.psi - ts.course);
+
+          //! LOS Navigation Law (called Pure Pursuit in Dune) - desired course is the LOS angle.
           m_heading.value = ts.los_angle;
-          if (ts.cc)
-            m_heading.value = Math::Angles::normalizeRadian(m_heading.value + state.psi - ts.course);
+
+          debug("CAS - DESIRED COURSE: %f", Angles::radians(m_heading.value));
 
           //! CAS: Running every 5 seconds when obstacles or ground are nearby.
           if((obst_vec.size() > 0 && (m_timestamp_new - m_timestamp_prev) > 5.0))

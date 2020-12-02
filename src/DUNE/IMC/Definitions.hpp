@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 0a76bfc0317d1fc588b25a655365160f                            *
+// IMC XML MD5: 18d3ce67b956c6c457605f6791618e28                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -26677,7 +26677,7 @@ namespace DUNE
     {
     public:
       //! Cell Position.
-      fp32_t cellposition;
+      fp32_t pos;
       //! Beams Measurements.
       MessageList<ADCPBeam> beams;
 
@@ -27479,6 +27479,81 @@ namespace DUNE
       getFixedSerializationSize(void) const
       {
         return 56;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Single Current Cell.
+    class SingleCurrentCell: public Message
+    {
+    public:
+      //! Latitude WGS-84.
+      fp64_t lat;
+      //! Longitude WGS-84.
+      fp64_t lon;
+      //! Cell Depth.
+      std::string depth;
+      //! Water Velocity.
+      std::string vel;
+      //! Direction.
+      std::string dir;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 2013;
+      }
+
+      SingleCurrentCell(void);
+
+      SingleCurrentCell*
+      clone(void) const
+      {
+        return new SingleCurrentCell(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return SingleCurrentCell::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "SingleCurrentCell";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 16;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(depth) + IMC::getSerializationSize(vel) + IMC::getSerializationSize(dir);
       }
 
       void

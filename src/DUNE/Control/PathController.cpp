@@ -228,7 +228,7 @@ namespace DUNE
       if (paramChanged(m_speriod))
         m_speriod = 1.0 / m_speriod;
 
-      m_ts.cc = true; //m_course_ctl ? 1 : 0; m_ts.cc = m_course_ctl ? 1 : 0;
+      m_ts.cc = m_course_ctl ? 1 : 0;
       m_ts.loitering = false;
       m_ts.nearby = false;
       m_ts.end_time = Clock::get();
@@ -767,7 +767,7 @@ namespace DUNE
       // Range and LOS angle to destination
       getBearingAndRange(m_estate, m_ts.end, &m_ts.los_angle, &m_ts.range);
 
-      // Ground course and speed
+      // Ground course and speed      
       m_ts.course = m_ts.cc ? std::atan2(m_estate.vy, m_estate.vx) : m_estate.psi;
       m_ts.speed = m_ts.cc ? Math::norm(m_estate.vx, m_estate.vy) : m_estate.u;
 
