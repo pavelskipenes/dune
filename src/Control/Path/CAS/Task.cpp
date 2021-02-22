@@ -87,6 +87,7 @@ namespace Control
         std::vector<double> directions;
         //! Safety distance to static obstacle.
         double dist_to_land;
+        double anti_grounding_freq;
 
       };
 
@@ -138,6 +139,10 @@ namespace Control
         bool m_static_obst;
         //! Contours to cas.
         Math::Matrix m_contours;
+        //! Contours to cas
+        Math::Matrix m_contours_to_cas;
+        //! Courses to cas
+        Eigen::VectorXd m_courses_to_cas;
         //! Safety distance to land.
         double m_dist_to_land;
 
@@ -395,6 +400,9 @@ namespace Control
           param("Course Offsets for Contours", m_args.directions)
           .units(Units::Degree)
           .description("Course offsets for contours surroundings");
+
+          param("Anti Grounding Frequency", m_args.anti_grounding_freq)
+          .units(Units::Second)
 
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
 
@@ -721,39 +729,9 @@ namespace Control
 
           m_timestamp_new = msg->getTimeStamp();
 
-          Math::Matrix m_contours_to_cas;
+          
 
-          // Retrieve contours from ENC database.
-          if(m_timer.overflow())
-          {
-            m_timer.reset();
-            inf("CAS: retrieving info");
-            // Retrieve contours from database and check distances from vehicle position.
-            //std::ofstream filez(m_args.debug_path+"useful_depare_single.csv");
-
-            debug("%f %f %f %f\n", Angles::degrees(m_lat_asv), Angles::degrees(m_lon_asv), m_args.cont_size, asv_state(2));
-            //std::cout << m_offsets;
-
-            m_contours = m_dp->getCAS(m_lat_asv, m_lon_asv, m_args.drval2, m_args.cont_size, asv_state(2), m_offsets);
-            debug("matrix size %d %d",m_contours.rows(),m_contours.columns());
-            debug("point 1 %f %f",m_contours(0,0),m_contours(0,1));
-
-
-            for(int i=0; i<m_contours.rows(); i++)
-            {
-              //debug("%f %f %f %f\n", Angles::degrees(contours(i,0)), Angles::degrees(contours(i,1)), Angles::degrees(contours(i,2)), contours(i,3));
-              std::cout << Angles::degrees(m_contours(i,0)) << "," << Angles::degrees(m_contours(i,1)) << "," << m_contours(i,2) << "," << m_contours(i,3) << std::endl;
-
-              if(m_contours(i,3) != 0.0 && m_contours(i,3) < m_dist_to_land) // Choose what is a safety distance to land.
-              {
-                m_static_obst = true;
-                m_contours_to_cas(i,0) = m_contours(i,2);
-                m_contours_to_cas(i,1) = m_contours(i,3);
-              }             
-            }
-            DepareData::DEPAREVector dep_vec = m_dp->getSquare(m_lat_asv, m_lon_asv, m_args.drval2, 5000.0);
-            m_dp->writeCSVfile(dep_vec, m_args.debug_path + "useful_depare.csv");
-          }
+          
         }
 
         void
@@ -767,9 +745,94 @@ namespace Control
 
           debug("CAS - DESIRED COURSE: %f", Angles::radians(m_heading.value));
 
+          // Create and fill waypoints matrix.
+          double wp0_dx = 0.0; // displ between asv and wp0
+          double wp0_dy = 0.0;
+          double wp1_dx = 0.0; // displ between asv and wp1
+          double wp1_dy = 0.0;
+          double wp2_dx = 0.0; // displ between asv and wp2
+          double wp2_dy = 0.0;
+
+          // Compute displacement between AutoNaut and waypoints.
+          WGS84::displacement(m_lat_asv, m_lon_asv, 0, ts.lat_st, ts.lon_st, 0, &wp0_dx, &wp0_dy);
+          WGS84::displacement(m_lat_asv, m_lon_asv, 0, ts.waypoints(0,0), ts.waypoints(0,1), 0, &wp1_dx, &wp1_dy);
+          
+          if(ts.waypoints.rows() > 1) //m_waypoints.rows() > 1
+          {
+            WGS84::displacement(m_lat_asv, m_lon_asv, 0, ts.waypoints(1,0), ts.waypoints(1,1), 0, &wp2_dx, &wp2_dy);
+            waypoints << wp0_dx, wp0_dy, // starting waypoint
+                          wp1_dx, wp1_dy, // waypoint we are heading to
+                          wp2_dx, wp2_dy; // next waypoint
+            
+            trace("Displacements: wp0 (%0.1f,%0.1f) - wp1 (%0.1f,%0.1f) - wp2 (%0.1f,%0.1f)", wp0_dx, wp0_dy, wp1_dx, wp1_dy, wp2_dx, wp2_dy);
+          } else
+          { // otherwise send wp1 twice.
+            waypoints << wp0_dx, wp0_dy, // starting waypoint
+                          wp1_dx, wp1_dy, // waypoint we are heading to
+                          wp1_dx, wp1_dy; // repeat 2nd wp for sb_mpc
+
+            trace("Displacements: wp0 (%0.1f,%0.1f) - wp1 (%0.1f,%0.1f)", wp0_dx, wp0_dy, wp1_dx, wp1_dy);
+          }
+
+          //! Anti-Grounding
+          // Retrieve contours from ENC database.
+          if(m_timer.overflow())
+          {
+            m_timer.reset();
+            inf("CAS: retrieving info");
+            // Retrieve contours from database and check distances from vehicle position.
+            //std::ofstream filez(m_args.debug_path+"useful_depare_single.csv");
+
+            debug("%f %f %f %f\n", Angles::degrees(m_lat_asv), Angles::degrees(m_lon_asv), m_args.cont_size, asv_state(2));
+            //std::cout << m_offsets;
+
+            m_contours = m_dp->getCAS(m_lat_asv, m_lon_asv, m_args.drval2, m_args.cont_size, asv_state(2), waypoints, m_offsets);
+            debug("matrix size %d %d",m_contours.rows(),m_contours.columns());
+            debug("point 1 %f %f",m_contours(0,0),m_contours(0,1));
+
+            m_contours_to_cas.resizeAndFill(m_offsets.size(),2,0.0);
+            int number_of_courses = m_offsets.size();
+            for(int i=0; i<m_contours.rows(); i++)
+            {
+              //debug("%f %f %f %f\n", Angles::degrees(contours(i,0)), Angles::degrees(contours(i,1)), Angles::degrees(contours(i,2)), contours(i,3));
+              //std::cout << Angles::degrees(m_contours(i,0)) << "," << Angles::degrees(m_contours(i,1)) << "," << m_contours(i,2) << "," << m_contours(i,3) << std::endl;
+
+              if(m_contours(i,3) != 0.0 && m_contours(i,3) < m_dist_to_land) // Choose what is a safety distance to land.
+              {
+                m_static_obst = true;
+                m_contours_to_cas(i,0) = m_contours(i,2);
+                m_contours_to_cas(i,1) = m_contours(i,3);
+                number_of_courses--;
+                //std::cout << "INSIDE IF" << std::endl;
+                //std::cout << "m_static_obst " << m_static_obst << ", m_contours_to_cas " << m_contours_to_cas << std::endl;
+                
+              }  
+              //std::cout << "No: " << number_of_courses << ", " << m_contours_to_cas(i,0) << "," << m_contours_to_cas(i,1) << std::endl;           
+            }
+            m_courses_to_cas.resize(number_of_courses);
+            int noc = number_of_courses;
+            for(int i=0; i<m_contours_to_cas.rows(); i++)
+            {
+              if (m_contours_to_cas(i,0) == 0 && m_contours_to_cas(i,1) == 0)
+              {
+                noc--;
+                m_courses_to_cas(noc) = Angles::radians(m_offsets[i]);
+                std::cout << Angles::degrees(m_courses_to_cas(noc)) << std::endl;
+                
+              }
+            }
+            std::cout << "Courses to CAS: " << m_courses_to_cas << std::endl;
+
+            DepareData::DEPAREVector dep_vec = m_dp->getSquare(m_lat_asv, m_lon_asv, m_args.drval2, 5000.0);
+            m_dp->writeCSVfile(dep_vec, m_args.debug_path + "useful_depare.csv");
+
+            //m_dp->writeCSVfile(m_contours_to_cas, m_args.debug_path + "m_contours_to_cas.csv");
+          }
+
           //! CAS: Running every 5 seconds when obstacles or ground are nearby.
           if((obst_vec.size() > 0 && (m_timestamp_new - m_timestamp_prev) > 5.0))
           {
+            std::cout << "CAS is running" << std::endl;
             m_timestamp_prev = m_timestamp_new;
 
             Eigen::Matrix<double, -1, 10> obst_state;
@@ -787,7 +850,7 @@ namespace Control
               // Distance between ASV - Obstacle
               double dist_x = 0.0;
               double dist_y = 0.0;
-              WGS84::displacement(m_lat_asv, m_lon_asv, 0, Angles::radians(obst_vec[i].lat), Angles::radians(obst_vec[i].lon), 0, &dist_x, &dist_y);
+              WGS84::displacement(m_lat_asv, m_lon_asv, 0, obst_vec[i].lat, obst_vec[i].lon, 0, &dist_x, &dist_y);
 
               trace("North offset x-coordinate in NED = %0.1f, East offset y-coordinate in NED = %0.1f", dist_x, dist_y);
 
@@ -840,41 +903,14 @@ namespace Control
               //debug("AUTONAUT (lon,lat,cog,sog) %0.3f %0.3f %0.1f %0.1f | %d-th OBSTACLE (dist_x,dist_y,cog,sog) %0.1f %0.1f %0.1f %f", Angles::degrees(m_lat_asv), Angles::degrees(m_lon_asv), Angles::degrees(asv_state(2)), asv_state(3), i+1, obst_state(i,0), obst_state(i,1), c_degrees_per_radian*obst_state(i,2), obst_state(i,3));
             }
 
-            // Create and fill waypoints matrix.
-            double wp0_dx = 0.0; // displ between asv and wp0
-            double wp0_dy = 0.0;
-            double wp1_dx = 0.0; // displ between asv and wp1
-            double wp1_dy = 0.0;
-            double wp2_dx = 0.0; // displ between asv and wp2
-            double wp2_dy = 0.0;
-
-            // Compute displacement between AutoNaut and waypoints.
-            WGS84::displacement(m_lat_asv, m_lon_asv, 0, ts.lat_st, ts.lon_st, 0, &wp0_dx, &wp0_dy);
-            WGS84::displacement(m_lat_asv, m_lon_asv, 0, ts.waypoints(0,0), ts.waypoints(0,1), 0, &wp1_dx, &wp1_dy);
             
-            if(ts.waypoints.rows() > 1) //m_waypoints.rows() > 1
-            {
-              WGS84::displacement(m_lat_asv, m_lon_asv, 0, ts.waypoints(1,0), ts.waypoints(1,1), 0, &wp2_dx, &wp2_dy);
-              waypoints << wp0_dx, wp0_dy, // starting waypoint
-                           wp1_dx, wp1_dy, // waypoint we are heading to
-                           wp2_dx, wp2_dy; // next waypoint
-              
-              trace("Displacements: wp0 (%0.1f,%0.1f) - wp1 (%0.1f,%0.1f) - wp2 (%0.1f,%0.1f)", wp0_dx, wp0_dy, wp1_dx, wp1_dy, wp2_dx, wp2_dy);
-            } else
-            { // otherwise send wp1 twice.
-              waypoints << wp0_dx, wp0_dy, // starting waypoint
-                           wp1_dx, wp1_dy, // waypoint we are heading to
-                           wp1_dx, wp1_dy; // repeat 2nd wp for sb_mpc
-
-              trace("Displacements: wp0 (%0.1f,%0.1f) - wp1 (%0.1f,%0.1f)", wp0_dx, wp0_dy, wp1_dx, wp1_dy);
-            }
 
             debug("OBSTACLE dist_x %f, dist_y %f, course %f, speed %f, a %f, b %f, c %f, d %f", obst_state(0,0), obst_state(0,1), obst_state(0,2), obst_state(0,3), obst_state(0,5), obst_state(0,6), obst_state(0,7), obst_state(0,8));
 
             debug("Arrived Here!");
 
             //! Collision Avoidance Algorithm - Compute heading offset/(speed offset)
-            sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, m_contours);
+            sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, m_courses_to_cas);
 
             //! New desired course and course offset.
             m_heading.value += psi_os;
@@ -887,14 +923,34 @@ namespace Control
             m_heading.value = Angles::normalizeRadian(m_heading.value);
 
             dispatch(m_heading);
+            std::cout << "Course offset: " << c_degrees_per_radian*psi_os << std::endl;
+            std::cout << "Heading: " << m_heading.value << std::endl;
 
             debug("COLLISION AVOIDANCE - Course offset: %0.1f - DESIRED COURSE:%0.1f  - Number of Obstacles: %lu", c_degrees_per_radian*psi_os, c_degrees_per_radian*m_heading.value, obst_vec.size());
           } else if(obst_vec.size() == 0 && (m_timestamp_new - m_timestamp_prev > 20.0) && m_static_obst && m_enable_antiground)
           {
             debug("No dynamic obstacles but static obstacles!");
-            // No obstacle in range but static obstacles close: implement pure Anti-Grounding.
+            
             m_timestamp_prev = m_timestamp_new;
+
+            // No obstacle in range but static obstacles close: implement pure Anti-Grounding.
+            // Add pure anti-grounding here
+
+            // psi_os comes from where?
+            //Eigen::Matrix<double, -1, 10> obst_state;
+            //getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints_, bool static_obst, Math::Matrix contours)
+            //sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, m_courses_to_cas);
+
+            //! New desired course and course offset.
+            //m_heading.value += psi_os;
+            //m_heading.off = c_degrees_per_radian*psi_os;
+
+            //! Normalize angle
+            //m_heading.value = Angles::normalizeRadian(m_heading.value);
+
             dispatch(m_heading);
+            debug("ANTI-GROUNDING ONLY - Course offset: %0.1f - DESIRED COURSE:%0.1f  - Number of Obstacles: %lu", c_degrees_per_radian*psi_os, c_degrees_per_radian*m_heading.value);
+
 
           } else if (obst_vec.size() == 0 && (m_timestamp_new - m_timestamp_prev > 1.0) && !m_static_obst)
           {

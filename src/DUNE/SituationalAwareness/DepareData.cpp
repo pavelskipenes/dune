@@ -122,7 +122,7 @@ namespace DUNE
     DepareData::DEPAREVector DepareData::getSquare(double Lat, double Lon, double drval2, double half_size)
     {
       std::string tablename = "DEPARE";
-      std::string c_stmt = "select Lat, Lon from " + tablename + " where DRVAL2=" +std::to_string(drval2) + " and " + makeSquareWhereClause(Lat, Lon, half_size) + ";";
+      std::string c_stmt = "select Lat, Lon, DRVAL1, DRVAL2 from " + tablename + " where DRVAL2=" +std::to_string(drval2) + " and " + makeSquareWhereClause(Lat, Lon, half_size) + ";";
       std::cout << c_stmt << std::endl;
       DepareData::DEPAREVector returnMap;
       try{
@@ -205,17 +205,23 @@ namespace DUNE
       return getCorridor(startLat, startLon, endLat, endLon, distance/(gridSize/2*std::sqrt(2)), corridorWidth);
     }
 
-    Math::Matrix DepareData::getCAS(double vessel_lat, double vessel_lon, double drval2, double size, double cog, std::vector<double> directions){
+    Math::Matrix DepareData::getCAS(double vessel_lat, double vessel_lon, double drval2, double size, double cog, const Eigen::Matrix<double,-1,2> waypoints_, std::vector<double> directions){
       DepareData::DEPAREVector dep_vec = this->getSquare(vessel_lat, vessel_lon, drval2, size);
       int offset = 2;
       Math::Matrix ranges(directions.size(),2);
       Math::Matrix ret(directions.size(),4,0.0);
 
+      Eigen::MatrixXd waypoints(waypoints_.rows(), waypoints_.cols()); waypoints = waypoints_;
+
+      double psi_path = atan2(waypoints(1,1) - waypoints(0,1),
+							waypoints(1,0) - waypoints(0,0)); // path course
+
       for(int i=0; i<directions.size(); i++)
       {
-        ranges(i,0) = normalize_angle(cog + Angles::radians(directions[i] - offset));
-        ranges(i,1) = normalize_angle(cog + Angles::radians(directions[i] + offset));
+        ranges(i,0) = normalize_angle(psi_path + Angles::radians(directions[i] - offset));
+        ranges(i,1) = normalize_angle(psi_path + Angles::radians(directions[i] + offset));
         //std::cout << "range 1 " << Angles::degrees(ranges(i,0)) << " range 2 " << Angles::degrees(ranges(i,1)) << std::endl;
+        std::cout << "cog: " << cog << "psi_path: " << psi_path << std::endl;
       }
 
       for(DepareData::DEPAREVector::iterator itr = dep_vec.begin(); itr != dep_vec.end(); ++itr)
@@ -228,11 +234,20 @@ namespace DUNE
         {
           if(bearing>=ranges(j,0) && bearing<=ranges(j,1) && range<size)
           {
-            ret(j,0)=itr->Lat;
-            ret(j,1)=itr->Lon;
-            ret(j,2)=Angles::degrees(bearing); //bearing; normalize_angle(bearing-cog)
-            ret(j,3)=range;
-            //std::cout << "Lat " << itr->Lat << " Lon " << itr->Lon << " bearing " << Angles::degrees(normalize_angle(bearing-cog)) << " range " << range;
+            if(ret(j,3) == 0.0)
+            {
+              ret(j,0)=itr->Lat;
+              ret(j,1)=itr->Lon;
+              ret(j,2)=Angles::degrees(bearing); //bearing; normalize_angle(bearing-cog)
+              ret(j,3)=range;
+            }
+            else if(range < ret(j,3)){
+              ret(j,0)=itr->Lat;
+              ret(j,1)=itr->Lon;
+              ret(j,2)=Angles::degrees(bearing); //bearing; normalize_angle(bearing-cog)
+              ret(j,3)=range;
+              //std::cout << "Lat " << itr->Lat << " Lon " << itr->Lon << " bearing " << Angles::degrees(normalize_angle(bearing-cog)) << " range " << range;
+            }
           }
         }
       }

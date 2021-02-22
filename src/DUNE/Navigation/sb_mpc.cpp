@@ -147,26 +147,26 @@ namespace DUNE
 
 		if (OBST_FILTER_ON_>0){
 
-	    // NB! swap +/- and left/right values in the following for NED (MR) version!
-	    chi_obst_os_.resize(3,1);
-	    //chi_obst_os_ << -15.0, 0.0, 5.0;  //-15.0, 0.0, 5.0; asymemtric, branches and zero offset
-        chi_obst_os_ << 5.0, 0.0, -0.1;  // ENU: -5.0, 0.0, 0.1; NED: 5.0, 0.0, -0.1; uncertainty adjusted in obstacle.cpp
-	    chi_obst_os_ *= DEG2RAD;
+		// NB! swap +/- and left/right values in the following for NED (MR) version!
+		chi_obst_os_.resize(3,1);
+		//chi_obst_os_ << -15.0, 0.0, 5.0;  //-15.0, 0.0, 5.0; asymemtric, branches and zero offset
+		chi_obst_os_ << 5.0, 0.0, -0.1;  // ENU: -5.0, 0.0, 0.1; NED: 5.0, 0.0, -0.1; uncertainty adjusted in obstacle.cpp
+		chi_obst_os_ *= DEG2RAD;
 
-	    //u_obst_os_.resize(2,1);
-	    //u_obst_os_ << -1.0, 0.0;  //-2.0, 0.0 [m/s] reduced speed, branches and stem
+		//u_obst_os_.resize(2,1);
+		//u_obst_os_ << -1.0, 0.0;  //-2.0, 0.0 [m/s] reduced speed, branches and stem
 
-	    u_obst_os_.resize(3,1);
-	    u_obst_os_ << -1.0, 0.0, 0.1;  //-1.0, 0.0, 0.1 [m/s] uncertainty adjusted in obstacle.cpp
+		u_obst_os_.resize(3,1);
+		u_obst_os_ << -1.0, 0.0, 0.1;  //-1.0, 0.0, 0.1 [m/s] uncertainty adjusted in obstacle.cpp
 
 	}else{
 
-	    chi_obst_os_.resize(1,1);
-	    chi_obst_os_ << 0.0;  // stem only
-	    chi_obst_os_ *= DEG2RAD;
+		chi_obst_os_.resize(1,1);
+		chi_obst_os_ << 0.0;  // stem only
+		chi_obst_os_ *= DEG2RAD;
 
-	    u_obst_os_.resize(1,1);
-	    u_obst_os_ << 0.0;    // stem only
+		u_obst_os_.resize(1,1);
+		u_obst_os_ << 0.0;    // stem only
 
 	}
 
@@ -177,7 +177,7 @@ namespace DUNE
 	}
 
 
-	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints_, bool static_obst, Math::Matrix contours){
+	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints_, bool static_obst, Eigen::VectorXd contours){
 	// REMOVED: Eigen::Matrix<double,-1,2>& predicted_traj, Eigen::Matrix<double,-1,1>& colav_status, Eigen::Matrix<double,-1,-1>& obst_status
 	double cost = INFINITY;
 	double cost_k = 0, cost_i = 0, cost_o = 0; //cost_ac = 0;
@@ -201,7 +201,7 @@ namespace DUNE
 	for(int f=0; f<contours.rows(); f++)
 	{
 		std::cout << contours(f,0) << " " << contours(f,1) << std::endl;
-	}
+	}	
 
 
 	if (obst_states.rows() == 0 && oldObstacles_.size() == 0 ){
@@ -210,7 +210,7 @@ namespace DUNE
 		P_ca_last_ = 1;
 		Chi_ca_last_ = 0;
 
-	        return;
+			return;
 	}else{
 
 	/*
@@ -310,7 +310,7 @@ namespace DUNE
 
 
 	}
-
+	
 	// compute new behavior only if an obstacle enters the colav range!
 	for (int k = 0; k < n_obst; k++){
 		d(0) = obst_vect[k]->x_[0] - asv_state(0);
@@ -382,7 +382,16 @@ namespace DUNE
     // distance of track from wp0 to wp1
 	double track_dist = sqrt(pow(waypoints(1,0) - waypoints(0,0),2) + pow(waypoints(1,1) - waypoints(0,1),2));
 	std::cout << "track dist :  " << track_dist << std::endl;
+	std::cout << "psi path :  " << psi_path*RAD2DEG << std::endl;
 
+	std::cout << "BEFORE: Chi_ca_: " << Chi_ca_ << std::endl;
+	Chi_ca_ = contours;
+	/*for (int i = 0; i < Chi_ca_.size(); i++){
+		std::cout << "BEFORE: Chi_ca_: " << Chi_ca_[i] << std::endl;
+		Chi_ca_[i] = normalize_angle(contours[i] + psi_path - psi_d);
+		std::cout << "AFTER: Chi_ca_: " << Chi_ca_[i] << std::endl;
+	}*/
+	std::cout << "AFTER: Chi_ca_: " << Chi_ca_ << std::endl;
 	// test if asv has passed wp
 
 	// next waypoint directional vector for improving accuracy of scenario
