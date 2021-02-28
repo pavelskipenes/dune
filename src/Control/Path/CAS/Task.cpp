@@ -403,6 +403,7 @@ namespace Control
 
           param("Anti Grounding Frequency", m_args.anti_grounding_freq)
           .units(Units::Second)
+          .description("Anti Grounding Frequency in seconds");
 
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
 
