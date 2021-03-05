@@ -177,9 +177,9 @@ namespace DUNE
 	}
 
 
-	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints_, bool static_obst, Eigen::VectorXd contours){
+	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints_, bool static_obst, Eigen::VectorXd contours, double &cost){
 	// REMOVED: Eigen::Matrix<double,-1,2>& predicted_traj, Eigen::Matrix<double,-1,1>& colav_status, Eigen::Matrix<double,-1,-1>& obst_status
-	double cost = INFINITY;
+	cost = INFINITY;
 	double cost_k = 0, cost_i = 0, cost_o = 0; //cost_ac = 0;
 	int n_obst, n_wps, n_samp=T_/DT_, n_samp_pred=n_samp/pred_step, n_psi_os_best;
 	Eigen::Vector2d d, v_o, v_s, los_0, d_s_wp1, los_s_wp1, d_wp0_wp1, los_wp0_wp1;
@@ -381,8 +381,6 @@ namespace DUNE
 
     // distance of track from wp0 to wp1
 	double track_dist = sqrt(pow(waypoints(1,0) - waypoints(0,0),2) + pow(waypoints(1,1) - waypoints(0,1),2));
-	std::cout << "track dist :  " << track_dist << std::endl;
-	std::cout << "psi path :  " << psi_path*RAD2DEG << std::endl;
 
 	std::cout << "BEFORE: Chi_ca_: " << Chi_ca_ << std::endl;
 	Chi_ca_ = contours;

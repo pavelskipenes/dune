@@ -87,6 +87,7 @@ namespace Control
         std::vector<double> directions;
         //! Safety distance to static obstacle.
         double dist_to_land;
+        //! Frequency of the anti-grounding algorithm
         double anti_grounding_freq;
 
       };
@@ -102,6 +103,8 @@ namespace Control
         IMC::DesiredHeading m_heading;
         //! Outgoing desired speed message.
         IMC::DesiredSpeed m_speed;
+        //! Outgoing cost message.
+        IMC::CasCost m_cost;
         //! Vector of obstacles
         std::vector<IMC::AisInfo> obst_vec;
         // Create matrix with past, current and next waypoint.
@@ -145,6 +148,10 @@ namespace Control
         Eigen::VectorXd m_courses_to_cas;
         //! Safety distance to land.
         double m_dist_to_land;
+        //! Frequency of the anti-grounding algorithm
+        double m_anti_grounding_freq;
+        //! Cost <Output from CAS>
+        double cost;
 
         //! Task arguments.
         Arguments m_args;
@@ -165,7 +172,8 @@ namespace Control
         m_timestamp_new(0.0),
         m_timestamp_prev(0.0),
         m_timestamp_obst(0.0),
-        m_static_obst(false)
+        m_static_obst(false),
+        cost(0.0)
         {
           param("Enable Collision Avoidance", m_args.en_cas)
           .defaultValue("true")
@@ -487,6 +495,9 @@ namespace Control
 
             if(paramChanged(m_args.dist_to_land))
               m_dist_to_land = m_args.dist_to_land;
+
+            if(paramChanged(m_args.anti_grounding_freq))
+              m_anti_grounding_freq = m_args.anti_grounding_freq;
           }
 
           void
@@ -503,7 +514,7 @@ namespace Control
               asv_state(i) = 0.0;
             }
 
-            m_timer.setTop(10);
+            m_timer.setTop(m_anti_grounding_freq);
           }
 
           //! Acquire resources.
@@ -911,11 +922,14 @@ namespace Control
             debug("Arrived Here!");
 
             //! Collision Avoidance Algorithm - Compute heading offset/(speed offset)
-            sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, m_courses_to_cas);
+            sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, m_courses_to_cas, cost);
 
             //! New desired course and course offset.
             m_heading.value += psi_os;
             m_heading.off = c_degrees_per_radian*psi_os;
+
+            //! New cost from CAS
+            m_cost.value = cost == INFINITY ? 0 : cost;
 
             //! New speed offset.
             //m_speed.value += u_os;
@@ -924,6 +938,7 @@ namespace Control
             m_heading.value = Angles::normalizeRadian(m_heading.value);
 
             dispatch(m_heading);
+            dispatch(m_cost);
             std::cout << "Course offset: " << c_degrees_per_radian*psi_os << std::endl;
             std::cout << "Heading: " << m_heading.value << std::endl;
 
@@ -937,7 +952,6 @@ namespace Control
             // No obstacle in range but static obstacles close: implement pure Anti-Grounding.
             // Add pure anti-grounding here
 
-            // psi_os comes from where?
             //Eigen::Matrix<double, -1, 10> obst_state;
             //getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints_, bool static_obst, Math::Matrix contours)
             //sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, m_courses_to_cas);

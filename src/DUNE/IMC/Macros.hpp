@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 18d3ce67b956c6c457605f6791618e28                            *
+// IMC XML MD5: 93bef990a69313cf52e9aca30c92d2f2                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -686,6 +686,8 @@
 #define DUNE_IMC_CURRENTVELOCITY 915
 //! CollisionAvoidance identification number.
 #define DUNE_IMC_COLLISIONAVOIDANCE 916
+//! CasCost identification number.
+#define DUNE_IMC_CASCOST 2021
 //! Surroundings identification number.
 #define DUNE_IMC_SURROUNDINGS 917
 //! Heave identification number.
@@ -714,7 +716,5 @@
 #define DUNE_IMC_PAR 2012
 //! AisGpsFix identification number.
 #define DUNE_IMC_AISGPSFIX 920
-//! SingleCurrentCell identification number.
-#define DUNE_IMC_SINGLECURRENTCELL 2013
 
 #endif

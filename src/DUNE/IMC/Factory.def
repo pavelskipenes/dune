@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 18d3ce67b956c6c457605f6791618e28                            *
+// IMC XML MD5: 93bef990a69313cf52e9aca30c92d2f2                            *
 //***************************************************************************
 
 MESSAGE(1, EntityState)
@@ -357,6 +357,7 @@ MESSAGE(914, RelativeWind)
 MESSAGE(919, AbsoluteWind)
 MESSAGE(915, CurrentVelocity)
 MESSAGE(916, CollisionAvoidance)
+MESSAGE(2021, CasCost)
 MESSAGE(917, Surroundings)
 MESSAGE(918, Heave)
 MESSAGE(1011, AcousticBackscatter)
@@ -371,5 +372,4 @@ MESSAGE(2010, ScienceSensors)
 MESSAGE(2011, ScienceSensorsReply)
 MESSAGE(2012, PAR)
 MESSAGE(920, AisGpsFix)
-MESSAGE(2013, SingleCurrentCell)
 #undef MESSAGE
