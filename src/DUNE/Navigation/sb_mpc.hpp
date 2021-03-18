@@ -57,10 +57,10 @@ namespace DUNE
      * @param waypoints The next waypoint.
 	 */
 
-	void create(double T, double DT, double T_stat, double P, double Q, double D_CLOSE, double D_SAFE, double K_COLL, double PHI_AH, double PHI_OT, double PHI_HO, double PHI_CR, double KAPPA, double KAPPA_TC, double K_P, double K_CHI, double K_DP, double K_DCHI_SB, double K_DCHI_P, double K_CHI_SB, double K_CHI_P, double D_INIT, double ang_range, double granularity, double WP_R, double LOS_LA_DIST, double LOS_KI, int GUIDANCE_STRATEGY);
+	void create(double T, double DT, double T_stat, double P, double Q, double D_CLOSE, double D_SAFE, double dist_to_land, double K_COLL, double PHI_AH, double PHI_OT, double PHI_HO, double PHI_CR, double KAPPA, double KAPPA_TC, double K_P, double K_CHI, double K_DP, double K_DCHI_SB, double K_DCHI_P, double K_CHI_SB, double K_CHI_P, double D_INIT, double ang_range, double granularity, double WP_R, double LOS_LA_DIST, double LOS_KI, int GUIDANCE_STRATEGY);
 	
 	// REMOVED: Matrix& predicted_traj, Matrix& colav_status, Matrix& obst_status.
-	void getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints, bool static_obst, Eigen::VectorXd contours, double &cost);
+	void getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints, bool static_obst, Math::Matrix course_offsets_matrix, double &cost);
 
 	/**
 	 * @brief  Returns the simulation time (prediction horizon) [sec].
@@ -231,7 +231,7 @@ namespace DUNE
 	private:
 
 	// bool AH_0, bool OBS_PASSED unused?
-	double costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, int &ik_return_to_path); //Eigen::Matrix<double,1,4> static_obst 
+	double costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, int &ik_return_to_path, double course_offset_cost); //Eigen::Matrix<double,1,4> static_obst 
 	double deltaP(double P_ca);
 	double deltaChi(double Chi_ca, double k_dchi_p, double k_dchi_sb); 
 	double sqrChi(double Chi_ca, double k_chi_p, double k_chi_sb); 
@@ -283,6 +283,7 @@ namespace DUNE
 	double Q_;
 	double D_CLOSE_;
 	double D_SAFE_;
+	double D_SAFE_LAND_;
 	double K_COLL_;
 	double PHI_AH_;
 	double PHI_OT_;

@@ -186,6 +186,15 @@ namespace DUNE
         }
       return false;
     }
+    // This function should not be here permanently, since it has nothing to do with DepareData, but for now it is just very practical. It will be used only for a short time.
+    bool DepareData::writeCSVfileCourseOffsets(double course, double bearing, double distance, double cost, std::string outputFile)
+    {
+      std::ofstream file_;
+      file_.open(outputFile, std::ios_base::app);
+      file_ << course << "," << bearing << "," << distance << "," << cost << "\r\n";
+      
+      return false;
+    }
 
     DepareData::DEPAREVector DepareData::getCorridor(double startLat, double startLon, double endLat, double endLon, double steps, double corridorWidth) {
       float stepLat= (endLat-startLat)/steps;
@@ -221,7 +230,7 @@ namespace DUNE
         ranges(i,0) = normalize_angle(psi_path + Angles::radians(directions[i] - offset));
         ranges(i,1) = normalize_angle(psi_path + Angles::radians(directions[i] + offset));
         //std::cout << "range 1 " << Angles::degrees(ranges(i,0)) << " range 2 " << Angles::degrees(ranges(i,1)) << std::endl;
-        std::cout << "cog: " << cog << "psi_path: " << psi_path << std::endl;
+        //std::cout << "cog: " << cog << "psi_path: " << psi_path << std::endl;
       }
 
       for(DepareData::DEPAREVector::iterator itr = dep_vec.begin(); itr != dep_vec.end(); ++itr)

@@ -54,7 +54,7 @@ namespace Control
         double out_of_range;
 
         // Simulation Parameters
-        double T, DT, T_STAT, P, Q, D_CLOSE, D_SAFE, K_COLL, 
+        double T, DT, T_STAT, P, Q, D_CLOSE, D_SAFE, K_COLL,
         KAPPA, KAPPA_TC, PHI_AH, PHI_OT, PHI_HO, PHI_CR, K_P, K_DP,
         K_CHI, K_DCHI_SB, K_DCHI_P, K_CHI_SB, K_CHI_P, D_INIT;
 
@@ -427,7 +427,7 @@ namespace Control
             // T and DT cannot be changed online. If changed, re-create the object.
             if(paramChanged(m_args.T) || paramChanged(m_args.DT))
                 sb_mpc.create(m_args.T, m_args.DT, m_args.T_STAT, m_args.P, m_args.Q, m_args.D_CLOSE,
-                          m_args.D_SAFE, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
+                          m_args.D_SAFE, m_args.dist_to_land, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
                           m_args.KAPPA, m_args.KAPPA_TC, m_args.K_P, m_args.K_CHI, m_args.K_DP, m_args.K_DCHI_SB,
                           m_args.K_DCHI_P, m_args.K_CHI_SB, m_args.K_CHI_P, m_args.D_INIT, m_args.COURSE_RANGE, m_args.GRANULARITY,
                           m_args.WP_R, m_args.LOS_LA_DIST, m_args.LOS_KI, m_args.GUIDANCE_STRATEGY);
@@ -441,6 +441,8 @@ namespace Control
                 sb_mpc.setDClose(m_args.D_CLOSE);
             if(paramChanged(m_args.D_SAFE))
                 sb_mpc.setDSafe(m_args.D_SAFE);
+            if(paramChanged(m_args.dist_to_land))
+                sb_mpc.setDSafe(m_args.dist_to_land);
             if(paramChanged(m_args.K_COLL))
                 sb_mpc.setKColl(m_args.K_COLL);
             if(paramChanged(m_args.KAPPA))
@@ -504,7 +506,7 @@ namespace Control
           onResourceInitialization(void)
           {
             sb_mpc.create(m_args.T, m_args.DT, m_args.T_STAT, m_args.P, m_args.Q, m_args.D_CLOSE,
-                          m_args.D_SAFE, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
+                          m_args.D_SAFE, m_args.dist_to_land, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
                           m_args.KAPPA, m_args.KAPPA_TC, m_args.K_P, m_args.K_CHI, m_args.K_DP, m_args.K_DCHI_SB,
                           m_args.K_DCHI_P, m_args.K_CHI_SB, m_args.K_CHI_P, m_args.D_INIT, m_args.COURSE_RANGE, m_args.GRANULARITY,
                           m_args.WP_R, m_args.LOS_LA_DIST, m_args.LOS_KI, m_args.GUIDANCE_STRATEGY);
@@ -795,45 +797,65 @@ namespace Control
             // Retrieve contours from database and check distances from vehicle position.
             //std::ofstream filez(m_args.debug_path+"useful_depare_single.csv");
 
-            debug("%f %f %f %f\n", Angles::degrees(m_lat_asv), Angles::degrees(m_lon_asv), m_args.cont_size, asv_state(2));
-            //std::cout << m_offsets;
+            //debug("%f %f %f %f\n", Angles::degrees(m_lat_asv), Angles::degrees(m_lon_asv), m_args.cont_size, asv_state(2))
 
             m_contours = m_dp->getCAS(m_lat_asv, m_lon_asv, m_args.drval2, m_args.cont_size, asv_state(2), waypoints, m_offsets);
-            debug("matrix size %d %d",m_contours.rows(),m_contours.columns());
-            debug("point 1 %f %f",m_contours(0,0),m_contours(0,1));
+            //debug("matrix size %d %d",m_contours.rows(),m_contours.columns());
+            //debug("point 1 %f %f",m_contours(0,0),m_contours(0,1));
 
-            m_contours_to_cas.resizeAndFill(m_offsets.size(),2,0.0);
+            m_contours_to_cas.resizeAndFill(m_offsets.size(),4,0.0);
             int number_of_courses = m_offsets.size();
+            // for(int i=0; i<m_contours.rows(); i++)
+            // {
+            //   //debug("%f %f %f %f\n", Angles::degrees(contours(i,0)), Angles::degrees(contours(i,1)), Angles::degrees(contours(i,2)), contours(i,3));
+            //   //std::cout << Angles::degrees(m_contours(i,0)) << "," << Angles::degrees(m_contours(i,1)) << "," << m_contours(i,2) << "," << m_contours(i,3) << std::endl;
+
+            //   if(m_contours(i,3) != 0.0 && m_contours(i,3) < m_dist_to_land) // Find courses where the distance to land is shorter than the minimal safe distance to land, and add these to m_contours_to_cas
+            //   {
+            //     m_static_obst = true;
+            //     m_contours_to_cas(i,0) = m_contours(i,2);
+            //     m_contours_to_cas(i,1) = m_contours(i,3);
+            //     number_of_courses--;                
+            //   }         
+            // }
+
+            // For each course offset, the distance from the vessel to land is found, in order to calculate a cost for this offset, depending on the distance to land. 
+            // The m_contours_to_cas matrix will have four columns: offset in rad, bearing, distance, cost
             for(int i=0; i<m_contours.rows(); i++)
             {
-              //debug("%f %f %f %f\n", Angles::degrees(contours(i,0)), Angles::degrees(contours(i,1)), Angles::degrees(contours(i,2)), contours(i,3));
-              //std::cout << Angles::degrees(m_contours(i,0)) << "," << Angles::degrees(m_contours(i,1)) << "," << m_contours(i,2) << "," << m_contours(i,3) << std::endl;
-
-              if(m_contours(i,3) != 0.0 && m_contours(i,3) < m_dist_to_land) // Choose what is a safety distance to land.
+              m_contours_to_cas(i,0) = Angles::radians(m_offsets[i]);
+              if(m_contours(i,3) != 0.0 && m_contours(i,3) < m_args.D_INIT) // Find courses inside the Surveillance range of the sb_mpc
               {
                 m_static_obst = true;
-                m_contours_to_cas(i,0) = m_contours(i,2);
-                m_contours_to_cas(i,1) = m_contours(i,3);
-                number_of_courses--;
-                //std::cout << "INSIDE IF" << std::endl;
-                //std::cout << "m_static_obst " << m_static_obst << ", m_contours_to_cas " << m_contours_to_cas << std::endl;
-                
-              }  
-              //std::cout << "No: " << number_of_courses << ", " << m_contours_to_cas(i,0) << "," << m_contours_to_cas(i,1) << std::endl;           
-            }
-            m_courses_to_cas.resize(number_of_courses);
-            int noc = number_of_courses;
-            for(int i=0; i<m_contours_to_cas.rows(); i++)
-            {
-              if (m_contours_to_cas(i,0) == 0 && m_contours_to_cas(i,1) == 0)
-              {
-                noc--;
-                m_courses_to_cas(noc) = Angles::radians(m_offsets[i]);
-                std::cout << Angles::degrees(m_courses_to_cas(noc)) << std::endl;
+                m_contours_to_cas(i,1) = m_contours(i,2);
+                m_contours_to_cas(i,2) = m_contours(i,3);
+                m_contours_to_cas(i,3) = (1/m_contours(i,3))*15000; // ; (1/pow(m_contours(i,3),2))*4500000   // Cost of Grounding
+
+                //debug("Contours to cas: \n Bearing: %f, Distance: %f, Cost: %f", m_contours_to_cas(i,0), m_contours_to_cas(i,1), m_contours_to_cas(i,2));
+              //debug("Courses with cost: \n Course: %f, Bearing: %f, Distance: %f, Cost: %f", Angles::degrees(m_contours_to_cas(i,0)), m_contours_to_cas(i,1), m_contours_to_cas(i,2), m_contours_to_cas(i,3));
+              m_dp->writeCSVfileCourseOffsets(Angles::degrees(m_contours_to_cas(i,0)), m_contours_to_cas(i,1), m_contours_to_cas(i,2), m_contours_to_cas(i,3), m_args.debug_path + "course_offsets_cost.csv");
                 
               }
+              
             }
-            std::cout << "Courses to CAS: " << m_courses_to_cas << std::endl;
+
+
+            // m_courses_to_cas.resize(number_of_courses);
+            // int noc = number_of_courses;
+            // for(int i=0; i<m_contours_to_cas.rows(); i++)
+            // {
+            //   //if (m_contours_to_cas(i,0) == 0 && m_contours_to_cas(i,1) == 0)
+            //   if(1)
+            //   {
+            //     noc--;
+            //     m_courses_to_cas(noc) = Angles::radians(m_offsets[i]);
+            //     debug("Courses with cost: \n Course: %f, Bearing: %f, Distance: %f, Cost: %f", Angles::degrees(m_contours_to_cas(i,0)), m_contours_to_cas(i,1), m_contours_to_cas(i,2), m_contours_to_cas(i,3));
+            //     m_dp->writeCSVfileCourseOffsets(Angles::degrees(m_contours_to_cas(i,0)), m_contours_to_cas(i,1), m_contours_to_cas(i,2), m_contours_to_cas(i,3), m_args.debug_path + "course_offsets_cost.csv");
+            //     //std::cout << "Courses in degrees: " << Angles::degrees(m_courses_to_cas(noc)) << std::endl;
+                
+            //   }
+            // }
+            //std::cout << "Courses to CAS: " << m_courses_to_cas << std::endl;
 
             DepareData::DEPAREVector dep_vec = m_dp->getSquare(m_lat_asv, m_lon_asv, m_args.drval2, 5000.0);
             m_dp->writeCSVfile(dep_vec, m_args.debug_path + "useful_depare.csv");
@@ -922,7 +944,7 @@ namespace Control
             debug("Arrived Here!");
 
             //! Collision Avoidance Algorithm - Compute heading offset/(speed offset)
-            sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, m_courses_to_cas, cost);
+            sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, m_contours_to_cas, cost);
 
             //! New desired course and course offset.
             m_heading.value += psi_os;

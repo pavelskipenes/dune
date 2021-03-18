@@ -43,6 +43,7 @@ namespace DUNE
 	  Q_(0.0),
 	  D_CLOSE_(0.0),
 	  D_SAFE_(0.0),
+	  D_SAFE_LAND_(0.0),
 	  K_COLL_(0.0),
 	  PHI_AH_(0.0),
 	  PHI_OT_(0.0),
@@ -75,7 +76,7 @@ namespace DUNE
     }
 	
 	void
-	simulationBasedMpc::create(double T, double DT, double T_stat, double P, double Q, double D_CLOSE, double D_SAFE, double K_COLL, double PHI_AH, double PHI_OT, double PHI_HO, 
+	simulationBasedMpc::create(double T, double DT, double T_stat, double P, double Q, double D_CLOSE, double D_SAFE, double dist_to_land, double K_COLL, double PHI_AH, double PHI_OT, double PHI_HO, 
 	double PHI_CR, double KAPPA, double KAPPA_TC, double K_P, double K_CHI, double K_DP, double K_DCHI_SB, double K_DCHI_P, double K_CHI_SB, double K_CHI_P, double D_INIT, 
 	double ang_range, double granularity, double WP_R, double LOS_LA_DIST, double LOS_KI, int GUIDANCE_STRATEGY)
 	{
@@ -90,6 +91,7 @@ namespace DUNE
 		D_INIT_ = D_INIT;	  // should be >= D_CLOSE 300.0 600.0 500.0 700.0 800 1852
 		D_CLOSE_ = D_CLOSE;	// 200.0 300.0 400.0 500.0 600 1000
 		D_SAFE_ = D_SAFE; 	  // 40.0, 50.0, 70.0, 80.0, 100, 200, 185.2
+		D_SAFE_LAND_ = dist_to_land;
 		K_COLL_ = K_COLL;		  // 0.5, (1.0), (0.1), 0.5, (10.0), 100.0 ;  need 0.1 when K_P_=10.5!
 		PHI_AH_ = PHI_AH;		  // 15.0, 22.5, 68.5 or more??
 		PHI_OT_ = PHI_OT;		  // 68.5
@@ -177,7 +179,7 @@ namespace DUNE
 	}
 
 
-	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints_, bool static_obst, Eigen::VectorXd contours, double &cost){
+	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints_, bool static_obst, Math::Matrix course_offsets_matrix, double &cost){
 	// REMOVED: Eigen::Matrix<double,-1,2>& predicted_traj, Eigen::Matrix<double,-1,1>& colav_status, Eigen::Matrix<double,-1,-1>& obst_status
 	cost = INFINITY;
 	double cost_k = 0, cost_i = 0, cost_o = 0; //cost_ac = 0;
@@ -198,10 +200,10 @@ namespace DUNE
 
 	Eigen::MatrixXd waypoints(waypoints_.rows(), waypoints_.cols()); waypoints = waypoints_;
 
-	for(int f=0; f<contours.rows(); f++)
-	{
-		std::cout << contours(f,0) << " " << contours(f,1) << std::endl;
-	}	
+	// for(int f=0; f<contours.rows(); f++)
+	// {
+	// 	std::cout << contours(f,0) << " " << contours(f,1) << std::endl;
+	// }	
 
 
 	if (obst_states.rows() == 0 && oldObstacles_.size() == 0 ){
@@ -382,14 +384,18 @@ namespace DUNE
     // distance of track from wp0 to wp1
 	double track_dist = sqrt(pow(waypoints(1,0) - waypoints(0,0),2) + pow(waypoints(1,1) - waypoints(0,1),2));
 
-	std::cout << "BEFORE: Chi_ca_: " << Chi_ca_ << std::endl;
-	Chi_ca_ = contours;
+	// ANTI-GROUNDING - THEA
+	// Giving only the courses not leading to grounding to the algorithm
+	// std::cout << "BEFORE: Chi_ca_: " << Chi_ca_ << std::endl;
+	//Chi_ca_ = contours;
 	/*for (int i = 0; i < Chi_ca_.size(); i++){
 		std::cout << "BEFORE: Chi_ca_: " << Chi_ca_[i] << std::endl;
 		Chi_ca_[i] = normalize_angle(contours[i] + psi_path - psi_d);
 		std::cout << "AFTER: Chi_ca_: " << Chi_ca_[i] << std::endl;
 	}*/
-	std::cout << "AFTER: Chi_ca_: " << Chi_ca_ << std::endl;
+	//std::cout << "AFTER: Chi_ca_: " << Chi_ca_ << std::endl;
+
+
 	// test if asv has passed wp
 
 	// next waypoint directional vector for improving accuracy of scenario
@@ -476,8 +482,8 @@ namespace DUNE
 		d(1) = obst_vect[k]->y_[0] - asv_state(1);
 		dist_0 = d.norm(); DIST_0(k)=dist_0;
 
-		std::cout << "d(0): " << d(0) << " d(1): " << d(1) << std::endl;
-		std::cout << "DIST_0(k): " << DIST_0(k) << std::endl;
+		//std::cout << "d(0): " << d(0) << " d(1): " << d(1) << std::endl;
+		//std::cout << "DIST_0(k): " << DIST_0(k) << std::endl;
 
 		los_0 = d/dist_0;
 
@@ -607,7 +613,7 @@ namespace DUNE
 	int cp = 0, n_cp = 3; // course-offset iterator and change points
 	for (int j = 0; j < P_ca_.size(); j++){
 		for (int i = 0; i < Chi_ca_.size(); i++){
-
+			std::cout << "Course offset Matrix: " << course_offsets_matrix(i,0) << " Cost: " << course_offsets_matrix(i,3) << std::endl;
 		    for (int cp_ = 0; cp_ < n_cp; cp_++){
 
 				// setup for guidance behavior simulation
@@ -665,7 +671,7 @@ namespace DUNE
 		        // Compute worst cost associated with the current control behavior and the corresponding scenarios for each obsbtacle
 				cost_i = -1;
 				cost_o = 0;
-				ik_return_to_path = 0; i_return_to_path = 0;
+				ik_return_to_path = 0; i_return_to_path = 0;				
 				for (int k = 0; k < n_obst; k++){
 					HL_(k) = 0;
 
@@ -673,8 +679,7 @@ namespace DUNE
 						
 						//std::cout << "(bool)SB_0(k)= " << (bool)SB_0(k) << "(bool)CRG_0(k)= " << (bool)CRG_0(k) << "(bool)OTG_0(k)= " << (bool)OTG_0(k) << "(bool)OT_0(k)= " << (bool)OT_0(k) << "(bool)HOT_0(k)= " << (bool)HOT_0(k) << "DIST_0(k)= " << DIST_0(k) << std::endl;
 						// (bool)AH_0(k) and (bool)OBS_PASSED_0(k) unused?
-						cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, (bool)SB_0(k), (bool)CRG_0(k), (bool)OTG_0(k), (bool)OT_0(k), (bool)HOT_0(k), DIST_0(k), u_d, l, ik_return_to_path); //static_obst
-
+						cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, (bool)SB_0(k), (bool)CRG_0(k), (bool)OTG_0(k), (bool)OT_0(k), (bool)HOT_0(k), DIST_0(k), u_d, l, ik_return_to_path, course_offsets_matrix(i,3)); //static_obst
 						//std::cout << "SPEED " << P_ca_[j] << " AND OFFSET " << Chi_ca_[i]*RAD2DEG << " HAVE COST " << cost_k << std::endl;
 						
 						if(guidance_strategy >= 2 && cp == 0 && Chi_ca_[i] != 0)
@@ -840,13 +845,14 @@ namespace DUNE
 }
 
 
-double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, int &ik_return_to_path){ //Eigen::Matrix<double,1,4> static_obst
+double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, int &ik_return_to_path, double course_offset_cost){ //Eigen::Matrix<double,1,4> static_obst
 	// bool AH_0, bool OBS_PASSED_0 unused?
-	double dist, phi, phi_o, psi_o, psi_rel, R, C, C1, C2, k_coll, d_safe_i, R_c, s_0; // dist_min;
+	double dist, phi, phi_o, psi_o, psi_rel, R, R_ground, C, C_ground, C1, C2, k_coll, d_safe_i, R_c, s_0; // dist_min;
 	Eigen::Vector2d d, los, los_inv, v_o, v_s;
 	bool mu, OT, SB, HO, CR, OTG, CRG, OTN, HOT, mu_0;
 	double d_safe = D_SAFE_;
 	double d_close = D_CLOSE_;
+	double d_safe_land = D_SAFE_LAND_;
 	double H0 = 0;
 	double H1 = 0;
 	double H2 = 0;
@@ -915,8 +921,8 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
 			ik_CPA = i;
 		}
 
-		R = 0; R_c = 0;
-		C = 0; C1 = 0; C2 = 0;
+		R = 0; R_c = 0; R_ground = 0;
+		C = 0; C1 = 0; C2 = 0; C_ground = 0;
 		mu = 0;
         gCost = 0;
 
@@ -1049,13 +1055,19 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
 				    R_c = 100*KAPPA_TC_;
 				}
 			}
+			// GROUNDING COST - THEA
+			if (dist <= d_safe_land){
+				R_ground = (1/pow(std::fabs(t-t0),P_))*pow(d_safe_land/dist,Q_);
+				C_ground = course_offset_cost*pow((v_s).norm(),2);
+			}
         }
-
+		// HAZARD
 		if ( obst_vect[k]->durationLost>pred_step ){
-			H0 = (2*DT_*pred_step/obst_vect[k]->durationLost)*C*R + KAPPA_*mu + R_c*mu_0+ G_*gCost;
+			H0 = (2*DT_*pred_step/obst_vect[k]->durationLost)*C*R + C_ground*R_ground + KAPPA_*mu + R_c*mu_0+ G_*gCost;
 		}else{
-			H0 = C*R + KAPPA_*mu + R_c*mu_0 + G_*gCost;
+			H0 = C*R + C_ground*R_ground + KAPPA_*mu + R_c*mu_0 + G_*gCost;
 		}
+		//std::cout << " C_ground: " << C_ground << " R_ground: " << R_ground << std::endl;
 
 		if (H0 > H1){
 			H1 = H0;  // Maximizing the cost with regards to time
@@ -1072,7 +1084,7 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
 
 		if (ik_CPA > ik_return_to_path )
 			ik_return_to_path = ik_CPA+1;
-
+		
 	}
 
 
@@ -1083,11 +1095,14 @@ double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool 
 
 	}
 
-
+	// f(P,delta) term that influences the priority of keeping nominal speed and course
 	H2 = K_P_*pow(1-P_ca,2) + sqrChi(Chi_ca, k_chi_p, k_chi_sb) + deltaP(P_ca) + deltaChi(Chi_ca, k_dchi_p, k_dchi_sb);
 	//H2 = K_P_*(1-P_ca) + K_CHI_*pow(Chi_ca,2) + deltaP(P_ca) + deltaChi(Chi_ca);
 
 	cost =  H1 + H2;
+
+	//std::cout << "Hazard Total H1: " << H1 << std::endl;
+	//std::cout << "CostFunction: " << cost << std::endl;
 
 	return cost;
 }
@@ -1260,6 +1275,7 @@ double simulationBasedMpc::dist2staticObst(Eigen::Vector2d p1, Eigen::Vector2d v
 	double simulationBasedMpc::getKColl(){
 		return K_COLL_;
 	}
+
 	double simulationBasedMpc::getPhiAH(){
 		return PHI_AH_;
 	}

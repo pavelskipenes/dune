@@ -66,6 +66,8 @@ namespace DUNE
       bool isDepthAbove(DEPAREVector DEPAREinputVector, double minDepth);
 
       bool writeCSVfile(DEPAREVector depths, std::string outputFile);
+
+      bool writeCSVfileCourseOffsets(double course, double bearing, double distance, double cost, std::string outputFile);
       
       DEPAREVector getWithinRadius(double Lat, double Lon, double radius);
 
