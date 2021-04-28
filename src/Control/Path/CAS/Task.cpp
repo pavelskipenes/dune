@@ -85,6 +85,8 @@ namespace Control
         double cont_size;
         //! Course offset for contours.
         std::vector<double> directions;
+        //! Weights for cost of grounding
+        std::vector<double> K_GROUND;
         //! Safety distance to static obstacle.
         double dist_to_land;
         //! Frequency of the anti-grounding algorithm
@@ -150,8 +152,17 @@ namespace Control
         double m_dist_to_land;
         //! Frequency of the anti-grounding algorithm
         double m_anti_grounding_freq;
+        //! Absolute wind direction and speed.
+        double m_abs_wind_dir;
+        double m_abs_wind_speed;
         //! Cost <Output from CAS>
         double cost;
+
+        //! Cost function for grounding
+        Math::Matrix env_factors;
+        Math::Matrix grounding_cost;
+
+        Eigen::Matrix<double,-1,3> static_obst_state;
 
         //! Task arguments.
         Arguments m_args;
@@ -173,6 +184,8 @@ namespace Control
         m_timestamp_prev(0.0),
         m_timestamp_obst(0.0),
         m_static_obst(false),
+        m_abs_wind_dir(0.0),
+        m_abs_wind_speed(0.0),
         cost(0.0)
         {
           param("Enable Collision Avoidance", m_args.en_cas)
@@ -260,9 +273,14 @@ namespace Control
           .defaultValue("0.5")
           .description("Cost of Collision.");
 
+          param("Cost of Grounding", m_args.K_GROUND)
+          .minimumValue("0.0")
+          .defaultValue("1.0")
+          .description("Cost of Grounding.");
+
           param("Cost of not complying COLREGS", m_args.KAPPA)
           .minimumValue("0.0")
-          .maximumValue("10.0")
+          .maximumValue("30.0")
           .defaultValue("3.0")
           .description("Cost of not Complying with the COLREGS.");
 
@@ -419,6 +437,7 @@ namespace Control
           bind<IMC::DesiredPath>(this);
           bind<IMC::AisInfo>(this);
           bind<IMC::GpsFix>(this);
+          bind<IMC::AbsoluteWind>(this);
         }
 
           void
@@ -532,6 +551,7 @@ namespace Control
 
             m_offsets = m_args.directions;
             m_contours.resizeAndFill(m_offsets.size(),2,0.0);
+            static_obst_state.resize(m_offsets.size(), 3);
           }
 
           //! Release resources.
@@ -742,10 +762,14 @@ namespace Control
           asv_state(5) = 0.0; //! Assume zero.
 
           m_timestamp_new = msg->getTimeStamp();
-
           
+        }
 
-          
+        void
+        consume(const IMC::AbsoluteWind* absolute_wind)
+        {
+          m_abs_wind_dir = absolute_wind->dir;
+          m_abs_wind_speed = absolute_wind->speed;
         }
 
         void
@@ -790,6 +814,7 @@ namespace Control
 
           //! Anti-Grounding
           // Retrieve contours from ENC database.
+          
           if(m_timer.overflow())
           {
             m_timer.reset();
@@ -797,65 +822,80 @@ namespace Control
             // Retrieve contours from database and check distances from vehicle position.
             //std::ofstream filez(m_args.debug_path+"useful_depare_single.csv");
 
-            //debug("%f %f %f %f\n", Angles::degrees(m_lat_asv), Angles::degrees(m_lon_asv), m_args.cont_size, asv_state(2))
-
             m_contours = m_dp->getCAS(m_lat_asv, m_lon_asv, m_args.drval2, m_args.cont_size, asv_state(2), waypoints, m_offsets);
-            //debug("matrix size %d %d",m_contours.rows(),m_contours.columns());
-            //debug("point 1 %f %f",m_contours(0,0),m_contours(0,1));
-
+            
             m_contours_to_cas.resizeAndFill(m_offsets.size(),4,0.0);
-            int number_of_courses = m_offsets.size();
-            // for(int i=0; i<m_contours.rows(); i++)
-            // {
-            //   //debug("%f %f %f %f\n", Angles::degrees(contours(i,0)), Angles::degrees(contours(i,1)), Angles::degrees(contours(i,2)), contours(i,3));
-            //   //std::cout << Angles::degrees(m_contours(i,0)) << "," << Angles::degrees(m_contours(i,1)) << "," << m_contours(i,2) << "," << m_contours(i,3) << std::endl;
-
-            //   if(m_contours(i,3) != 0.0 && m_contours(i,3) < m_dist_to_land) // Find courses where the distance to land is shorter than the minimal safe distance to land, and add these to m_contours_to_cas
-            //   {
-            //     m_static_obst = true;
-            //     m_contours_to_cas(i,0) = m_contours(i,2);
-            //     m_contours_to_cas(i,1) = m_contours(i,3);
-            //     number_of_courses--;                
-            //   }         
-            // }
+            //K_ground.resizeAndFill(m_offsets.size(),2,0.0);
+            grounding_cost.resizeAndFill(m_offsets.size(),2,0.0);
+            env_factors.resizeAndFill(6,m_offsets.size(),0.0); // 5 env factors pluss course offset and 13 offsets = 6x13 matrix
+            
 
             // For each course offset, the distance from the vessel to land is found, in order to calculate a cost for this offset, depending on the distance to land. 
             // The m_contours_to_cas matrix will have four columns: offset in rad, bearing, distance, cost
+            
             for(int i=0; i<m_contours.rows(); i++)
             {
+              
               m_contours_to_cas(i,0) = Angles::radians(m_offsets[i]);
+              static_obst_state(i,0) = Angles::radians(m_offsets[i]);
+              static_obst_state(i,1) = 0.0;
+              static_obst_state(i,2) = 0.0;
+
               if(m_contours(i,3) != 0.0 && m_contours(i,3) < m_args.D_INIT) // Find courses inside the Surveillance range of the sb_mpc
               {
                 m_static_obst = true;
+                // Distance between ASV - Static Obstacle
+                double static_dist_x = 0.0;
+                double static_dist_y = 0.0;
+                WGS84::displacement(m_lat_asv, m_lon_asv, 0, m_contours(i,0), m_contours(i,1), 0, &static_dist_x, &static_dist_y);
+                static_obst_state(i,1) = static_dist_x;
+                static_obst_state(i,2) = static_dist_y;
+                Eigen::Vector2d distance_to_land;
+                distance_to_land(0) = static_dist_x;
+                distance_to_land(1) = static_dist_y;
+                std::cout << "Course offset: " << Angles::degrees(static_obst_state(i,0)) << ", Dist_x: " << static_dist_x << ", Dist_y: " << static_dist_y << ", D_norm: " << distance_to_land.norm() << std::endl;
+                //std::cout << "m_lat_asv: " << m_lat_asv << ", m_lon_asv: " << m_lon_asv << ", m_cont_0: " << m_contours(i,0) << ", m_cont_1: " << m_contours(i,1) << std::endl;
+                
                 m_contours_to_cas(i,1) = m_contours(i,2);
                 m_contours_to_cas(i,2) = m_contours(i,3);
-                m_contours_to_cas(i,3) = (1/m_contours(i,3))*15000; // ; (1/pow(m_contours(i,3),2))*4500000   // Cost of Grounding
+                m_contours_to_cas(i,3) = 1;// (1/m_contours(i,3))*15000; // ; (1/pow(m_contours(i,3),2))*4500000   // Cost of Grounding
 
                 //debug("Contours to cas: \n Bearing: %f, Distance: %f, Cost: %f", m_contours_to_cas(i,0), m_contours_to_cas(i,1), m_contours_to_cas(i,2));
-              //debug("Courses with cost: \n Course: %f, Bearing: %f, Distance: %f, Cost: %f", Angles::degrees(m_contours_to_cas(i,0)), m_contours_to_cas(i,1), m_contours_to_cas(i,2), m_contours_to_cas(i,3));
-              m_dp->writeCSVfileCourseOffsets(Angles::degrees(m_contours_to_cas(i,0)), m_contours_to_cas(i,1), m_contours_to_cas(i,2), m_contours_to_cas(i,3), m_args.debug_path + "course_offsets_cost.csv");
-                
-              }
-              
+                //debug("Courses with cost: \n Course: %f, Bearing: %f, Distance: %f, Cost: %f", Angles::degrees(m_contours_to_cas(i,0)), m_contours_to_cas(i,1), m_contours_to_cas(i,2), m_contours_to_cas(i,3));
+                m_dp->writeCSVfileCourseOffsets(Angles::degrees(m_contours_to_cas(i,0)), m_contours_to_cas(i,1), m_contours_to_cas(i,2), m_contours_to_cas(i,3), m_args.debug_path + "course_offsets_cost.csv");
+                m_dp->writeCSVfileCourseOffsets(Angles::degrees(m_contours(i,0)), Angles::degrees(m_contours(i,1)), m_contours(i,2), m_contours(i,3), m_args.debug_path + "useful_depare_m_contours.csv");
+              } 
             }
 
+            // Cost function with environmental factors
+            // Simulation values
+            
+            double bathymetry = 1;
+            double heave = 1;
+            double wave_freq = 1;
+            m_abs_wind_dir = 90;
+            m_abs_wind_speed = 10;
+            double abs_current_dir = 90;
+            double abs_current_speed = 0.25;
 
-            // m_courses_to_cas.resize(number_of_courses);
-            // int noc = number_of_courses;
-            // for(int i=0; i<m_contours_to_cas.rows(); i++)
-            // {
-            //   //if (m_contours_to_cas(i,0) == 0 && m_contours_to_cas(i,1) == 0)
-            //   if(1)
-            //   {
-            //     noc--;
-            //     m_courses_to_cas(noc) = Angles::radians(m_offsets[i]);
-            //     debug("Courses with cost: \n Course: %f, Bearing: %f, Distance: %f, Cost: %f", Angles::degrees(m_contours_to_cas(i,0)), m_contours_to_cas(i,1), m_contours_to_cas(i,2), m_contours_to_cas(i,3));
-            //     m_dp->writeCSVfileCourseOffsets(Angles::degrees(m_contours_to_cas(i,0)), m_contours_to_cas(i,1), m_contours_to_cas(i,2), m_contours_to_cas(i,3), m_args.debug_path + "course_offsets_cost.csv");
-            //     //std::cout << "Courses in degrees: " << Angles::degrees(m_courses_to_cas(noc)) << std::endl;
-                
-            //   }
-            // }
-            //std::cout << "Courses to CAS: " << m_courses_to_cas << std::endl;
+            double psi_path = atan2(waypoints(1,1) - waypoints(0,1),
+							waypoints(1,0) - waypoints(0,0)); // path course, or use the current position to next waypoint?
+            for(int i=0; i<m_contours.rows(); i++)
+            {
+              //K_ground(i,0) = m_offsets[i];
+              //K_ground(i,1) = 1*m_abs_wind_speed*fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(m_abs_wind_dir))); // function for cost
+              env_factors(0,i) = m_offsets[i];
+              env_factors(1,i) = m_args.K_GROUND[0]*bathymetry;
+              env_factors(2,i) = m_args.K_GROUND[1]*heave;
+              env_factors(3,i) = m_args.K_GROUND[2]*wave_freq;
+              env_factors(4,i) = m_args.K_GROUND[3]*m_abs_wind_speed*fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(m_abs_wind_dir)));
+              env_factors(5,i) = m_args.K_GROUND[4]*abs_current_speed*fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(abs_current_dir)));
+              grounding_cost(i,0) = m_offsets[i];
+              grounding_cost(i,1) = env_factors(1,i) + env_factors(2,i) + env_factors(3,i) + env_factors(4,i) + env_factors(5,i);
+              grounding_cost(i,1) = 100; // For pure anti-grounding testing purposes
+            }
+            std::cout << "env_factors: " << env_factors << std::endl;
+            std::cout << "grounding_cost: " << grounding_cost << std::endl;
 
             DepareData::DEPAREVector dep_vec = m_dp->getSquare(m_lat_asv, m_lon_asv, m_args.drval2, 5000.0);
             m_dp->writeCSVfile(dep_vec, m_args.debug_path + "useful_depare.csv");
@@ -942,9 +982,16 @@ namespace Control
             debug("OBSTACLE dist_x %f, dist_y %f, course %f, speed %f, a %f, b %f, c %f, d %f", obst_state(0,0), obst_state(0,1), obst_state(0,2), obst_state(0,3), obst_state(0,5), obst_state(0,6), obst_state(0,7), obst_state(0,8));
 
             debug("Arrived Here!");
-
+            std::cout << "Task static_state: " << static_obst_state << std::endl;
+            // To avoid empty matrix error, since the CAS and anti-grounding runs at different intervals
+            for(int i=0; i<m_contours.rows(); i++)
+            {
+              static_obst_state(i,0) = Angles::radians(m_offsets[i]);
+              env_factors(0,i) = Angles::radians(m_offsets[i]);
+              //K_ground(i,0) = Angles::radians(m_offsets[i]);
+            }
             //! Collision Avoidance Algorithm - Compute heading offset/(speed offset)
-            sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, m_contours_to_cas, cost);
+            sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, static_obst_state, grounding_cost, cost);
 
             //! New desired course and course offset.
             m_heading.value += psi_os;
@@ -968,24 +1015,36 @@ namespace Control
           } else if(obst_vec.size() == 0 && (m_timestamp_new - m_timestamp_prev > 20.0) && m_static_obst && m_enable_antiground)
           {
             debug("No dynamic obstacles but static obstacles!");
+            debug("Pure Anti-Grounding!");
             
             m_timestamp_prev = m_timestamp_new;
 
             // No obstacle in range but static obstacles close: implement pure Anti-Grounding.
             // Add pure anti-grounding here
 
-            //Eigen::Matrix<double, -1, 10> obst_state;
-            //getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints_, bool static_obst, Math::Matrix contours)
-            //sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, m_courses_to_cas);
+            Eigen::Matrix<double, -1, 10> obst_state;
+            obst_state.resize(obst_vec.size(), 0);
+            sb_mpc.getBestControlOffset(u_os, psi_os, asv_state(3), m_heading.value, asv_state, obst_state, waypoints, m_static_obst, static_obst_state, grounding_cost, cost);
 
             //! New desired course and course offset.
-            //m_heading.value += psi_os;
-            //m_heading.off = c_degrees_per_radian*psi_os;
+            m_heading.value += psi_os;
+            m_heading.off = c_degrees_per_radian*psi_os;
+
+            //! New cost from CAS
+            m_cost.value = cost == INFINITY ? 0 : cost;
+
+            //! New speed offset.
+            //m_speed.value += u_os;
 
             //! Normalize angle
-            //m_heading.value = Angles::normalizeRadian(m_heading.value);
+            m_heading.value = Angles::normalizeRadian(m_heading.value);
 
             dispatch(m_heading);
+            dispatch(m_cost);
+            std::cout << "Course offset: " << c_degrees_per_radian*psi_os << std::endl;
+            std::cout << "Heading: " << Angles::degrees(m_heading.value) << std::endl;
+
+            //dispatch(m_heading);
             debug("ANTI-GROUNDING ONLY - Course offset: %0.1f - DESIRED COURSE:%0.1f  - Number of Obstacles: %lu", c_degrees_per_radian*psi_os, c_degrees_per_radian*m_heading.value);
 
 

@@ -216,7 +216,7 @@ namespace DUNE
 
     Math::Matrix DepareData::getCAS(double vessel_lat, double vessel_lon, double drval2, double size, double cog, const Eigen::Matrix<double,-1,2> waypoints_, std::vector<double> directions){
       DepareData::DEPAREVector dep_vec = this->getSquare(vessel_lat, vessel_lon, drval2, size);
-      int offset = 2;
+      int offset = 3;
       Math::Matrix ranges(directions.size(),2);
       Math::Matrix ret(directions.size(),4,0.0);
 
@@ -224,11 +224,14 @@ namespace DUNE
 
       double psi_path = atan2(waypoints(1,1) - waypoints(0,1),
 							waypoints(1,0) - waypoints(0,0)); // path course
+      
+      double psi_path_relative = atan2(waypoints(1,1) - vessel_lat,
+							waypoints(1,0) - vessel_lon); // path course, from asv current position to next waypoint
 
       for(int i=0; i<directions.size(); i++)
       {
-        ranges(i,0) = normalize_angle(psi_path + Angles::radians(directions[i] - offset));
-        ranges(i,1) = normalize_angle(psi_path + Angles::radians(directions[i] + offset));
+        ranges(i,0) = normalize_angle(psi_path_relative + Angles::radians(directions[i] - offset));
+        ranges(i,1) = normalize_angle(psi_path_relative + Angles::radians(directions[i] + offset));
         //std::cout << "range 1 " << Angles::degrees(ranges(i,0)) << " range 2 " << Angles::degrees(ranges(i,1)) << std::endl;
         //std::cout << "cog: " << cog << "psi_path: " << psi_path << std::endl;
       }
