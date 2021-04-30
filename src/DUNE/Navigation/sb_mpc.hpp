@@ -52,15 +52,20 @@ namespace DUNE
 	 * @param u_d The nominal speed
 	 * @param psi_d The nominal heading
 	 * @param asv_state The state of the asv: x, y, psi, u, v, r.
+	 * @param waypoints The next waypoint.
+	 * @param dynamic_obst Boolean true if a dynamic (vessel) obstacle is present.
 	 * @param obst_states The states of the obstacles : x, y, u, v, A, B, C, D, id. (A, B, C, D - size from AIS)
-     * @param static_obst No-go zone defined to be on the left of a line when seen from the starting point of the line.
-     * @param waypoints The next waypoint.
+     * @param static_obst Boolean true if a static obstacle is present.
+	 * @param static_obst_states The position (bearing and range) of the static obstacle in the USV body frame.
+	 * @param grounding Cost of grounding based on several factors computed at high-level (i.e. weather).
+	 * @param cost Cost returned to DUNE Task.
+     
 	 */
 
 	void create(double T, double DT, double T_stat, double P, double Q, double D_CLOSE, double D_SAFE, double dist_to_land, double K_COLL, double PHI_AH, double PHI_OT, double PHI_HO, double PHI_CR, double KAPPA, double KAPPA_TC, double K_P, double K_CHI, double K_DP, double K_DCHI_SB, double K_DCHI_P, double K_CHI_SB, double K_CHI_P, double D_INIT, double ang_range, double granularity, double WP_R, double LOS_LA_DIST, double LOS_KI, int GUIDANCE_STRATEGY);
 	
 	// REMOVED: Matrix& predicted_traj, Matrix& colav_status, Matrix& obst_status.
-	void getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints, bool static_obst, Eigen::Matrix<double,-1,3> static_obst_states_, Math::Matrix grounding_cost, double &cost);
+	void getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,2>& waypoints, bool dynamic_obst, const Eigen::Matrix<double,-1,10>& obst_states, bool static_obst, Eigen::Matrix<double,-1,3> static_obst_states, Math::Matrix grounding_cost, double &cost);
 
 	/**
 	 * @brief  Returns the simulation time (prediction horizon) [sec].

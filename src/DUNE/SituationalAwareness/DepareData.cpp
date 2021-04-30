@@ -216,7 +216,7 @@ namespace DUNE
 
     Math::Matrix DepareData::getCAS(double vessel_lat, double vessel_lon, double drval2, double size, double cog, const Eigen::Matrix<double,-1,2> waypoints_, std::vector<double> directions){
       DepareData::DEPAREVector dep_vec = this->getSquare(vessel_lat, vessel_lon, drval2, size);
-      int offset = 3;
+      int offset = 5;
       Math::Matrix ranges(directions.size(),2);
       Math::Matrix ret(directions.size(),4,0.0);
 

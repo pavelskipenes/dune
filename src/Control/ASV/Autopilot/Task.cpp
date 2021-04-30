@@ -487,7 +487,7 @@ namespace Control
           // Compute Time Delta.
           m_tstep = m_delta.getDelta();
 
-          if(!m_des_head_arrived)
+          /*if(!m_des_head_arrived)
           {
             debug("!m_des_head_arrived");
           }
@@ -495,12 +495,12 @@ namespace Control
           if(m_service)
           {
             debug("m_service");
-          }
+          }*/
 
           if(!m_des_head_arrived || m_service)
           {
             dispatchRudder(0, m_tstep);
-            debug("Dispatching a 0 rudder angle");
+            //debug("Dispatching a 0 rudder angle");
             reset();
             return;
           }

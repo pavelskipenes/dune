@@ -178,8 +178,7 @@ namespace DUNE
 
 	}
 
-
-	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints_, bool static_obst, Eigen::Matrix<double,-1,3> static_obst_states_, Math::Matrix grounding_cost, double &cost){
+	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,2>& waypoints_, bool dynamic_obst, const Eigen::Matrix<double,-1,10>& obst_states, bool static_obst, Eigen::Matrix<double,-1,3> static_obst_states_, Math::Matrix grounding_cost, double &cost){
 		// REMOVED: Eigen::Matrix<double,-1,2>& predicted_traj, Eigen::Matrix<double,-1,1>& colav_status, Eigen::Matrix<double,-1,-1>& obst_status
 		cost = INFINITY;
 		double cost_k = 0, cost_i = 0, cost_o = 0; //cost_ac = 0;
@@ -200,17 +199,11 @@ namespace DUNE
 
 		Eigen::MatrixXd waypoints(waypoints_.rows(), waypoints_.cols()); waypoints = waypoints_;
 
-		// for(int f=0; f<contours.rows(); f++)
-		// {
-		// 	std::cout << contours(f,0) << " " << contours(f,1) << std::endl;
-		// }	
-
-
 		if (obst_states.rows() == 0 && oldObstacles_.size() == 0 ){
 			
 
 			// Pure Anti-Grounding here?
-			if (static_obst){
+			if (static_obst && !dynamic_obst){
 				std::cout << "STATIC TOP" << std::endl;
 				// Calculate the cost
 				n_obst = 1; //static_obst_states_.rows();
@@ -260,17 +253,23 @@ namespace DUNE
 							// Compute worst cost associated with the current control behavior and the corresponding scenarios for each obsbtacle
 							cost_i = -1;
 							cost_o = 0;
-							ik_return_to_path = 0; i_return_to_path = 0;				
+							ik_return_to_path = 0; i_return_to_path = 0;
+							std::cout << "n_obst= " << n_obst_branches << "\n" << std::endl;
+							std::cout << "n_obst_branches= " << n_obst_branches << "\n" << std::endl;
 							for (int k = 0; k < n_obst; k++){
 								std::cout << "N_OBST LOOP" << std::endl;
 								HL_(k) = 0;
+								
+								std::cout << "k= " << k << "\n" << std::endl;
 
 								for (int l = 0; l < n_obst_branches; l++){
-									std::cout << "N_OBST_BRANCHES LOOP" << std::endl;
-									
+									std::cout << "N_OBST_BRANCHES LOOP\n" << std::endl;
+
+									std::cout << "i= " << i << "\n" << std::endl;
+
 									//std::cout << "(bool)SB_0(k)= " << (bool)SB_0(k) << "(bool)CRG_0(k)= " << (bool)CRG_0(k) << "(bool)OTG_0(k)= " << (bool)OTG_0(k) << "(bool)OT_0(k)= " << (bool)OT_0(k) << "(bool)HOT_0(k)= " << (bool)HOT_0(k) << "DIST_0(k)= " << DIST_0(k) << std::endl;
 									// (bool)AH_0(k) and (bool)OBS_PASSED_0(k) unused?
-									cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, 0, 0, 0, 0, 0, 0, u_d, l, ik_return_to_path, static_obst_states_, grounding_cost(i,1), i); //static_obst
+									cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, 0, 0, 0, 0, 0, 0, u_d, l, ik_return_to_path, static_obst_states_, grounding_cost(1,i), i); //static_obst
 									//std::cout << "SPEED " << P_ca_[j] << " AND OFFSET " << Chi_ca_[i]*RAD2DEG << " HAVE COST " << cost_k << std::endl;
 									if(guidance_strategy >= 2 && cp == 0 && Chi_ca_[i] != 0)
 										cost_k = cost_k;// + 0.1*n_cp; // (a small) path deviation penalty
@@ -1054,12 +1053,16 @@ namespace DUNE
 				//t += DT_;
 				t += DT_*pred_step;
 
+				/*
 				// dist to land
 				d_to_land(0) = static_obst_states(chi_ca_itr,1) - asv->m_x[i];
 				d_to_land(1) = static_obst_states(chi_ca_itr,2) - asv->m_y[i];
 				dist_to_land = d_to_land.norm();
 				//std::cout << "In COST: asv->m_x " << asv->m_x[i] << ", asv->m_y " << asv->m_y[i] << std::endl;
 				//std::cout << "In COST: course offset: " << Angles::degrees(static_obst_states(k,0)) << ", dist_to_land: " << dist_to_land << std::endl;
+				*/
+
+				dist_to_land = static_obst_states(chi_ca_itr,1);
 
 				R_ground = 0;
 				C_ground = 0;
