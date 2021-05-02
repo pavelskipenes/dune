@@ -133,8 +133,6 @@ namespace DUNE
 			Chi_ca_(i) = Chi_ca_(i-1) - granularity;
 		}
 
-		//std::cout << "COURSE OFFSETS" << Chi_ca_ << std::endl;
-
 		// OR
 		//Chi_ca_.resize(13);
 		//Chi_ca_ << -90.0,-75.0,-60.0,-45.0,-30.0,-15.0,0.0,15.0,30.0,45.0,60.0,75.0,90.0;
@@ -178,7 +176,7 @@ namespace DUNE
 
 	}
 
-	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,2>& waypoints_, bool dynamic_obst, const Eigen::Matrix<double,-1,10>& obst_states, bool static_obst, Eigen::Matrix<double,-1,3> static_obst_states_, Math::Matrix grounding_cost, double &cost){
+	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,2>& waypoints_, bool dynamic_obst, const Eigen::Matrix<double,-1,10>& obst_states, bool static_obst, Eigen::Matrix<double,-1,3> static_obst_states_, double &cost){
 		// REMOVED: Eigen::Matrix<double,-1,2>& predicted_traj, Eigen::Matrix<double,-1,1>& colav_status, Eigen::Matrix<double,-1,-1>& obst_status
 		cost = INFINITY;
 		double cost_k = 0, cost_i = 0, cost_o = 0; //cost_ac = 0;
@@ -197,264 +195,242 @@ namespace DUNE
 		Eigen::VectorXd x_opt(n_samp_pred);
 		Eigen::VectorXd y_opt(n_samp_pred);
 
-		Eigen::MatrixXd waypoints(waypoints_.rows(), waypoints_.cols()); waypoints = waypoints_;
+		Eigen::MatrixXd waypoints(waypoints_.rows(), waypoints_.cols()); waypoints = waypoints_;			
 
-		if (obst_states.rows() == 0 && oldObstacles_.size() == 0 ){
-			
+		// Pure Anti-Grounding
+		if (static_obst && !dynamic_obst){
+			std::cout << "SB-MPC: PURE ANTI-GROUNDING" << std::endl;
+			n_obst = 1;
+			HL_0.resize(n_obst); HL_.resize(n_obst); // relative hazard level computed from cost
+			OBS_PASSED_0.resize(n_obst);
 
-			// Pure Anti-Grounding here?
-			if (static_obst && !dynamic_obst){
-				std::cout << "STATIC TOP" << std::endl;
-				// Calculate the cost
-				n_obst = 1; //static_obst_states_.rows();
-				//n_obst_branches = 1;
-				std::cout << "n_obst: " << n_obst << std::endl;
-				HL_0.resize(n_obst); HL_.resize(n_obst); // relative hazard level computed from cost
-				OBS_PASSED_0.resize(n_obst);
+			double Chi_ca_i = 0.0;
+			int i_return_to_path = 0, ik_return_to_path = 0, i_return_to_path_best=n_samp; // iter at which ASV can return to path
+			int cp = 0, n_cp = 3; // course-offset iterator and change points
+			for (int j = 0; j < P_ca_.size(); j++){	// iterates through speed 'offsets', only 1 speed
+				for (int i = 0; i < Chi_ca_.size(); i++){	// iterates through course offsets
+					//std::cout << "CHI_CA LOOP" << std::endl;
+					for (int cp_ = 0; cp_ < n_cp; cp_++){
+						//std::cout << "CP LOOP" << std::endl;
 
-				double Chi_ca_i = 0.0;
-				int i_return_to_path = 0, ik_return_to_path = 0, i_return_to_path_best=n_samp; // iter at which ASV can return to path
-				int cp = 0, n_cp = 3; // course-offset iterator and change points
-				for (int j = 0; j < P_ca_.size(); j++){	// iterates through speed 'offsets', only 1 speed
-					for (int i = 0; i < Chi_ca_.size(); i++){	// iterates through course offsets
-						std::cout << "CHI_CA LOOP" << std::endl;
-						for (int cp_ = 0; cp_ < n_cp; cp_++){
-							std::cout << "CP LOOP" << std::endl;
+						// setup for guidance behavior simulation
+						if ( cp_ > 0 && (0.0 == Chi_ca_[i] || (guidance_strategy < 2 && std::fabs(Chi_ca_[i]) >= 90.0*DEG2RAD) ) )
+							break;
 
-							// setup for guidance behavior simulation
-							if ( cp_ > 0 && (0.0 == Chi_ca_[i] || (guidance_strategy < 2 && std::fabs(Chi_ca_[i]) >= 90.0*DEG2RAD) ) )
-								break;
+						Chi_ca_i = Chi_ca_[i]; // offset for cp=0
 
-							Chi_ca_i = Chi_ca_[i]; // offset for cp=0
+						cp = cp_; // for forward iteration
+						if (guidance_strategy >= 2 && cp_ > 0 && cp_ < n_cp)
+							cp = n_cp - cp_; // for reverse iteration (not needed if return path is predicted?)
 
-							cp = cp_; // for forward iteration
-							if (guidance_strategy >= 2 && cp_ > 0 && cp_ < n_cp)
-								cp = n_cp - cp_; // for reverse iteration (not needed if return path is predicted?)
+						if (cp > 0 && guidance_strategy < 2){ // LOS, WPP
 
-							if (cp > 0 && guidance_strategy < 2){ // LOS, WPP
+							if (Chi_ca_[i]>0)
+								Chi_ca_i = Chi_ca_[i] + 15.0*DEG2RAD*cp;
 
-								if (Chi_ca_[i]>0)
-									Chi_ca_i = Chi_ca_[i] + 15.0*DEG2RAD*cp;
+							if (Chi_ca_[i]<0)
+								Chi_ca_i = Chi_ca_[i] - 15.0*DEG2RAD*cp;
 
-								if (Chi_ca_[i]<0)
-									Chi_ca_i = Chi_ca_[i] - 15.0*DEG2RAD*cp;
+						}else if (cp > 0){ // CH, HH; reverse iteration!
 
-							}else if (cp > 0){ // CH, HH; reverse iteration!
+								Chi_ca_i = 0.0; // no offset => return to original ref.
+						}
 
-									Chi_ca_i = 0.0; // no offset => return to original ref.
+						if (std::fabs(Chi_ca_i*RAD2DEG) > 90.0)
+							break;
+
+						asv->linearPrediction(asv_state, u_d*P_ca_[j], psi_d + Chi_ca_i, waypoints, Chi_ca_i, cp, guidance_strategy, WP_R_, LOS_LA_DIST_, LOS_KI_);
+
+
+						// Compute worst cost associated with the current control behavior and the corresponding scenarios for each obsbtacle
+						cost_i = -1;
+						cost_o = 0;
+						ik_return_to_path = 0; i_return_to_path = 0;
+						//std::cout << "n_obst= " << n_obst_branches << "\n" << std::endl;
+						//std::cout << "n_obst_branches= " << n_obst_branches << "\n" << std::endl;
+						for (int k = 0; k < n_obst; k++){
+							//std::cout << "N_OBST LOOP" << std::endl;
+							HL_(k) = 0;
+							
+							//std::cout << "k= " << k << "\n" << std::endl;
+
+							for (int l = 0; l < n_obst_branches; l++){
+								//std::cout << "N_OBST_BRANCHES LOOP\n" << std::endl;
+
+								//std::cout << "i= " << i << "\n" << std::endl;
+
+								//std::cout << "(bool)SB_0(k)= " << (bool)SB_0(k) << "(bool)CRG_0(k)= " << (bool)CRG_0(k) << "(bool)OTG_0(k)= " << (bool)OTG_0(k) << "(bool)OT_0(k)= " << (bool)OT_0(k) << "(bool)HOT_0(k)= " << (bool)HOT_0(k) << "DIST_0(k)= " << DIST_0(k) << std::endl;
+								// (bool)AH_0(k) and (bool)OBS_PASSED_0(k) unused?
+								cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, 0, 0, 0, 0, 0, 0, u_d, l, ik_return_to_path, dynamic_obst, static_obst, static_obst_states_, i);
+								//std::cout << "SPEED " << P_ca_[j] << " AND OFFSET " << Chi_ca_[i]*RAD2DEG << " HAVE COST " << cost_k << std::endl;
+								if(guidance_strategy >= 2 && cp == 0 && Chi_ca_[i] != 0)
+									cost_k = cost_k;// + 0.1*n_cp; // (a small) path deviation penalty
+
+								if(guidance_strategy >= 2 && cp > 0)
+									cost_k = cost_k;// + 0.1*cp; // (a small) path deviation penalty
+
+								// save the worst cost among the branches of this obstacle
+								if (cost_k > HL_(k) && OBS_PASSED_0(k)==0) HL_(k) = cost_k;
+
+								// save the overall worst cost for this control behavior
+								if (cost_k > cost_i) cost_i = cost_k;
+
+								// save the latest iter at which the ASV can return to its original path
+								if (ik_return_to_path > i_return_to_path)
+									i_return_to_path = ik_return_to_path;
+
 							}
 
-							if (std::fabs(Chi_ca_i*RAD2DEG) > 90.0)
-								break;
+							// accumulate cost for all obstacles
+							cost_o =  cost_o + HL_(k);
+						}
 
-							asv->linearPrediction(asv_state, u_d*P_ca_[j], psi_d + Chi_ca_i, waypoints, Chi_ca_i, cp, guidance_strategy, WP_R_, LOS_LA_DIST_, LOS_KI_);
+						// Save current scenario if cost is lower than that of previously checked controls
+						if (cost_i < cost){
+							cost = cost_i; 			// Minimizing the overall cost
+							u_os_best = P_ca_[j];   // test with 1
+							psi_os_best = Chi_ca_[i];   // test with -30*DEG2RAD
+							n_psi_os_best = cp+1; 	// number of course offsets
+							i_return_to_path_best = i_return_to_path;
+							std::cout << "Current cost is lower: " << cost << " With course offset: " << psi_os_best*RAD2DEG << std::endl;
+
+							if (i_return_to_path > cp && i_return_to_path < n_samp - pred_step){
+								asv->linearPrediction(asv_state, u_d*P_ca_[j], psi_d, waypoints, 0, i_return_to_path, guidance_strategy, WP_R_, LOS_LA_DIST_, LOS_KI_);
+
+							}
 
 
-							// Compute worst cost associated with the current control behavior and the corresponding scenarios for each obsbtacle
-							cost_i = -1;
-							cost_o = 0;
-							ik_return_to_path = 0; i_return_to_path = 0;
-							std::cout << "n_obst= " << n_obst_branches << "\n" << std::endl;
-							std::cout << "n_obst_branches= " << n_obst_branches << "\n" << std::endl;
+							x_opt = asv->m_x;
+							y_opt = asv->m_y;
+
+							// save the relative hazard level for each obstacle at the optimum
+							// highest value indicates which obstacle is considered most dangerous
 							for (int k = 0; k < n_obst; k++){
-								std::cout << "N_OBST LOOP" << std::endl;
-								HL_(k) = 0;
-								
-								std::cout << "k= " << k << "\n" << std::endl;
-
-								for (int l = 0; l < n_obst_branches; l++){
-									std::cout << "N_OBST_BRANCHES LOOP\n" << std::endl;
-
-									std::cout << "i= " << i << "\n" << std::endl;
-
-									//std::cout << "(bool)SB_0(k)= " << (bool)SB_0(k) << "(bool)CRG_0(k)= " << (bool)CRG_0(k) << "(bool)OTG_0(k)= " << (bool)OTG_0(k) << "(bool)OT_0(k)= " << (bool)OT_0(k) << "(bool)HOT_0(k)= " << (bool)HOT_0(k) << "DIST_0(k)= " << DIST_0(k) << std::endl;
-									// (bool)AH_0(k) and (bool)OBS_PASSED_0(k) unused?
-									cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, 0, 0, 0, 0, 0, 0, u_d, l, ik_return_to_path, static_obst_states_, grounding_cost(1,i), i); //static_obst
-									//std::cout << "SPEED " << P_ca_[j] << " AND OFFSET " << Chi_ca_[i]*RAD2DEG << " HAVE COST " << cost_k << std::endl;
-									if(guidance_strategy >= 2 && cp == 0 && Chi_ca_[i] != 0)
-										cost_k = cost_k;// + 0.1*n_cp; // (a small) path deviation penalty
-
-									if(guidance_strategy >= 2 && cp > 0)
-										cost_k = cost_k;// + 0.1*cp; // (a small) path deviation penalty
-
-									// save the worst cost among the branches of this obstacle
-									if (cost_k > HL_(k) && OBS_PASSED_0(k)==0) HL_(k) = cost_k;
-
-									// save the overall worst cost for this control behavior
-									if (cost_k > cost_i) cost_i = cost_k;
-
-									// save the latest iter at which the ASV can return to its original path
-									if (ik_return_to_path > i_return_to_path)
-										i_return_to_path = ik_return_to_path;
-
+								if (cost_o > 0){
+									HL_0(k) = HL_(k)/cost_o;
+								} else {
+									HL_0(k) = 0;
 								}
-
-								// accumulate cost for all obstacles
-								cost_o =  cost_o + HL_(k);
 							}
 
-							// Save current scenario if cost is lower than that of previously checked controls
-							if (cost_i < cost){
-								cost = cost_i; 			// Minimizing the overall cost
-								u_os_best = P_ca_[j];   // test with 1
-								psi_os_best = Chi_ca_[i];   // test with -30*DEG2RAD
-								n_psi_os_best = cp+1; 	// number of course offsets
-								i_return_to_path_best = i_return_to_path;
-								std::cout << "Current cost is lower: " << cost << " With course offset: " << psi_os_best*RAD2DEG << std::endl;
-
-								if (i_return_to_path > cp && i_return_to_path < n_samp - pred_step){
-									asv->linearPrediction(asv_state, u_d*P_ca_[j], psi_d, waypoints, 0, i_return_to_path, guidance_strategy, WP_R_, LOS_LA_DIST_, LOS_KI_);
-
-								}
-
-
-								x_opt = asv->m_x;
-								y_opt = asv->m_y;
-
-								// save the relative hazard level for each obstacle at the optimum
-								// highest value indicates which obstacle is considered most dangerous
-								for (int k = 0; k < n_obst; k++){
-									if (cost_o > 0){
-										HL_0(k) = HL_(k)/cost_o;
-									} else {
-										HL_0(k) = 0;
-									}
-								}
-
-							}
 						}
 					}
 				}
-
-				P_ca_last_ = u_os_best;
-				Chi_ca_last_ = psi_os_best;
-				CF_0 = u_os_best * (1 - (std::fabs(RAD2DEG*psi_os_best)/15.0)/8.0); // 6 course offsets possible towards SB/P, 2 factors possible speed reduction
-
-				std::cout << "_______________" << std::endl;
-				std::cout << "PURE ANTI-GROUNDING" << std::endl;
-				std::cout << "_______________" << std::endl;
-				std::cout << "cost : " << cost << std::endl;
-
-				std::cout << "relative hazard level : " << HL_0 << std::endl;
-				std::cout << "control freedom : " << CF_0 << std::endl;
-				std::cout << "return to path at iter: " << i_return_to_path_best << std::endl;
-				std::cout << "_______________" << std::endl;
-
-				//std::cout << "psi_path = " << psi_path*RAD2DEG << std::endl;
-				//std::cout << "psi_path - psi_d = " << std::fabs(psi_path - normalize_angle(psi_d))*RAD2DEG << std::endl;
-
-				if(guidance_strategy <2){
-					std::cout << "predicted course offsets: " << n_psi_os_best << std::endl;
-				}else{
-					std::cout << "using prediction path " << n_psi_os_best << std::endl;
-				}
-				std::cout << "_________________________________" << std::endl;
-
 			}
-			else{
+
+			P_ca_last_ = u_os_best;
+			Chi_ca_last_ = psi_os_best;
+			CF_0 = u_os_best * (1 - (std::fabs(RAD2DEG*psi_os_best)/15.0)/8.0); // 6 course offsets possible towards SB/P, 2 factors possible speed reduction
+
+			std::cout << "_______________" << std::endl;
+			std::cout << "PURE ANTI-GROUNDING" << std::endl;
+			std::cout << "_______________" << std::endl;
+			std::cout << "cost : " << cost << std::endl;
+			std::cout << "course offset : " << Angles::degrees(psi_os_best) << std::endl;
+			std::cout << "relative hazard level : " << HL_0 << std::endl;
+			std::cout << "control freedom : " << CF_0 << std::endl;
+			std::cout << "return to path at iter: " << i_return_to_path_best << std::endl;
+			std::cout << "_______________" << std::endl;
+
+			//std::cout << "psi_path = " << psi_path*RAD2DEG << std::endl;
+			//std::cout << "psi_path - psi_d = " << std::fabs(psi_path - normalize_angle(psi_d))*RAD2DEG << std::endl;
+
+			if(guidance_strategy <2){
+				std::cout << "predicted course offsets: " << n_psi_os_best << std::endl;
+			}else{
+				std::cout << "using prediction path " << n_psi_os_best << std::endl;
+			}
+			std::cout << "_________________________________" << std::endl;
+
+		}else{
+			std::cout << "SB-MPC: DYNAMIC OBSTACLES" << std::endl;
+
+			// Update list
+			for (int i = 0; i < obst_states.rows(); i++){
+				bool obst_exists = false;
+				// iterate through old obstacle list
+				/**/
+				for (int j = 0; j < oldObstacles_.size(); j++){
+
+					// does obstacle exist in old obstacle list?
+					if( (double)oldObstacles_[j]->id_ == obst_states(i,9)){
+						// update object in old list and move it to the new list,
+
+						oldObstacles_[j]->durationLost = 0.0; // update
+
+						oldObstacles_[j]->updateTrajectory(obst_states.row(i), OBST_FILTER_ON_); // update obstacle
+
+						obst_vect.push_back(oldObstacles_[j]); // copy updated obstacle
+
+						oldObstacles_.erase(oldObstacles_.begin()+j);	// does not destroy this object, but the pointer to it!
+
+						obst_exists = true;
+
+						//std::cout << "Yey!! obstacle exists!" << std::endl;
+
+						break;
+					}
+				}
+
+				if (!obst_exists){
+					obstacle *obst = new obstacle(obst_states.row(i), T_, DT_*pred_step, chi_obst_os_, u_obst_os_, OBST_FILTER_ON_);
+					obst_vect.push_back(obst);
+					//std::cout << "Ney!! new obstacle!" << std::endl;
+				}
+			}
+
+			// Keep terminated obstacles that may still be relevant, and compute duration lost as input to the cost of collision risk
+			// Obstacle track may be lost due to sensor/detection failure, or the obstacle may go out of COLAV-target range
+			// Detection failure will lead to the start (creation) of a new track (obstacle), typically after a short duration,
+			// whereas an obstacle that is out of COLAV-target range may re-enter range with the same id.
+
+			if (OBST_FILTER_ON_){
+				for (int j = 0; j < oldObstacles_.size(); j++){
+
+					// update duration lost
+					oldObstacles_[j]->durationLost += DT_*pred_step; // increment is the same as dt_f in obstacle!
+
+					// is this old obstacle still relevant?
+					if( oldObstacles_[j]->durationTracked >= T_TRACKED_LIMIT_ &&
+						(
+						oldObstacles_[j]->durationLost < T_LOST_LIMIT_ ||
+						oldObstacles_[j]->P(0,0) <= 5.0 	// 2.0
+						)
+					){
+						// update object in old list and move it to the new list,
+
+						oldObstacles_[j]->updateTrajectory(OBST_FILTER_ON_); // update obstacle
+
+						obst_vect.push_back(oldObstacles_[j]); // copy updated obstacle
+
+						oldObstacles_.erase(oldObstacles_.begin()+j);	// does not destroy this object, but the pointer to it!
+
+						std::cout << "NB! obstacle " << oldObstacles_[j]->id_ <<  " lost " << oldObstacles_[j]->durationLost << "s ago, but allowed to live!" << std::endl;
+
+					}
+				}
+			}
+
+			n_obst = obst_vect.size();
+			std::cout << "n_obst: " << n_obst << std::endl;
+
+			// delete and clear remaining (terminated) elements in the old list
+			int n_obst_old = oldObstacles_.size();
+			std::cout << "n_obst_old: " << n_obst_old << std::endl;
+			for (int k = 0; k < n_obst_old; k++){
+				delete(oldObstacles_[k]);
+			}
+			oldObstacles_.clear();
+
+
+			if (n_obst == 0){
 				u_os_best = 1;
 				psi_os_best = 0;
 				P_ca_last_ = 1;
 				Chi_ca_last_ = 0;
+
 				return;
 			}
-				
-		}else{
-
-				/*
-					for (int i = 0; i < obst_states.rows(); i++){
-						obstacle *obst = new obstacle(obst_states.row(i), T_, DT_*pred_step, chi_obst_os_, u_obst_os_); // test! DT_* pred_step!
-						obst_vect.push_back(obst);
-					}
-					n_obst = obst_vect.size();
-				*/
-
-				// Update list
-				for (int i = 0; i < obst_states.rows(); i++){
-					bool obst_exists = false;
-					// iterate through old obstacle list
-					/**/
-					for (int j = 0; j < oldObstacles_.size(); j++){
-
-						// does obstacle exist in old obstacle list?
-						if( (double)oldObstacles_[j]->id_ == obst_states(i,9)){
-							// update object in old list and move it to the new list,
-
-							oldObstacles_[j]->durationLost = 0.0; // update
-
-							oldObstacles_[j]->updateTrajectory(obst_states.row(i), OBST_FILTER_ON_); // update obstacle
-
-							obst_vect.push_back(oldObstacles_[j]); // copy updated obstacle
-
-							oldObstacles_.erase(oldObstacles_.begin()+j);	// does not destroy this object, but the pointer to it!
-
-							obst_exists = true;
-
-							std::cout << "Yey!! obstacle exists!" << std::endl;
-
-							break;
-						}
-					}
-
-					if (!obst_exists){
-						obstacle *obst = new obstacle(obst_states.row(i), T_, DT_*pred_step, chi_obst_os_, u_obst_os_, OBST_FILTER_ON_);
-						obst_vect.push_back(obst);
-						//std::cout << "Ney!! new obstacle!" << std::endl;
-					}
-				}
-
-				// Keep terminated obstacles that may still be relevant, and compute duration lost as input to the cost of collision risk
-				// Obstacle track may be lost due to sensor/detection failure, or the obstacle may go out of COLAV-target range
-				// Detection failure will lead to the start (creation) of a new track (obstacle), typically after a short duration,
-				// whereas an obstacle that is out of COLAV-target range may re-enter range with the same id.
-
-				if (OBST_FILTER_ON_){
-					for (int j = 0; j < oldObstacles_.size(); j++){
-
-						// update duration lost
-						oldObstacles_[j]->durationLost += DT_*pred_step; // increment is the same as dt_f in obstacle!
-
-						// is this old obstacle still relevant?
-						if( oldObstacles_[j]->durationTracked >= T_TRACKED_LIMIT_ &&
-							(
-							oldObstacles_[j]->durationLost < T_LOST_LIMIT_ ||
-							oldObstacles_[j]->P(0,0) <= 5.0 	// 2.0
-							)
-						){
-							// update object in old list and move it to the new list,
-
-							oldObstacles_[j]->updateTrajectory(OBST_FILTER_ON_); // update obstacle
-
-							obst_vect.push_back(oldObstacles_[j]); // copy updated obstacle
-
-							oldObstacles_.erase(oldObstacles_.begin()+j);	// does not destroy this object, but the pointer to it!
-
-							std::cout << "NB! obstacle " << oldObstacles_[j]->id_ <<  " lost " << oldObstacles_[j]->durationLost << "s ago, but allowed to live!" << std::endl;
-
-						}
-					}
-				}
-
-				n_obst = obst_vect.size();
-				std::cout << "n_obst: " << n_obst << std::endl;
-
-				// delete and clear remaining (terminated) elements in the old list
-				int n_obst_old = oldObstacles_.size();
-				std::cout << "n_obst_old: " << n_obst_old << std::endl;
-				for (int k = 0; k < n_obst_old; k++){
-					delete(oldObstacles_[k]);
-				}
-				oldObstacles_.clear();
-
-
-				if (n_obst == 0){
-					u_os_best = 1;
-					psi_os_best = 0;
-					P_ca_last_ = 1;
-					Chi_ca_last_ = 0;
-
-					return;
-				}
 
 
 		
@@ -491,10 +467,10 @@ namespace DUNE
 
 			n_wps = waypoints.rows();
 
-			for (int i = 0; i < n_wps; i++){
-				std::cout << "waypoint " << i << " " << waypoints.row(i) << std::endl;
+			// for (int i = 0; i < n_wps; i++){
+			// 	std::cout << "waypoint " << i << " " << waypoints.row(i) << std::endl;
 
-			}
+			// }
 
 
 
@@ -584,11 +560,11 @@ namespace DUNE
 					// progress along path: s_total - s(t) < R or s(t) < R? depends on s(t)
 					along_track_dist < R;
 
-				std::cout << "SWITCH WAYPOINT??   " << switch_wp << std::endl;
+				//std::cout << "SWITCH WAYPOINT??   " << switch_wp << std::endl;
 
 				//std::cout << "asv-wp radius :  " << sqrt(asv_wp_radius_sqrd) << " <? " << R << std::endl;
 
-				std::cout << "remaining track dist :  " << along_track_dist << " <? " << R << std::endl; //works for both ENU and NED, along_track_dist reduces towards next wp, no need to subtract from track_dist.
+				//std::cout << "remaining track dist :  " << along_track_dist << " <? " << R << std::endl; //works for both ENU and NED, along_track_dist reduces towards next wp, no need to subtract from track_dist.
 
 
 				//std::cout << "switch_wp :  " << switch_wp << std::endl;
@@ -628,29 +604,29 @@ namespace DUNE
 				d(1) = obst_vect[k]->y_[0] - asv_state(1);
 				dist_0 = d.norm(); DIST_0(k)=dist_0;
 
-				std::cout << "d(0): " << d(0) << " d(1): " << d(1) << std::endl;
-				std::cout << "DIST_0(k): " << DIST_0(k) << std::endl;
+				std::cout << "distance x: " << d(0) << " distance y: " << d(1) << std::endl;
+				std::cout << "Distance to obst k: " << k << " " << DIST_0(k) << " m" << std::endl;
 
 				los_0 = d/dist_0;
 
-				std::cout << "los_0: " << los_0*RAD2DEG << " los_0:" << los_0 << std::endl;
+				//std::cout << "los_0: " << los_0*RAD2DEG << " los_0:" << los_0 << std::endl;
 
 				PHI_0(k) = atan2(d(1),d(0));	// bearing
 				//std::cout << "PHI_0/bearing : " << PHI_0(k)*RAD2DEG << std::endl;
 
-				std::cout << "PHI_0(k): " << PHI_0(k)*RAD2DEG << " and normalize_angle(asv_state(2)): " << normalize_angle(asv_state(2))*RAD2DEG << std::endl;
+				//std::cout << "PHI_0(k): " << PHI_0(k)*RAD2DEG << " and normalize_angle(asv_state(2)): " << normalize_angle(asv_state(2))*RAD2DEG << std::endl;
 
 				phi_0 = PHI_0(k) - normalize_angle(asv_state(2));
-				std::cout << "phi_0 " << phi_0*RAD2DEG << std::endl;
+				//std::cout << "phi_0 " << phi_0*RAD2DEG << std::endl;
 				phi_0 = normalize_angle(phi_0);
-				std::cout << "phi_0 after " << phi_0*RAD2DEG << std::endl;
+				//std::cout << "phi_0 after " << phi_0*RAD2DEG << std::endl;
 				
 
 				//std::cout << "relative bearing : " << phi_0*RAD2DEG << std::endl;
 
 
 				// obstacle at starboard/port side
-				std::cout << "SB_ obst_vec: " << obst_vect[k]->SB_0 << std::endl;
+				//std::cout << "SB_ obst_vec: " << obst_vect[k]->SB_0 << std::endl;
 				if (obst_vect[k]->SB_0 > -1 &&
 					((phi_0 > -15*DEG2RAD && phi_0 < 15*DEG2RAD) ||
 					(phi_0 < -165*DEG2RAD && phi_0 >= -180*DEG2RAD) ||
@@ -673,7 +649,7 @@ namespace DUNE
 				//std::cout << "AH_ : " << obst_vect[k]->AH_0 << std::endl;
 				double los_phi = acos(v_s.dot(los_0)/v_s.norm());
 				//double los_phi = phi_0;
-				std::cout << "LOS_PHI : " << los_phi*RAD2DEG << std::endl;
+				//std::cout << "LOS_PHI : " << los_phi*RAD2DEG << std::endl;
 				if (obst_vect[k]->AH_0 > -1 && los_phi > PHI_AH_*DEG2RAD && los_phi < 90.0*DEG2RAD){ //112.5?
 				{
 					AH_0(k) = obst_vect[k]->AH_0;
@@ -734,7 +710,6 @@ namespace DUNE
 
 				if (guidance_strategy < 2 && dist_0 > D_CLOSE_){ // check angle made with LOS to next WP
 					CRG_0(k) = CRG_0(k) && v_o.dot(los_s_wp1) < cos(PHI_CR_*DEG2RAD)*v_o.norm();
-					std::cout << "Inside CRG IF " << std::endl;
 				}
 
 				std::cout << "CRG_0 : " << CRG_0(k) << std::endl;
@@ -825,9 +800,8 @@ namespace DUNE
 								
 								//std::cout << "(bool)SB_0(k)= " << (bool)SB_0(k) << "(bool)CRG_0(k)= " << (bool)CRG_0(k) << "(bool)OTG_0(k)= " << (bool)OTG_0(k) << "(bool)OT_0(k)= " << (bool)OT_0(k) << "(bool)HOT_0(k)= " << (bool)HOT_0(k) << "DIST_0(k)= " << DIST_0(k) << std::endl;
 								// (bool)AH_0(k) and (bool)OBS_PASSED_0(k) unused?
-								cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, (bool)SB_0(k), (bool)CRG_0(k), (bool)OTG_0(k), (bool)OT_0(k), (bool)HOT_0(k), DIST_0(k), u_d, l, ik_return_to_path, static_obst_states_, grounding_cost(i,1), i); //static_obst
+								cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, (bool)SB_0(k), (bool)CRG_0(k), (bool)OTG_0(k), (bool)OT_0(k), (bool)HOT_0(k), DIST_0(k), u_d, l, ik_return_to_path, dynamic_obst, static_obst, static_obst_states_, i);
 								//std::cout << "SPEED " << P_ca_[j] << " AND OFFSET " << Chi_ca_[i]*RAD2DEG << " HAVE COST " << cost_k << std::endl;
-
 								if(guidance_strategy >= 2 && cp == 0 && Chi_ca_[i] != 0)
 									cost_k = cost_k + 0.1*n_cp; // (a small) path deviation penalty
 
@@ -965,7 +939,7 @@ namespace DUNE
 
 			std::cout << "_______________" << std::endl;
 			std::cout << "cost : " << cost << std::endl;
-
+			std::cout << "course offset : " << Angles::degrees(psi_os_best) << std::endl;
 			std::cout << "relative hazard level : " << HL_0 << std::endl;
 			std::cout << "control freedom : " << CF_0 << std::endl;
 			std::cout << "return to path at iter: " << i_return_to_path_best << std::endl;
@@ -995,7 +969,7 @@ namespace DUNE
 	}
 
 
-	double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, int &ik_return_to_path, Eigen::Matrix<double,-1,3> static_obst_states, double grounding_cost_value, int chi_ca_itr){ //Eigen::Matrix<double,1,4> static_obst
+	double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, int &ik_return_to_path, bool dynamic_obst, bool static_obst, Eigen::Matrix<double,-1,3> static_obst_state, int chi_ca_index){
 		// bool AH_0, bool OBS_PASSED_0 unused?
 		double dist, dist_to_land, phi, phi_o, psi_o, psi_rel, R, R_ground, C, C_ground, C1, C2, k_coll, d_safe_i, R_c, s_0; // dist_min;
 		Eigen::Vector2d d, d_to_land, los, los_inv, v_o, v_s;
@@ -1018,14 +992,14 @@ namespace DUNE
 		int ik_H0 = -1, ik_CPA = 0;
 		double d_CPA = INFINITY;
 
-		bool isGeoConstr;                   // no-go zone variable
+		//bool isGeoConstr;                   // no-go zone variable
 		double gCost, n_geo_samp, d_geo;    // no-go zone variable
 		Eigen::Vector2d p0, p1, v0, v1;     // no-go zone variable
 
 		ik_return_to_path = n_samp;
 
 		
-		isGeoConstr = false;
+		//isGeoConstr = false;
 		/*
 		if (static_obst.rows() == 0){
 			isGeoConstr = false;
@@ -1048,21 +1022,21 @@ namespace DUNE
 		for (int i = 0; i < n_samp-1; i+=pred_step){ // using 5s or 10s fixed intervals for DT_=0.5
 
 			//j= (int) (i/(double)pred_step); // synchronize asv and obstacle prediction steps
-
-			if (obst_vect.size()== 0){
+			if (static_obst && !dynamic_obst){
+			//if (obst_vect.size()== 0){
 				//t += DT_;
 				t += DT_*pred_step;
 
 				/*
 				// dist to land
-				d_to_land(0) = static_obst_states(chi_ca_itr,1) - asv->m_x[i];
-				d_to_land(1) = static_obst_states(chi_ca_itr,2) - asv->m_y[i];
+				d_to_land(0) = static_obst_states(chi_ca_index,1) - asv->m_x[i];
+				d_to_land(1) = static_obst_states(chi_ca_index,2) - asv->m_y[i];
 				dist_to_land = d_to_land.norm();
 				//std::cout << "In COST: asv->m_x " << asv->m_x[i] << ", asv->m_y " << asv->m_y[i] << std::endl;
 				//std::cout << "In COST: course offset: " << Angles::degrees(static_obst_states(k,0)) << ", dist_to_land: " << dist_to_land << std::endl;
 				*/
 
-				dist_to_land = static_obst_states(chi_ca_itr,1);
+				dist_to_land = static_obst_state(chi_ca_index,1);
 
 				R_ground = 0;
 				C_ground = 0;
@@ -1071,7 +1045,7 @@ namespace DUNE
 				// GROUNDING COST - THEA
 				if (dist_to_land <= d_safe_land && dist_to_land != 0.0){
 					R_ground = (1/pow(std::fabs(t-t0),0.05))*pow(d_safe_land/dist_to_land,Q_);
-					C_ground = grounding_cost_value; //course_offset_cost*pow((v_s).norm(),2);
+					C_ground = static_obst_state(chi_ca_index, 2);//grounding_cost_value; //course_offset_cost*pow((v_s).norm(),2);
 					//std::cout << "Total grounding cost: " << R_ground*C_ground << " dist_to_land " << dist_to_land << " C_ground " << C_ground << std::endl;
 				}
 				H0 = C_ground*R_ground;
@@ -1094,14 +1068,14 @@ namespace DUNE
 
 				H2 = K_P_*pow(1-P_ca,2) + sqrChi(Chi_ca, k_chi_p, k_chi_sb) + deltaP(P_ca) + deltaChi(Chi_ca, k_dchi_p, k_dchi_sb);
 
-				std::cout << "H1: " << H1 << ", H0: " << H0 << ", Cost: " << H1 + 0.1*H2 << ", R_ground: " << R_ground << ", dist_to_land: " << dist_to_land << ", Course offset: " << Angles::degrees(static_obst_states(chi_ca_itr,0)) << std::endl;
+				//std::cout << "H1: " << H1 << ", H0: " << H0 << ", Cost: " << H1 + 0.1*H2 << ", R_ground: " << R_ground << ", dist_to_land: " << dist_to_land << ", Course offset: " << Angles::degrees(static_obst_states(chi_ca_index,0)) << std::endl;
 				
 				
 				cost =  H1 + 0.1*H2;
 
 				return cost;
 				
-			}else {
+			}else{
 
 				// link index 'l' with the correct obstacle branch prediction vector
 				if (n_obst_branches>1){
@@ -1121,11 +1095,10 @@ namespace DUNE
 				//std::cout << "OUTSIDE: dist " << dist << std::endl;
 
 				// dist to land
-				//d_to_land(0) = static_obst_states(k,1) - asv->m_x[i];
-				//d_to_land(1) = static_obst_states(k,2) - asv->m_y[i];
-				d_to_land(0) = static_obst_states(chi_ca_itr,1) - asv->m_x[i];
-				d_to_land(1) = static_obst_states(chi_ca_itr,2) - asv->m_y[i];
-				dist_to_land = d_to_land.norm();
+				// d_to_land(0) = static_obst_states(chi_ca_index,1) - asv->m_x[i];
+				// d_to_land(1) = static_obst_states(chi_ca_index,2) - asv->m_y[i];
+				// dist_to_land = d_to_land.norm();
+				dist_to_land = static_obst_state(chi_ca_index,1);
 				//std::cout << "Distance to land " << dist_to_land << std::endl;
 
 				// compute d_CPA and t_CPA
@@ -1273,7 +1246,7 @@ namespace DUNE
 					// GROUNDING COST - THEA
 					if (dist_to_land <= d_safe_land && dist_to_land != 0.0){
 						R_ground = (1/pow(std::fabs(t-t0),0.05))*pow(d_safe_land/dist_to_land,Q_);
-						C_ground = grounding_cost_value; //course_offset_cost*pow((v_s).norm(),2);
+						C_ground = static_obst_state(chi_ca_index, 2); //grounding_cost_value; //course_offset_cost*pow((v_s).norm(),2);
 						//std::cout << "Total grounding cost: " << R_ground*C_ground << " dist_to_land " << dist_to_land << " C_ground " << C_ground << std::endl;
 					}
 				}

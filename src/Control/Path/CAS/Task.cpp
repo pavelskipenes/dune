@@ -158,7 +158,6 @@ namespace Control
 
         //! Cost function for grounding
         Math::Matrix m_env_factors;
-        Math::Matrix m_grounding_cost;
         Eigen::Matrix<double,-1,3> m_static_obst_state;
         Eigen::Matrix<double,-1,10> m_dynamic_obst_state;
 
@@ -775,7 +774,6 @@ namespace Control
           double abs_current_speed = 0.25;
 
           m_env_factors.resizeAndFill(6,m_offsets.size(),0.0); // 5 env factors plus course offset and 13 offsets = 6x13 matrix
-          m_grounding_cost.resizeAndFill(2,m_offsets.size(),0.0);
           
           double psi_path = atan2(m_waypoints(1,1) - m_waypoints(0,1),
             m_waypoints(1,0) - m_waypoints(0,0)); // path course, or use the current position to next waypoint?
@@ -788,12 +786,10 @@ namespace Control
             m_env_factors(3,i) = m_args.K_GROUND[2]*wave_freq;
             m_env_factors(4,i) = m_args.K_GROUND[3]*m_abs_wind_speed*fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(m_abs_wind_dir)));
             m_env_factors(5,i) = m_args.K_GROUND[4]*abs_current_speed*fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(abs_current_dir)));
-            m_grounding_cost(0,i) = m_offsets[i];
-            m_grounding_cost(1,i) = m_env_factors(1,i) + m_env_factors(2,i) + m_env_factors(3,i) + m_env_factors(4,i) + m_env_factors(5,i);
-            m_grounding_cost(1,i) = 100; // For pure anti-grounding testing purposes
+            m_static_obst_state(i,2) = m_env_factors(1,i) + m_env_factors(2,i) + m_env_factors(3,i) + m_env_factors(4,i) + m_env_factors(5,i);
+            m_static_obst_state(i,2) = 100; // For pure anti-grounding testing purposes 
           }
           //std::cout << "m_env_factors: " << m_env_factors << std::endl;
-          //std::cout << "m_grounding_cost: " << m_grounding_cost << std::endl;
 
           DepareData::DEPAREVector dep_vec = m_dp->getSquare(m_lat_asv, m_lon_asv, m_args.drval2, 5000.0);
           m_dp->writeCSVfile(dep_vec, m_args.debug_path + "useful_depare.csv");
@@ -865,12 +861,14 @@ namespace Control
             m_timer_antig.reset();
           }
 
+          m_dynamic_obst = false;
+
           if(m_obst_vec.size() > 0) // there are dynamic obstacles in range.
           {
             m_dynamic_obst = true;
 
             // Create and fill matrix of dynamic obstacles.
-            m_dynamic_obst_state.resize(m_obst_vec.size(), 0);
+            m_dynamic_obst_state.resize(m_obst_vec.size(), 10);
 
             //! Update m_asv_states to fit CAS (sb_mpc) inputs
             //m_asv_state(3) = sqrt(std::pow(m_asv_state(3), 2) + std::pow(m_asv_state(4), 2)); // u = Speed in BODY
@@ -956,16 +954,10 @@ namespace Control
             {
               // Collision avoidance situation.
               debug("Anti-collision situation!");
-              // To avoid empty matrix error, since the CAS and anti-grounding runs at different intervals
-              for(int i=0; i<m_contours.rows(); i++)
-              {
-                m_static_obst_state(i,0) = Angles::radians(m_offsets[i]);
-                m_env_factors(0,i) = Angles::radians(m_offsets[i]);
-              }
             } else // both this is a anti-grounding and anti-collision scenario!
               debug("Anti-grounding and anti-collision situation!");
 
-            sb_mpc.getBestControlOffset(u_os, psi_os, m_asv_state(3), m_des_heading.value, m_asv_state, m_waypoints, m_dynamic_obst, m_dynamic_obst_state, m_static_obst, m_static_obst_state, m_grounding_cost, cost);
+            sb_mpc.getBestControlOffset(u_os, psi_os, m_asv_state(3), m_des_heading.value, m_asv_state, m_waypoints, m_dynamic_obst, m_dynamic_obst_state, m_static_obst, m_static_obst_state, cost);
 
             //! New desired course and course offset.
             m_des_heading.value += psi_os;
