@@ -122,7 +122,7 @@ namespace DUNE
     DepareData::DEPAREVector DepareData::getSquare(double Lat, double Lon, double drval2, double half_size)
     {
       std::string tablename = "DEPARE";
-      std::string c_stmt = "select Lat, Lon, DRVAL1, DRVAL2 from " + tablename + " where DRVAL2=" +std::to_string(drval2) + " and " + makeSquareWhereClause(Lat, Lon, half_size) + ";";
+      std::string c_stmt = "select Lat, Lon, DRVAL1, DRVAL2 from " + tablename + " where DRVAL1=" +std::to_string(drval2) + " and " + makeSquareWhereClause(Lat, Lon, half_size) + ";";
       std::cout << c_stmt << std::endl;
       DepareData::DEPAREVector returnMap;
       try{
@@ -232,16 +232,12 @@ namespace DUNE
       {
         ranges(i,0) = normalize_angle(psi_path_relative + Angles::radians(directions[i] - offset));
         ranges(i,1) = normalize_angle(psi_path_relative + Angles::radians(directions[i] + offset));
-        //std::cout << "range 1 " << Angles::degrees(ranges(i,0)) << " range 2 " << Angles::degrees(ranges(i,1)) << std::endl;
-        //std::cout << "cog: " << cog << "psi_path: " << psi_path << std::endl;
       }
 
       for(DepareData::DEPAREVector::iterator itr = dep_vec.begin(); itr != dep_vec.end(); ++itr)
       {
         double bearing, range;
         WGS84::getNEBearingAndRange(vessel_lat, vessel_lon, itr->Lat, itr->Lon, &bearing, &range);
-        //std::cout << " bearing " << Angles::degrees(bearing) << " range " << range << std::endl;
-
         for(int j=0; j<ranges.rows(); j++)
         {
           if(bearing>=ranges(j,0) && bearing<=ranges(j,1) && range<size)
@@ -253,17 +249,35 @@ namespace DUNE
               ret(j,2)=Angles::degrees(bearing); //bearing; normalize_angle(bearing-cog)
               ret(j,3)=range;
             }
-            else if(range < ret(j,3)){
+            else if(range < ret(j,3)){ // In order to find the point with the shortest distance
               ret(j,0)=itr->Lat;
               ret(j,1)=itr->Lon;
-              ret(j,2)=Angles::degrees(bearing); //bearing; normalize_angle(bearing-cog)
+              ret(j,2)=Angles::degrees(bearing);
               ret(j,3)=range;
-              //std::cout << "Lat " << itr->Lat << " Lon " << itr->Lon << " bearing " << Angles::degrees(normalize_angle(bearing-cog)) << " range " << range;
+            }
+          }
+          // Special case where the range goes from e.g. 175 to -175 and the first does not work
+          if (ranges(j,0) > 0 && ranges(j,1) < 0)
+          {
+            if((bearing>=ranges(j,0) || bearing<=ranges(j,1)) && range<size)
+            {
+              if(ret(j,3) == 0.0)
+              {
+                ret(j,0)=itr->Lat;
+                ret(j,1)=itr->Lon;
+                ret(j,2)=Angles::degrees(bearing);
+                ret(j,3)=range;
+              }
+              else if(range < ret(j,3)){ // In order to find the point with the shortest distance
+                ret(j,0)=itr->Lat;
+                ret(j,1)=itr->Lon;
+                ret(j,2)=Angles::degrees(bearing);
+                ret(j,3)=range;
+              }
             }
           }
         }
       }
-
       return ret;
     }
 
