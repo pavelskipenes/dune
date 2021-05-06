@@ -1036,7 +1036,15 @@ namespace DUNE
 				//std::cout << "In COST: course offset: " << Angles::degrees(static_obst_states(k,0)) << ", dist_to_land: " << dist_to_land << std::endl;
 				*/
 
+				// static_obst_state contains offsets from -95 to +95 so you need to change the indexing chi_ca_index..
+				// chi_ca_index = 1 -> left is chi_ca_index, center chi_ca_index+1, right is chi_ca_index+2
+				// chi_ca_index = 2 -> left is chi_ca_index+2, center chi_ca_index+3, right is chi_ca_index+4
+				// chi_ca_index = 3 -> left is chi_ca_index+4, center chi_ca_index+5, right is chi_ca_index+6
+				// etc.
 				dist_to_land = static_obst_state(chi_ca_index,1);
+				double dist_to_land_left = static_obst_state(chi_ca_index,1);
+				double dist_to_land_right = static_obst_state(chi_ca_index,1);
+				k = 2;
 
 				R_ground = 0;
 				C_ground = 0;
@@ -1044,7 +1052,7 @@ namespace DUNE
 
 				// GROUNDING COST - THEA
 				if (dist_to_land <= d_safe_land && dist_to_land != 0.0){
-					R_ground = (1/pow(std::fabs(t-t0),0.05))*pow(d_safe_land/dist_to_land,Q_);
+					R_ground = (1/pow(std::fabs(t-t0),0.05))*pow(d_safe_land/dist_to_land + d_safe_land/k/dist_to_land_left + d_safe_land/k/dist_to_land_right,Q_);
 					C_ground = static_obst_state(chi_ca_index, 2);//grounding_cost_value; //course_offset_cost*pow((v_s).norm(),2);
 					//std::cout << "Total grounding cost: " << R_ground*C_ground << " dist_to_land " << dist_to_land << " C_ground " << C_ground << std::endl;
 				}

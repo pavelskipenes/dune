@@ -420,9 +420,9 @@ namespace Control
           .minimumValue("10.0")
           .description("Maximum size of contour square around vessel");
 
-          param("Course Offsets for Contours", m_args.directions)
-          .units(Units::Degree)
-          .description("Course offsets for contours surroundings");
+          //param("Course Offsets for Contours", m_args.directions)
+          //.units(Units::Degree)
+          //.description("Course offsets for contours surroundings");
 
           param("Anti Grounding Check Frequency", m_args.anti_grounding_freq)
           .units(Units::Second)
@@ -508,9 +508,6 @@ namespace Control
             if(paramChanged(m_args.en_antiground))
                 m_enable_antiground = m_args.en_antiground;
 
-            if(paramChanged(m_args.directions))
-              m_offsets = m_args.directions;
-
             if(paramChanged(m_args.dist_to_land))
               m_dist_to_land = m_args.dist_to_land;
 
@@ -548,7 +545,15 @@ namespace Control
               inf(DTR("Problem opening charts: %s"), e.what());
             }
 
-            m_offsets = m_args.directions;
+            // Compute course offsets for anti-grounding surveillance check.
+            int course_samples = 2*Math::round(m_args.COURSE_RANGE+5.0/5.0)+1;
+            m_offsets[0] = m_args.COURSE_RANGE+5.0;
+            for(int i=1;i<course_samples;i++)
+            {
+              m_offsets[i] = m_offsets[i-1] - m_args.GRANULARITY;
+              debug("OFFSET: %.3f",m_offsets[i]);
+		        }
+
             m_contours.resizeAndFill(m_offsets.size(),2,0.0);
             m_static_obst_state.resize(m_offsets.size(), 3);
           }
