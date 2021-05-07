@@ -88,7 +88,7 @@ namespace Control
         //! Weights for cost of grounding
         std::vector<double> K_GROUND;
         //! Safety distance to static obstacle.
-        double dist_to_land;
+        double safe_dist_to_land;
         //! Frequency of the anti-grounding algorithm
         double anti_grounding_freq;
 
@@ -147,7 +147,7 @@ namespace Control
         //! Contours to cas.
         Math::Matrix m_contours;
         //! Safety distance to land.
-        double m_dist_to_land;
+        double m_safe_dist_to_land;
         //! Frequency of the anti-grounding algorithm
         double m_anti_grounding_freq;
         //! Absolute wind direction and speed.
@@ -259,7 +259,7 @@ namespace Control
           .minimumValue("50.0")
           .description("Minimal distance to moving obstacle which is considered as safe [m].");
 
-          param("Minimal Safe Distance To Land", m_args.dist_to_land)
+          param("Minimal Safe Distance To Land", m_args.safe_dist_to_land)
           .units(Units::Meter)
           .minimumValue("10.0")
           .description("Minimal distance to static obstacle which is considered as safe [m].");
@@ -443,7 +443,7 @@ namespace Control
             // T and DT cannot be changed online. If changed, re-create the object.
             if(paramChanged(m_args.T) || paramChanged(m_args.DT))
                 sb_mpc.create(m_args.T, m_args.DT, m_args.T_STAT, m_args.P, m_args.Q, m_args.D_CLOSE,
-                          m_args.D_SAFE, m_args.dist_to_land, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
+                          m_args.D_SAFE, m_args.safe_dist_to_land, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
                           m_args.KAPPA, m_args.KAPPA_TC, m_args.K_P, m_args.K_CHI, m_args.K_DP, m_args.K_DCHI_SB,
                           m_args.K_DCHI_P, m_args.K_CHI_SB, m_args.K_CHI_P, m_args.D_INIT, m_args.COURSE_RANGE, m_args.GRANULARITY,
                           m_args.WP_R, m_args.LOS_LA_DIST, m_args.LOS_KI, m_args.GUIDANCE_STRATEGY);
@@ -457,8 +457,8 @@ namespace Control
                 sb_mpc.setDClose(m_args.D_CLOSE);
             if(paramChanged(m_args.D_SAFE))
                 sb_mpc.setDSafe(m_args.D_SAFE);
-            if(paramChanged(m_args.dist_to_land))
-                sb_mpc.setDSafe(m_args.dist_to_land);
+            if(paramChanged(m_args.safe_dist_to_land))
+                sb_mpc.setDSafe(m_args.safe_dist_to_land);
             if(paramChanged(m_args.K_COLL))
                 sb_mpc.setKColl(m_args.K_COLL);
             if(paramChanged(m_args.KAPPA))
@@ -511,8 +511,8 @@ namespace Control
             if(paramChanged(m_args.directions))
               m_offsets = m_args.directions;
 
-            if(paramChanged(m_args.dist_to_land))
-              m_dist_to_land = m_args.dist_to_land;
+            if(paramChanged(m_args.safe_dist_to_land))
+              m_safe_dist_to_land = m_args.safe_dist_to_land;
 
             if(paramChanged(m_args.anti_grounding_freq))
               m_anti_grounding_freq = m_args.anti_grounding_freq;
@@ -522,7 +522,7 @@ namespace Control
           onResourceInitialization(void)
           {
             sb_mpc.create(m_args.T, m_args.DT, m_args.T_STAT, m_args.P, m_args.Q, m_args.D_CLOSE,
-                          m_args.D_SAFE, m_args.dist_to_land, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
+                          m_args.D_SAFE, m_args.safe_dist_to_land, m_args.K_COLL, m_args.PHI_AH, m_args.PHI_OT, m_args.PHI_HO, m_args.PHI_CR,
                           m_args.KAPPA, m_args.KAPPA_TC, m_args.K_P, m_args.K_CHI, m_args.K_DP, m_args.K_DCHI_SB,
                           m_args.K_DCHI_P, m_args.K_CHI_SB, m_args.K_CHI_P, m_args.D_INIT, m_args.COURSE_RANGE, m_args.GRANULARITY,
                           m_args.WP_R, m_args.LOS_LA_DIST, m_args.LOS_KI, m_args.GUIDANCE_STRATEGY);
@@ -787,7 +787,7 @@ namespace Control
             m_env_factors(4,i) = m_args.K_GROUND[3]*m_abs_wind_speed*fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(m_abs_wind_dir)));
             m_env_factors(5,i) = m_args.K_GROUND[4]*abs_current_speed*fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(abs_current_dir)));
             m_static_obst_state(i,2) = m_env_factors(1,i) + m_env_factors(2,i) + m_env_factors(3,i) + m_env_factors(4,i) + m_env_factors(5,i);
-            m_static_obst_state(i,2) = 100; // For pure anti-grounding testing purposes 
+            m_static_obst_state(i,2) = 0.0; // For pure anti-grounding testing purposes 
           }
           //std::cout << "m_env_factors: " << m_env_factors << std::endl;
 

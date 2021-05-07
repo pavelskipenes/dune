@@ -176,9 +176,8 @@ namespace DUNE
 
 	}
 
-	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,2>& waypoints_, bool dynamic_obst, const Eigen::Matrix<double,-1,10>& obst_states, bool static_obst, Eigen::Matrix<double,-1,3> static_obst_states_, double &cost){
-		// REMOVED: Eigen::Matrix<double,-1,2>& predicted_traj, Eigen::Matrix<double,-1,1>& colav_status, Eigen::Matrix<double,-1,-1>& obst_status
-		cost = INFINITY;
+	void simulationBasedMpc::getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d_, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,2>& waypoints_, bool dynamic_obst, const Eigen::Matrix<double,-1,10>& obst_states, bool static_obst, Eigen::Matrix<double,-1,3> static_obst_states_, double &cost_mra){
+		double cost = INFINITY;
 		double cost_k = 0, cost_i = 0, cost_o = 0; //cost_ac = 0;
 		int n_obst, n_wps, n_samp=T_/DT_, n_samp_pred=n_samp/pred_step, n_psi_os_best;
 		Eigen::Vector2d d, v_o, v_s, los_0, d_s_wp1, los_s_wp1, d_wp0_wp1, los_wp0_wp1;
@@ -831,6 +830,7 @@ namespace DUNE
 							psi_os_best = Chi_ca_[i];   // test with -30*DEG2RAD
 							n_psi_os_best = cp+1; 	// number of course offsets
 							i_return_to_path_best = i_return_to_path;
+							cost_mra = cost;
 							std::cout << "Current cost is lower: " << cost << " With course offset: " << psi_os_best*RAD2DEG << std::endl;
 
 							if (i_return_to_path > cp && i_return_to_path < n_samp - pred_step){
@@ -998,43 +998,10 @@ namespace DUNE
 
 		ik_return_to_path = n_samp;
 
-		
-		//isGeoConstr = false;
-		/*
-		if (static_obst.rows() == 0){
-			isGeoConstr = false;
-		}else{
-			// Variables used for implementing no-go zones
-			n_geo_samp = T_stat_/DT_;                       // Number of samples within prediction horizon for static obstacles
-			p0 << asv->m_y[0], asv->m_x[0];                     // Start of trajectory
-			p1 << asv->m_y[n_geo_samp],asv->m_x[n_geo_samp];    // End of trajectory
-			int conv = 1; // NED, enu to be figured out
-			v0 << static_obst[1], static_obst[0]*conv;      // Start of no-go line
-			v1 << static_obst[3], static_obst[2]*conv;      // End of no-go line
-
-			// When obstacles are implemented as polygons, isBehind condition can be removed
-			d_geo = distPoint2line(p1, v0, v1);
-			isGeoConstr = (doIntersect(p0, p1, v0, v1) || isBehind(p1, v0, v1, d_geo));
-		}*/
-
-		//std::cout << "obstacle vector: " << obst_vect[k] << std::endl;
-		//for (int i = 0; i < n_samp-1; i++){
 		for (int i = 0; i < n_samp-1; i+=pred_step){ // using 5s or 10s fixed intervals for DT_=0.5
 
-			//j= (int) (i/(double)pred_step); // synchronize asv and obstacle prediction steps
 			if (static_obst && !dynamic_obst){
-			//if (obst_vect.size()== 0){
-				//t += DT_;
 				t += DT_*pred_step;
-
-				/*
-				// dist to land
-				d_to_land(0) = static_obst_states(chi_ca_index,1) - asv->m_x[i];
-				d_to_land(1) = static_obst_states(chi_ca_index,2) - asv->m_y[i];
-				dist_to_land = d_to_land.norm();
-				//std::cout << "In COST: asv->m_x " << asv->m_x[i] << ", asv->m_y " << asv->m_y[i] << std::endl;
-				//std::cout << "In COST: course offset: " << Angles::degrees(static_obst_states(k,0)) << ", dist_to_land: " << dist_to_land << std::endl;
-				*/
 
 				dist_to_land = static_obst_state(chi_ca_index,1);
 
@@ -1045,8 +1012,7 @@ namespace DUNE
 				// GROUNDING COST - THEA
 				if (dist_to_land <= d_safe_land && dist_to_land != 0.0){
 					R_ground = (1/pow(std::fabs(t-t0),0.05))*pow(d_safe_land/dist_to_land,Q_);
-					C_ground = static_obst_state(chi_ca_index, 2);//grounding_cost_value; //course_offset_cost*pow((v_s).norm(),2);
-					//std::cout << "Total grounding cost: " << R_ground*C_ground << " dist_to_land " << dist_to_land << " C_ground " << C_ground << std::endl;
+					C_ground = static_obst_state(chi_ca_index, 2);
 				}
 				H0 = C_ground*R_ground;
 
@@ -1077,6 +1043,7 @@ namespace DUNE
 				
 			}else{
 
+				j= (int) (i/(double)pred_step); // synchronize asv and obstacle prediction steps
 				// link index 'l' with the correct obstacle branch prediction vector
 				if (n_obst_branches>1){
 					obst_vect[k]->psi_ = obst_vect[k]->psi_br(l);
