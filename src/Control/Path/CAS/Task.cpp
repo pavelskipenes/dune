@@ -756,7 +756,7 @@ namespace Control
           m_asv_state(0) = 0.0; // ASV assumed to be centered, (0,0)
           m_asv_state(1) = 0.0;
           m_asv_state(2) = msg->cog;
-          m_asv_state(3) = msg->sog;
+          m_asv_state(3) = 0.45; //msg->sog; // The current sog oscillates between 0.2 and 0.7 ish and sometimes goes as high as 1.7, which makes predictions bad, therefore the mean value is used instead
           m_asv_state(4) = 0.0; //! Assume zero sideslip
           m_asv_state(5) = 0.0; //! Assume zero.
 
