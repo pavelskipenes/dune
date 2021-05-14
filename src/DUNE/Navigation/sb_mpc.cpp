@@ -245,14 +245,9 @@ namespace DUNE
 						cost_i = -1;
 						cost_o = 0;
 						ik_return_to_path = 0; i_return_to_path = 0;
-						//std::cout << "n_obst= " << n_obst_branches << "\n" << std::endl;
-						//std::cout << "n_obst_branches= " << n_obst_branches << "\n" << std::endl;
 						for (int k = 0; k < n_obst; k++){
-							//std::cout << "N_OBST LOOP" << std::endl;
 							HL_(k) = 0;
 							
-							//std::cout << "k= " << k << "\n" << std::endl;
-
 							for (int l = 0; l < n_obst_branches; l++){
 								//std::cout << "N_OBST_BRANCHES LOOP\n" << std::endl;
 
@@ -285,6 +280,7 @@ namespace DUNE
 						}
 
 						// Save current scenario if cost is lower than that of previously checked controls
+						std::cout << "New cost: " << cost_i << " With course offset: " << Chi_ca_[i]*RAD2DEG << " With predicted distance: " << dist_i << std::endl;
 						if (cost_i < cost){
 							cost = cost_i; 			// Minimizing the overall cost
 							u_os_best = P_ca_[j];   // test with 1
@@ -791,7 +787,7 @@ namespace DUNE
 						// Compute worst cost associated with the current control behavior and the corresponding scenarios for each obsbtacle
 						cost_i = -1;
 						cost_o = 0;
-						ik_return_to_path = 0; i_return_to_path = 0;				
+						ik_return_to_path = 0; i_return_to_path = 0;			
 						for (int k = 0; k < n_obst; k++){
 							HL_(k) = 0;
 
@@ -824,6 +820,7 @@ namespace DUNE
 						}
 
 						// Save current scenario if cost is lower than that of previously checked controls
+						std::cout << "New cost: " << cost_i << " With course offset: " << Chi_ca_[i]*RAD2DEG << std::endl;
 						if (cost_i < cost){
 							cost = cost_i; 			// Minimizing the overall cost
 							u_os_best = P_ca_[j];   // test with 1
@@ -971,8 +968,8 @@ namespace DUNE
 
 	double simulationBasedMpc::costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, int &ik_return_to_path, bool dynamic_obst, bool static_obst, Eigen::Matrix<double,-1,3> static_obst_state, int chi_ca_index){
 		// bool AH_0, bool OBS_PASSED_0 unused?
-		double dist, dist_to_land, phi, phi_o, psi_o, psi_rel, R, R_ground, C, C_ground, C1, C2, k_coll, d_safe_i, R_c, s_0; // dist_min;
-		Eigen::Vector2d d, d_to_land, los, los_inv, v_o, v_s;
+		double dist, dist_to_land, asv_pred_dist, phi, phi_o, psi_o, psi_rel, R, R_ground, C, C_ground, C1, C2, k_coll, d_safe_i, R_c, s_0;
+		Eigen::Vector2d d, asv_pred_pos, los, los_inv, v_o, v_s;
 		bool mu, OT, SB, HO, CR, OTG, CRG, OTN, HOT, mu_0;
 		double d_safe = D_SAFE_;
 		double d_close = D_CLOSE_;
@@ -999,60 +996,57 @@ namespace DUNE
 		ik_return_to_path = n_samp;
 
 		for (int i = 0; i < n_samp-1; i+=pred_step){ // using 5s or 10s fixed intervals for DT_=0.5
+			
 
-			if (static_obst && !dynamic_obst){
-				t += DT_*pred_step;
+			R = 0; R_c = 0; R_ground = 0;
+			C = 0; C1 = 0; C2 = 0; C_ground = 0;
+			mu = 0;
+			gCost = 0;
+
+			t += DT_*pred_step;
+			j = (int) (i/(double)pred_step); // synchronize asv and obstacle prediction steps
+			
+
+			if (static_obst){			
 
 				// static_obst_state contains offsets from -95 to +95 so you need to change the indexing chi_ca_index..
 				// chi_ca_index = 1 -> left is chi_ca_index, center chi_ca_index+1, right is chi_ca_index+2
 				// chi_ca_index = 2 -> left is chi_ca_index+2, center chi_ca_index+3, right is chi_ca_index+4
 				// chi_ca_index = 3 -> left is chi_ca_index+4, center chi_ca_index+5, right is chi_ca_index+6
 				// etc.
-				dist_to_land = static_obst_state(chi_ca_index,1);
-				double dist_to_land_left = static_obst_state(chi_ca_index,1);
-				double dist_to_land_right = static_obst_state(chi_ca_index,1);
-				k = 2;
+				
+				double dist_to_land_left = static_obst_state(chi_ca_index+2,1)*sin(granularity_);
+				double dist_to_land_right = static_obst_state(chi_ca_index,1)*sin(granularity_);
+				int k_ground = 2;
 
-				R_ground = 0;
-				C_ground = 0;
-				mu = 0;
+				asv_pred_pos(0) = asv->m_x[i];
+				asv_pred_pos(1) = asv->m_y[i];
+				asv_pred_dist = asv_pred_pos.norm();
+				
+				dist_to_land = (static_obst_state(chi_ca_index+1,1) != 0.0) ? fmax(1.0, static_obst_state(chi_ca_index+1,1) - asv_pred_dist) : 0.0;
 
 				// GROUNDING COST - THEA
+				double risk_land = 0.0;
+				double risk_land_left = 0.0;
+				double risk_land_right = 0.0;
+
 				if (dist_to_land <= d_safe_land && dist_to_land != 0.0){
-					R_ground = (1/pow(std::fabs(t-t0),0.05))*pow(d_safe_land/dist_to_land + d_safe_land/k/dist_to_land_left + d_safe_land/k/dist_to_land_right,Q_);
-					C_ground = static_obst_state(chi_ca_index, 2);//grounding_cost_value; //course_offset_cost*pow((v_s).norm(),2);
-					//std::cout << "Total grounding cost: " << R_ground*C_ground << " dist_to_land " << dist_to_land << " C_ground " << C_ground << std::endl;
+					risk_land = d_safe_land/dist_to_land;
 				}
-				H0 = C_ground*R_ground;
-
-				if (H0 > H1){
-					H1 = H0;  // Maximizing the cost with regards to time
-					// save and pass on this iteration (i) for return path prediction???
+				if (dist_to_land_left <= d_safe_land && dist_to_land_left != 0.0){
+					risk_land_left = d_safe_land/(k_ground*dist_to_land_left);
 				}
-
-				// iteration (i) at which the ASV can return to path without colliding with obstacle k
-				if (H0 > 0) {
-					ik_H0 = i; // save iter at which there is a hazard
-					ik_return_to_path = n_samp; // reset the possible return iter
-				}else if (i == ik_H0+1){
-					ik_return_to_path = i; //the next iter without hazard indicates a possible return time
+				if (dist_to_land_right <= d_safe_land && dist_to_land_right != 0.0){
+					risk_land_right = d_safe_land/(k_ground*dist_to_land_right);
 				}
-
-				if (ik_CPA > ik_return_to_path )
-					ik_return_to_path = ik_CPA+1;
-
-				H2 = K_P_*pow(1-P_ca,2) + sqrChi(Chi_ca, k_chi_p, k_chi_sb) + deltaP(P_ca) + deltaChi(Chi_ca, k_dchi_p, k_dchi_sb);
-
-				//std::cout << "H1: " << H1 << ", H0: " << H0 << ", Cost: " << H1 + 0.1*H2 << ", R_ground: " << R_ground << ", dist_to_land: " << dist_to_land << ", Course offset: " << Angles::degrees(static_obst_states(chi_ca_index,0)) << std::endl;
 				
-				
-				cost =  H1 + 0.1*H2;
+				R_ground = (1/pow(std::fabs(t-t0),0.05))*pow(risk_land + risk_land_left + risk_land_right,Q_);
+				C_ground = static_obst_state(chi_ca_index, 2);
+			
+			}
+			if (dynamic_obst){
 
-				return cost;
 				
-			}else{
-
-				j= (int) (i/(double)pred_step); // synchronize asv and obstacle prediction steps
 				// link index 'l' with the correct obstacle branch prediction vector
 				if (n_obst_branches>1){
 					obst_vect[k]->psi_ = obst_vect[k]->psi_br(l);
@@ -1062,34 +1056,17 @@ namespace DUNE
 					obst_vect[k]->v_[j] = obst_vect[k]->v_m(j,l);
 				}
 
-				//t += DT_;
-				t += DT_*pred_step;
-
 				d(0) = obst_vect[k]->x_[j] - asv->m_x[i];
 				d(1) = obst_vect[k]->y_[j] - asv->m_y[i];
 				dist = d.norm();
-				//std::cout << "OUTSIDE: dist " << dist << std::endl;
-
-				// dist to land
-				// d_to_land(0) = static_obst_states(chi_ca_index,1) - asv->m_x[i];
-				// d_to_land(1) = static_obst_states(chi_ca_index,2) - asv->m_y[i];
-				// dist_to_land = d_to_land.norm();
-				dist_to_land = static_obst_state(chi_ca_index,1);
-				//std::cout << "Distance to land " << dist_to_land << std::endl;
 
 				// compute d_CPA and t_CPA
 				if (dist < d_CPA ){
 					d_CPA = dist;
 					ik_CPA = i;
-				}
-
-				R = 0; R_c = 0; R_ground = 0;
-				C = 0; C1 = 0; C2 = 0; C_ground = 0;
-				mu = 0;
-				gCost = 0;
+				}				
 
 				if (dist < d_close){
-
 					v_o(0) = obst_vect[k]->u_[j];
 					v_o(1) = obst_vect[k]->v_[j];
 					rot2d(obst_vect[k]->psi_,v_o);
@@ -1196,9 +1173,7 @@ namespace DUNE
 					// obstacle size determines d_safe
 					d_safe_i = D_SAFE_ + obst_vect[k]->getL()/2; // override d_safe_i computed above
 					
-					if (dist <= d_safe_i){ // changed from < to <=
-						//std::cout << "INSIDE: dist, safe distance " << dist << ", " << d_safe_i << std::endl;
-
+					if (dist <= d_safe_i){ // changed from < to <=. dist is the predicted distance to obst, while DIST_0 is the current distance to obst
 						if (dist < 1) dist=1; // safe numerics!
 						R = (1/pow(std::fabs(t-t0),P_))*pow(d_safe_i/dist,Q_);
 						k_coll = K_COLL_*asv->getL()*obst_vect[k]->getL(); // L-influence!
@@ -1219,42 +1194,39 @@ namespace DUNE
 							R_c = 100*KAPPA_TC_;
 						}
 					}
-					// GROUNDING COST - THEA
-					if (dist_to_land <= d_safe_land && dist_to_land != 0.0){
-						R_ground = (1/pow(std::fabs(t-t0),0.05))*pow(d_safe_land/dist_to_land,Q_);
-						C_ground = static_obst_state(chi_ca_index, 2); //grounding_cost_value; //course_offset_cost*pow((v_s).norm(),2);
-						//std::cout << "Total grounding cost: " << R_ground*C_ground << " dist_to_land " << dist_to_land << " C_ground " << C_ground << std::endl;
-					}
 				}
 				// HAZARD
 				if ( obst_vect[k]->durationLost>pred_step ){
 					//H0 = (2*DT_*pred_step/obst_vect[k]->durationLost)*C*R + KAPPA_*mu + R_c*mu_0;
-					H0 = (2*DT_*pred_step/obst_vect[k]->durationLost)*C*R + C_ground*R_ground + KAPPA_*mu + R_c*mu_0;
-				}else{
-					//H0 = C*R + KAPPA_*mu + R_c*mu_0;
-					H0 = C*R + C_ground*R_ground + KAPPA_*mu + R_c*mu_0;
+					//H0 = (2*DT_*pred_step/obst_vect[k]->durationLost)*C*R + C_ground*R_ground + KAPPA_*mu + R_c*mu_0;
+					C = (2*DT_*pred_step/obst_vect[k]->durationLost)*C;
 				}
-				//std::cout << " C_ground: " << C_ground << " R_ground: " << R_ground << std::endl;
-
-				if (H0 > H1){
-					H1 = H0;  // Maximizing the cost with regards to time
-					// save and pass on this iteration (i) for return path prediction???
-				}
-
-				// iteration (i) at which the ASV can return to path without colliding with obstacle k
-				if (H0 > 0) {
-					ik_H0 = i; // save iter at which there is a hazard
-					ik_return_to_path = n_samp; // reset the possible return iter
-				}else if (i == ik_H0+1){
-					ik_return_to_path = i; //the next iter without hazard indicates a possible return time
-				}
-
-				if (ik_CPA > ik_return_to_path )
-					ik_return_to_path = ik_CPA+1;
 			}
-			
-		}
 
+			H0 = C*R + C_ground*R_ground + KAPPA_*mu + R_c*mu_0;
+			
+			
+			
+			if (H0 > H1){
+				H1 = H0;  // Maximizing the cost with regards to time
+				// save and pass on this iteration (i) for return path prediction???
+				//std::cout << "Grounding hazard: " << C_ground*R_ground << ", Collision hazard: " << C*R << std::endl;
+			}
+
+			// iteration (i) at which the ASV can return to path without colliding with obstacle k
+			if (H0 > 0) {
+				ik_H0 = i; // save iter at which there is a hazard
+				ik_return_to_path = n_samp; // reset the possible return iter
+			}else if (i == ik_H0+1){
+				ik_return_to_path = i; //the next iter without hazard indicates a possible return time
+			}
+
+			if (ik_CPA > ik_return_to_path )
+				ik_return_to_path = ik_CPA+1;
+
+			//std::cout << "H1: " << H1 << ", H0: " << H0 << ", R_ground: " << R_ground << ", dist_to_land: " << dist_to_land << ", Course offset: " << Angles::degrees(static_obst_state(chi_ca_index,0)) << std::endl;
+		
+		}
 
 		// Use symmetric control cost when overtaking to prioritize current side
 		if ( (OTG_0 || OT_0) && (DIST_0 > D_SAFE_) ){

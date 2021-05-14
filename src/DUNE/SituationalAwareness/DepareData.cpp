@@ -122,7 +122,7 @@ namespace DUNE
     DepareData::DEPAREVector DepareData::getSquare(double Lat, double Lon, double drval2, double half_size)
     {
       std::string tablename = "DEPARE";
-      std::string c_stmt = "select Lat, Lon, DRVAL1, DRVAL2 from " + tablename + " where DRVAL1=" +std::to_string(drval2) + " and " + makeSquareWhereClause(Lat, Lon, half_size) + ";";
+      std::string c_stmt = "select Lat, Lon, DRVAL1, DRVAL2 from " + tablename + " where DRVAL2=" +std::to_string(drval2) + " and " + makeSquareWhereClause(Lat, Lon, half_size) + ";";
       std::cout << c_stmt << std::endl;
       DepareData::DEPAREVector returnMap;
       try{
