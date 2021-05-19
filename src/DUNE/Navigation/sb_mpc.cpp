@@ -280,7 +280,7 @@ namespace DUNE
 						}
 
 						// Save current scenario if cost is lower than that of previously checked controls
-						std::cout << "New cost: " << cost_i << " With course offset: " << Chi_ca_[i]*RAD2DEG << " With predicted distance: " << dist_i << std::endl;
+						std::cout << "New cost: " << cost_i << " With course offset: " << Chi_ca_[i]*RAD2DEG << std::endl;
 						if (cost_i < cost){
 							cost = cost_i; 			// Minimizing the overall cost
 							u_os_best = P_ca_[j];   // test with 1

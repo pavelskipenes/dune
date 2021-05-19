@@ -254,15 +254,15 @@ namespace Control
           .defaultValue("400.0")
           .description("Maximum SB_MPC Surveillance Range.");
 
-          param("Minimal Safe Distance To Vessels", m_args.D_SAFE)
+          param("Minimum Safe Distance To Vessels", m_args.D_SAFE)
           .units(Units::Meter)
           .minimumValue("50.0")
-          .description("Minimal distance to moving obstacle which is considered as safe [m].");
+          .description("Minimum distance to moving obstacle which is considered as safe [m].");
 
-          param("Minimal Safe Distance To Land", m_args.safe_dist_to_land)
+          param("Minimum Safe Distance To Land", m_args.safe_dist_to_land)
           .units(Units::Meter)
           .minimumValue("10.0")
-          .description("Minimal distance to static obstacle which is considered as safe [m].");
+          .description("Minimum distance to static obstacle which is considered as safe [m].");
 
           param("Cost of Collisions", m_args.K_COLL)
           .minimumValue("0.0")
@@ -408,7 +408,7 @@ namespace Control
           .defaultValue("50")
           .description("Digital Map resolution in meters");
 
-          param("DRVAL2", m_args.drval2)
+          param("Minimum Safe Depth Value", m_args.drval2)
           .units(Units::Meter)
           .defaultValue("10.0")
           .description("Maximum (deepest) value of a depth range");
@@ -778,9 +778,9 @@ namespace Control
           double bathymetry = 1;
           double heave = 1;
           double wave_freq = 1;
-          m_abs_wind_dir = 90;
+          m_abs_wind_dir = 310;
           m_abs_wind_speed = 10;
-          double abs_current_dir = 90;
+          double abs_current_dir = 310;
           double abs_current_speed = 0.25;
 
           m_env_factors.resizeAndFill(6,m_offsets.size(),0.0); // 5 env factors plus course offset and 13 offsets = 6x13 matrix
@@ -796,11 +796,11 @@ namespace Control
             m_env_factors(3,i) = m_args.K_GROUND[2]*wave_freq;
             m_env_factors(4,i) = m_args.K_GROUND[3]*m_abs_wind_speed*fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(m_abs_wind_dir)));
             m_env_factors(5,i) = m_args.K_GROUND[4]*abs_current_speed*fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(abs_current_dir)));
-            m_static_obst_state(i,2) = m_env_factors(1,i) + m_env_factors(2,i) + m_env_factors(3,i) + m_env_factors(4,i) + m_env_factors(5,i);
-            m_static_obst_state(i,2) = 0.0; // For pure anti-grounding testing purposes 
+            m_static_obst_state(i,2) = 100.0 + m_env_factors(1,i) + m_env_factors(2,i) + m_env_factors(3,i) + m_env_factors(4,i) + m_env_factors(5,i);
+            //m_static_obst_state(i,2) = 100.0; // For pure anti-grounding testing purposes 
           }
           //std::cout << "m_env_factors: " << m_env_factors << std::endl;
-
+          std::cout << "m_static_obst_state: " << m_static_obst_state << std::endl;
           DepareData::DEPAREVector dep_vec = m_dp->getSquare(m_lat_asv, m_lon_asv, m_args.drval2, 5000.0);
           m_dp->writeCSVfile(dep_vec, m_args.debug_path + "useful_depare.csv");
 
