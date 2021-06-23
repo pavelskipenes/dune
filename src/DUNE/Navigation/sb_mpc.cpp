@@ -40,6 +40,7 @@ namespace DUNE
 	  pred_step(0),
 	  n_obst_branches(0),
 	  P_(0.0),
+	  P_G_(0.0),
 	  Q_(0.0),
 	  D_CLOSE_(0.0),
 	  D_SAFE_(0.0),
@@ -76,7 +77,7 @@ namespace DUNE
     }
 	
 	void
-	simulationBasedMpc::create(double T, double DT, double T_stat, double P, double Q, double D_CLOSE, double D_SAFE, double safe_dist_to_land, double K_COLL, double PHI_AH, double PHI_OT, double PHI_HO, 
+	simulationBasedMpc::create(double T, double DT, double T_stat, double P, double P_G, double Q, double D_CLOSE, double D_SAFE, double safe_dist_to_land, double K_COLL, double PHI_AH, double PHI_OT, double PHI_HO, 
 	double PHI_CR, double KAPPA, double KAPPA_TC, double K_P, double K_CHI, double K_DP, double K_DCHI_SB, double K_DCHI_P, double K_CHI_SB, double K_CHI_P, double D_INIT, 
 	double ang_range, double granularity, double WP_R, double LOS_LA_DIST, double LOS_KI, int GUIDANCE_STRATEGY)
 	{
@@ -87,6 +88,7 @@ namespace DUNE
 		pred_step = 1;
 
 		P_ = P; 		      // 0.5, (1.0), 2.0
+		P_G_ = P_G;
 		Q_ = Q;		        // (4.0), 40.0, 10.0
 		D_INIT_ = D_INIT;	  // should be >= D_CLOSE 300.0 600.0 500.0 700.0 800 1852
 		D_CLOSE_ = D_CLOSE;	// 200.0 300.0 400.0 500.0 600 1000
@@ -288,7 +290,7 @@ namespace DUNE
 							n_psi_os_best = cp+1; 	// number of course offsets
 							i_return_to_path_best = i_return_to_path;
 							std::cout << "Current cost is lower: " << cost << " With course offset: " << psi_os_best*RAD2DEG << std::endl;
-
+							
 							if (i_return_to_path > cp && i_return_to_path < n_samp - pred_step){
 								asv->linearPrediction(asv_state, u_d*P_ca_[j], psi_d, waypoints, 0, i_return_to_path, guidance_strategy, WP_R_, LOS_LA_DIST_, LOS_KI_);
 
@@ -1040,7 +1042,7 @@ namespace DUNE
 					risk_land_right = d_safe_land/(k_ground*dist_to_land_right);
 				}
 				
-				R_ground = (1/pow(std::fabs(t-t0),0.05))*pow(risk_land + risk_land_left + risk_land_right,Q_);
+				R_ground = (1/pow(std::fabs(t-t0),P_G_))*pow(risk_land + risk_land_left + risk_land_right,Q_);
 				C_ground = static_obst_state(chi_ca_index, 2);
 			
 			}
