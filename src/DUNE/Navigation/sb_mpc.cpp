@@ -503,18 +503,6 @@ namespace DUNE
 			// distance of track from wp0 to wp1
 			double track_dist = sqrt(pow(waypoints(1,0) - waypoints(0,0),2) + pow(waypoints(1,1) - waypoints(0,1),2));
 
-			// ANTI-GROUNDING - THEA
-			// Giving only the courses not leading to grounding to the algorithm
-			// std::cout << "BEFORE: Chi_ca_: " << Chi_ca_ << std::endl;
-			//Chi_ca_ = contours;
-			/*for (int i = 0; i < Chi_ca_.size(); i++){
-				std::cout << "BEFORE: Chi_ca_: " << Chi_ca_[i] << std::endl;
-				Chi_ca_[i] = normalize_angle(contours[i] + psi_path - psi_d);
-				std::cout << "AFTER: Chi_ca_: " << Chi_ca_[i] << std::endl;
-			}*/
-			//std::cout << "AFTER: Chi_ca_: " << Chi_ca_ << std::endl;
-
-
 			// test if asv has passed wp
 
 			// next waypoint directional vector for improving accuracy of scenario
@@ -600,9 +588,6 @@ namespace DUNE
 				d(0) = obst_vect[k]->x_[0] - asv_state(0);
 				d(1) = obst_vect[k]->y_[0] - asv_state(1);
 				dist_0 = d.norm(); DIST_0(k)=dist_0;
-
-				std::cout << "distance x: " << d(0) << " distance y: " << d(1) << std::endl;
-				std::cout << "Distance to obst k: " << k << " " << DIST_0(k) << " m" << std::endl;
 
 				los_0 = d/dist_0;
 
@@ -795,10 +780,8 @@ namespace DUNE
 
 							for (int l = 0; l < n_obst_branches; l++){
 								
-								//std::cout << "(bool)SB_0(k)= " << (bool)SB_0(k) << "(bool)CRG_0(k)= " << (bool)CRG_0(k) << "(bool)OTG_0(k)= " << (bool)OTG_0(k) << "(bool)OT_0(k)= " << (bool)OT_0(k) << "(bool)HOT_0(k)= " << (bool)HOT_0(k) << "DIST_0(k)= " << DIST_0(k) << std::endl;
 								// (bool)AH_0(k) and (bool)OBS_PASSED_0(k) unused?
 								cost_k = costFunction(P_ca_[j], Chi_ca_[i], k, (bool)SB_0(k), (bool)CRG_0(k), (bool)OTG_0(k), (bool)OT_0(k), (bool)HOT_0(k), DIST_0(k), u_d, l, ik_return_to_path, dynamic_obst, static_obst, static_obst_states_, i);
-								//std::cout << "SPEED " << P_ca_[j] << " AND OFFSET " << Chi_ca_[i]*RAD2DEG << " HAVE COST " << cost_k << std::endl;
 								if(guidance_strategy >= 2 && cp == 0 && Chi_ca_[i] != 0)
 									cost_k = cost_k + 0.1*n_cp; // (a small) path deviation penalty
 
@@ -822,7 +805,6 @@ namespace DUNE
 						}
 
 						// Save current scenario if cost is lower than that of previously checked controls
-						std::cout << "New cost: " << cost_i << " With course offset: " << Chi_ca_[i]*RAD2DEG << std::endl;
 						if (cost_i < cost){
 							cost = cost_i; 			// Minimizing the overall cost
 							u_os_best = P_ca_[j];   // test with 1
@@ -830,7 +812,6 @@ namespace DUNE
 							n_psi_os_best = cp+1; 	// number of course offsets
 							i_return_to_path_best = i_return_to_path;
 							cost_mra = cost;
-							std::cout << "Current cost is lower: " << cost << " With course offset: " << psi_os_best*RAD2DEG << std::endl;
 
 							if (i_return_to_path > cp && i_return_to_path < n_samp - pred_step){
 								// Simulate ASV trajectory for current control behavior
@@ -1010,12 +991,6 @@ namespace DUNE
 			
 
 			if (static_obst){			
-
-				// static_obst_state contains offsets from -95 to +95 so you need to change the indexing chi_ca_index..
-				// chi_ca_index = 1 -> left is chi_ca_index, center chi_ca_index+1, right is chi_ca_index+2
-				// chi_ca_index = 2 -> left is chi_ca_index+2, center chi_ca_index+3, right is chi_ca_index+4
-				// chi_ca_index = 3 -> left is chi_ca_index+4, center chi_ca_index+5, right is chi_ca_index+6
-				// etc.
 				
 				double dist_to_land_left = static_obst_state(chi_ca_index+2,1)*sin(granularity_);
 				double dist_to_land_right = static_obst_state(chi_ca_index,1)*sin(granularity_);
@@ -1027,7 +1002,6 @@ namespace DUNE
 				
 				dist_to_land = (static_obst_state(chi_ca_index+1,1) != 0.0) ? fmax(1.0, static_obst_state(chi_ca_index+1,1) - asv_pred_dist) : 0.0;
 
-				// GROUNDING COST - THEA
 				double risk_land = 0.0;
 				double risk_land_left = 0.0;
 				double risk_land_right = 0.0;
@@ -1199,8 +1173,6 @@ namespace DUNE
 				}
 				// HAZARD
 				if ( obst_vect[k]->durationLost>pred_step ){
-					//H0 = (2*DT_*pred_step/obst_vect[k]->durationLost)*C*R + KAPPA_*mu + R_c*mu_0;
-					//H0 = (2*DT_*pred_step/obst_vect[k]->durationLost)*C*R + C_ground*R_ground + KAPPA_*mu + R_c*mu_0;
 					C = (2*DT_*pred_step/obst_vect[k]->durationLost)*C;
 				}
 			}
@@ -1212,7 +1184,6 @@ namespace DUNE
 			if (H0 > H1){
 				H1 = H0;  // Maximizing the cost with regards to time
 				// save and pass on this iteration (i) for return path prediction???
-				//std::cout << "Grounding hazard: " << C_ground*R_ground << ", Collision hazard: " << C*R << std::endl;
 			}
 
 			// iteration (i) at which the ASV can return to path without colliding with obstacle k
@@ -1224,10 +1195,7 @@ namespace DUNE
 			}
 
 			if (ik_CPA > ik_return_to_path )
-				ik_return_to_path = ik_CPA+1;
-
-			//std::cout << "H1: " << H1 << ", H0: " << H0 << ", R_ground: " << R_ground << ", dist_to_land: " << dist_to_land << ", Course offset: " << Angles::degrees(static_obst_state(chi_ca_index,0)) << std::endl;
-		
+				ik_return_to_path = ik_CPA+1;		
 		}
 
 		// Use symmetric control cost when overtaking to prioritize current side
@@ -1237,14 +1205,10 @@ namespace DUNE
 
 		}
 
-		// f(P,delta) term that influences the priority of keeping nominal speed and course
 		H2 = K_P_*pow(1-P_ca,2) + sqrChi(Chi_ca, k_chi_p, k_chi_sb) + deltaP(P_ca) + deltaChi(Chi_ca, k_dchi_p, k_dchi_sb);
 		//H2 = K_P_*(1-P_ca) + K_CHI_*pow(Chi_ca,2) + deltaP(P_ca) + deltaChi(Chi_ca);
 
 		cost =  H1 + H2;
-
-		//std::cout << "Hazard Total H1: " << H1 << std::endl;
-		//std::cout << "CostFunction: " << cost << std::endl;
 
 		return cost;
 	}

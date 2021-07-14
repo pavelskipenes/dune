@@ -81,12 +81,14 @@ namespace Control
         double map_res;
         //! DRVAL2
         double drval2;
-        //! DRVAL2
+        //! Contours Distance.
         double cont_size;
         //! Course offset for contours.
         std::vector<double> directions;
-        //! Weights for cost of grounding
-        std::vector<double> K_GROUND;
+        //! Cost of grounding
+        double K_GROUND;
+        //! Weights on environmental factors
+        std::vector<double> K_ENV;
         //! Safety distance to static obstacle.
         double safe_dist_to_land;
         //! Frequency of the anti-grounding algorithm
@@ -278,8 +280,13 @@ namespace Control
 
           param("Cost of Grounding", m_args.K_GROUND)
           .minimumValue("0.0")
-          .defaultValue("1.0")
+          .defaultValue("100.0")
           .description("Cost of Grounding.");
+
+          param("Weights on Environmental Factors", m_args.K_ENV)
+          .minimumValue("0.0, 0.0, 0.0, 0.0, 0.0")
+          .defaultValue("10.0, 10.0, 10.0, 10.0, 10.0")
+          .description("Weights on Environmental Factors.");
 
           param("Cost of not complying COLREGS", m_args.KAPPA)
           .minimumValue("0.0")
@@ -794,17 +801,17 @@ namespace Control
           m_env_factors.resizeAndFill(6,m_offsets.size(),0.0); // 5 env factors plus course offset and 13 offsets = 6x13 matrix
           
           double psi_path = atan2(m_waypoints(1,1) - m_waypoints(0,1),
-            m_waypoints(1,0) - m_waypoints(0,0)); // path course, or use the current position to next waypoint?
+            m_waypoints(1,0) - m_waypoints(0,0));
           for(int i=0; i<m_contours.rows(); i++)
           {
             
             m_env_factors(0,i) = m_offsets[i];
-            m_env_factors(1,i) = m_args.K_GROUND[0]*pow(bathymetry,2);
-            m_env_factors(2,i) = m_args.K_GROUND[1]*pow(heave,2);
-            m_env_factors(3,i) = m_args.K_GROUND[2]*wave_freq;
-            m_env_factors(4,i) = m_args.K_GROUND[3]*m_abs_wind_speed*pow(fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(m_abs_wind_dir))),2);
-            m_env_factors(5,i) = m_args.K_GROUND[4]*abs_current_speed*pow(fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(abs_current_dir))),2);
-            m_static_obst_state(i,2) = 100.0 + m_env_factors(1,i) + m_env_factors(2,i) + m_env_factors(3,i) + m_env_factors(4,i) + m_env_factors(5,i);
+            m_env_factors(1,i) = m_args.K_ENV[0]*pow(bathymetry,2);
+            m_env_factors(2,i) = m_args.K_ENV[1]*pow(heave,2);
+            m_env_factors(3,i) = m_args.K_ENV[2]*wave_freq;
+            m_env_factors(4,i) = m_args.K_ENV[3]*m_abs_wind_speed*pow(fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(m_abs_wind_dir))),2);
+            m_env_factors(5,i) = m_args.K_ENV[4]*abs_current_speed*pow(fmax(0, cos(psi_path + Angles::radians(m_offsets[i]) - Angles::radians(abs_current_dir))),2);
+            m_static_obst_state(i,2) = m_args.K_GROUND + m_env_factors(1,i) + m_env_factors(2,i) + m_env_factors(3,i) + m_env_factors(4,i) + m_env_factors(5,i);
           }
           DepareData::DEPAREVector dep_vec = m_dp->getSquare(m_lat_asv, m_lon_asv, m_args.drval2, 5000.0);
           m_dp->writeCSVfile(dep_vec, m_args.debug_path + "useful_depare.csv");
@@ -969,7 +976,7 @@ namespace Control
             {
               // Collision avoidance situation.
               debug("Anti-collision situation!");
-            } else // both this is a anti-grounding and anti-collision scenario!
+            } else // both, this is an anti-grounding and anti-collision scenario!
               debug("Anti-grounding and anti-collision situation!");
 
             sb_mpc.getBestControlOffset(u_os, psi_os, m_asv_state(3), m_des_heading.value, m_asv_state, m_waypoints, m_dynamic_obst, m_dynamic_obst_state, m_static_obst, m_static_obst_state, cost);
