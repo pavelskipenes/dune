@@ -674,6 +674,7 @@ namespace Transports
         switch (msg->comm_mean)
         {
           case (IMC::TransmissionRequest::CMEAN_SATELLITE):
+            inf("Comm Manager sending via Iridium");
             m_router.sendViaSatellite(msg, m_args.iridium_plain_texts);
             break;
           case (IMC::TransmissionRequest::CMEAN_GSM):

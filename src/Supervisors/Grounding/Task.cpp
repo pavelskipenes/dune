@@ -255,7 +255,7 @@ namespace Supervisors
         //Create waypoints matrix: first row has vehicle current position.
         Math::Matrix waypoints(msg->maneuvers.size()+1, 2);
         waypoints(0,0) = m_current_lat;
-        waypoints(0,1) = m_current_lon; 
+        waypoints(0,1) = m_current_lon;
 
         unsigned i=0;
         // Iterate through plan maneuvers

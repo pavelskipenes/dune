@@ -35,7 +35,7 @@
 
 namespace Sensors
 {
-  namespace GPS
+  namespace HemisphereGPS
   {
     using DUNE_NAMESPACES;
 

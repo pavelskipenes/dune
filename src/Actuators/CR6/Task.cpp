@@ -67,6 +67,8 @@ namespace Actuators
       bool print_serial;
       //! User-defined Power Settings String.
       std::string user_pwrSettings;
+      // Critical battery voltage.
+      double critical_voltage;
     };
 
     //! Labels for states voltages
@@ -124,6 +126,10 @@ namespace Actuators
       int m_retries;
       //! Waiting for reboot.
       bool m_do_send;
+      //! Transmission request id
+      int m_reqid;
+      //! Send iridium
+      bool m_iridium;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
@@ -133,7 +139,9 @@ namespace Actuators
         rudder_max(45),
         rudder_cmd(0),
         pwr_sett_rec(false),
-        m_do_send(true)
+        m_do_send(true),
+        m_reqid(0),
+        m_iridium(false)
       {
         param("Serial Port - Device", m_args.uart_dev)
         .defaultValue("")
@@ -184,6 +192,14 @@ namespace Actuators
         .defaultValue("000000")
         .description("User-defined relays settings on L1");
 
+        param("Critical Voltage", m_args.critical_voltage)
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .scope(Tasks::Parameter::SCOPE_IDLE)
+        .defaultValue("11")
+        .minimumValue("9")
+        .maximumValue("14")
+        .description("Voltage value below which warning is sent via Iridium");
+
         bind<IMC::SetThrusterActuation>(this);
         bind<IMC::SetServoPosition>(this);
         bind<IMC::PowerSettings>(this);
@@ -232,7 +248,7 @@ namespace Actuators
         NMEAWriter stn("BBB01");
 
         // Active controller selector: Remote or Heading &/or Speed
-        if((!m_args.enable_thruster) && (!m_args.enable_heading)){        // User defines
+        if((!m_args.enable_thruster) && (!m_args.enable_heading)){        // User defined
           stn << String::str("%d,%d", m_args.rudder_USER, m_args.thruster_USER)
               << String::str("%d%d%d%d%d%d",m_pwr_settings.l2,m_pwr_settings.l3,m_pwr_settings.iridium,
                                             m_pwr_settings.modem,m_pwr_settings.pumps,m_pwr_settings.vhf);
@@ -357,6 +373,25 @@ namespace Actuators
         m_volt.value = std::atof(volt.c_str());
         //spew("Voltage:%f\n",m_volt.value);
         dispatch(m_volt);
+
+        if(!m_iridium && m_volt.value<m_args.critical_voltage)
+        {
+          std::string volt_ir = std::to_string(m_args.critical_voltage);
+          std::string volt_ir_tr = volt_ir.substr(0,5);
+          IMC::TransmissionRequest req;
+          req.setDestination(m_ctx.resolver.id());
+          req.data_mode = TransmissionRequest::DMODE_TEXT;
+          req.txt_data = "Battery voltage is below "+volt_ir_tr+".";
+          req.deadline = Clock::getSinceEpoch() + 60;
+          req.req_id = ++m_reqid;
+
+          req.comm_mean = TransmissionRequest::CMEAN_SATELLITE;
+          req.destination = "";
+          inf("Sending via Iridium: '%s'", req.txt_data.c_str());
+          dispatch(req);
+
+          m_iridium = true;
+        }
 
         std::string panels = proper.substr(commas[2]+1,5);
         m_panelspwr.value = std::atof(panels.c_str());

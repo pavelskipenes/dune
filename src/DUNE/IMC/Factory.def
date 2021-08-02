@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 18d3ce67b956c6c457605f6791618e28                            *
+// IMC XML MD5: b74b7b539df3601fb358d4b65474dd62                            *
 //***************************************************************************
 
 MESSAGE(1, EntityState)
@@ -370,6 +370,6 @@ MESSAGE(2009, IridiumReport)
 MESSAGE(2010, ScienceSensors)
 MESSAGE(2011, ScienceSensorsReply)
 MESSAGE(2012, PAR)
-MESSAGE(920, AisGpsFix)
 MESSAGE(2013, SingleCurrentCell)
+MESSAGE(2014, Gamma)
 #undef MESSAGE

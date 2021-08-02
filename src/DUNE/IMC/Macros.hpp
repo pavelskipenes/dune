@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 18d3ce67b956c6c457605f6791618e28                            *
+// IMC XML MD5: b74b7b539df3601fb358d4b65474dd62                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -712,9 +712,9 @@
 #define DUNE_IMC_SCIENCESENSORSREPLY 2011
 //! PAR identification number.
 #define DUNE_IMC_PAR 2012
-//! AisGpsFix identification number.
-#define DUNE_IMC_AISGPSFIX 920
 //! SingleCurrentCell identification number.
 #define DUNE_IMC_SINGLECURRENTCELL 2013
+//! Gamma identification number.
+#define DUNE_IMC_GAMMA 2014
 
 #endif

@@ -576,13 +576,13 @@ namespace Sensors
           {
             m_accel.time = timestamp;
             m_accel.x = adis_message.dvel_x * fps;
-            m_accel.y = adis_message.dvel_y * fps;
-            m_accel.z = adis_message.dvel_z * fps;
+            m_accel.y = -adis_message.dvel_y * fps; // According to mounting.
+            m_accel.z = -adis_message.dvel_z * fps;
 
             m_ang_vel.time = timestamp;
             m_ang_vel.x = adis_message.dang_x * fps;
-            m_ang_vel.y = adis_message.dang_y * fps;
-            m_ang_vel.z = adis_message.dang_z * fps;
+            m_ang_vel.y = -adis_message.dang_y * fps;
+            m_ang_vel.z = -adis_message.dang_z * fps;
 
             m_accel.setSourceEntity(m_sensor_entity[pkt->getID()]);
             m_ang_vel.setSourceEntity(m_sensor_entity[pkt->getID()]);

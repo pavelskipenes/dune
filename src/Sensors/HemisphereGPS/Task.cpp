@@ -43,7 +43,7 @@
 namespace Sensors
 {
   //! Device driver for NMEA capable %GPS devices.
-  namespace GPS
+  namespace HemisphereGPS
   {
     using DUNE_NAMESPACES;
 
@@ -638,6 +638,7 @@ namespace Sensors
         if (parts[0] == m_args.stn_order.back())
         {
           m_wdog.reset();
+          m_fix.setDestinationEntity(resolveEntity("NavManager"));
           dispatch(m_fix);
 
           if (m_has_euler)

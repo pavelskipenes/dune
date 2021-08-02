@@ -63,6 +63,8 @@ namespace Sensors
     static const unsigned c_rmc_fields = 12;
     //! Minimum number of fields of GGA sentence.
     static const unsigned c_gga_fields = 15;
+    //! Minimum number of fields of ZDA sentence.
+    static const unsigned c_zda_fields = 7;
 
     //! %Task arguments.
     struct Arguments
@@ -92,7 +94,7 @@ namespace Sensors
       //! Vehicle Type.
       std::map<int, std::string> m_systems;
       //! AIS Gps Fix.
-      IMC::AisGpsFix own_vessel_fix;
+      IMC::GpsFix own_vessel_fix;
       //! Input watchdog.
       Time::Counter<float> m_wdog;
 
@@ -139,6 +141,13 @@ namespace Sensors
         {
           throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
         }
+      }
+
+      //! Reserve entity identifiers.
+      void
+      onEntityReservation(void)
+      {
+        //own_vessel_fix.setSourceEntity(reserveEntity("AIS"));
       }
 
       void
@@ -267,7 +276,7 @@ namespace Sensors
 
             //trace("AIS24: %f %f %f %f", msg.dim_a, msg.dim_b, msg.dim_c, msg.dim_d);
           }
-        } else if(init.compare("$GPRMC")==0 || init.compare("$GPGGA")==0)
+        } else if(init.compare("$GPRMC")==0 || init.compare("$GPGGA")==0 || init.compare("$GPZDA")==0)
         {
           processSentence(nmea_msg);
           //trace("AIS GPS %s", nmea_msg.c_str());
@@ -394,6 +403,7 @@ namespace Sensors
         {
           clearMessages();
           own_vessel_fix.setTimeStamp();
+          //own_vessel_fix.setDestinationEntity(resolveEntity("NavManager"));
         }
 
         if (hasNMEAMessageCode(parts[0], "RMC"))
@@ -402,11 +412,16 @@ namespace Sensors
         } else if (hasNMEAMessageCode(parts[0], "GGA"))
         {
           interpretGGA(parts);
+        } else if (hasNMEAMessageCode(parts[0], "ZDA"))
+        {
+          interpretZDA(parts);
         }
 
         if (parts[0] == m_args.stn_order.back())
         {
           m_wdog.reset();
+          own_vessel_fix.setDestination(getSystemId());
+          own_vessel_fix.setDestinationEntity(resolveEntity("NavManager"));
           dispatch(own_vessel_fix);
         }
       }
@@ -436,27 +451,27 @@ namespace Sensors
             // Convert coordinates to radians.
             own_vessel_fix.lat = Angles::radians(own_vessel_fix.lat);
             own_vessel_fix.lon = Angles::radians(own_vessel_fix.lon);
-            own_vessel_fix.validity |= IMC::AisGpsFix::GFV_VALID_POS;
+            own_vessel_fix.validity |= IMC::GpsFix::GFV_VALID_POS;
           } else
           {
-            own_vessel_fix.validity &= ~IMC::AisGpsFix::GFV_VALID_POS;
+            own_vessel_fix.validity &= ~IMC::GpsFix::GFV_VALID_POS;
           }
 
           if (readNumber(parts[8], own_vessel_fix.cog))
           {
             own_vessel_fix.cog = Angles::normalizeRadian(Angles::radians(own_vessel_fix.cog));
-            own_vessel_fix.validity |= IMC::AisGpsFix::GFV_VALID_COG;
+            own_vessel_fix.validity |= IMC::GpsFix::GFV_VALID_COG;
           }
 
           if (readNumber(parts[7], own_vessel_fix.sog))
           {
             own_vessel_fix.sog *= 1000.0f / 3600.0f;
-            own_vessel_fix.validity |= IMC::AisGpsFix::GFV_VALID_SOG;
+            own_vessel_fix.validity |= IMC::GpsFix::GFV_VALID_SOG;
           }
         } else
         {
           war(DTR("AIS GPS fix not valid!"));
-          own_vessel_fix.validity &= ~IMC::AisGpsFix::GFV_VALID_POS;
+          own_vessel_fix.validity &= ~IMC::GpsFix::GFV_VALID_POS;
         }
       }
 
@@ -479,13 +494,13 @@ namespace Sensors
         readDecimal(parts[6], quality);
         if (quality == 1)
         {
-          own_vessel_fix.type = IMC::AisGpsFix::GFT_STANDALONE;
-          own_vessel_fix.validity |= IMC::AisGpsFix::GFV_VALID_POS;
+          own_vessel_fix.type = IMC::GpsFix::GFT_STANDALONE;
+          own_vessel_fix.validity |= IMC::GpsFix::GFV_VALID_POS;
         }
         else if (quality == 2)
         {
-          own_vessel_fix.type = IMC::AisGpsFix::GFT_DIFFERENTIAL;
-          own_vessel_fix.validity |= IMC::AisGpsFix::GFV_VALID_POS;
+          own_vessel_fix.type = IMC::GpsFix::GFT_DIFFERENTIAL;
+          own_vessel_fix.validity |= IMC::GpsFix::GFV_VALID_POS;
         }
 
         if (readLatitude(parts[2], parts[3], own_vessel_fix.lat)
@@ -501,7 +516,7 @@ namespace Sensors
           // Convert coordinates to radians.
           own_vessel_fix.lat = Angles::radians(own_vessel_fix.lat);
           own_vessel_fix.lon = Angles::radians(own_vessel_fix.lon);
-          own_vessel_fix.validity |= IMC::AisGpsFix::GFV_VALID_POS;
+          own_vessel_fix.validity |= IMC::GpsFix::GFV_VALID_POS;
         }
         else
         {
@@ -509,7 +524,31 @@ namespace Sensors
         }
 
         if (readNumber(parts[8], own_vessel_fix.hdop))
-          own_vessel_fix.validity |= IMC::AisGpsFix::GFV_VALID_HDOP;
+          own_vessel_fix.validity |= IMC::GpsFix::GFV_VALID_HDOP;
+      }
+
+      //! Interpret ZDA sentence (UTC date and time).
+      //! @param[in] parts vector of strings from sentence.
+      void
+      interpretZDA(const std::vector<std::string>& parts)
+      {
+        if (parts.size() < c_zda_fields)
+        {
+          war(DTR("invalid ZDA sentence"));
+          return;
+        }
+
+        // Read time.
+        if (readTime(parts[1], own_vessel_fix.utc_time))
+          own_vessel_fix.validity |= IMC::GpsFix::GFV_VALID_TIME;
+
+        // Read date.
+        if (readDecimal(parts[2], own_vessel_fix.utc_day)
+            && readDecimal(parts[3], own_vessel_fix.utc_month)
+            && readDecimal(parts[4], own_vessel_fix.utc_year))
+        {
+          own_vessel_fix.validity |= IMC::GpsFix::GFV_VALID_DATE;
+        }
       }
 
       //! Read latitude from string.

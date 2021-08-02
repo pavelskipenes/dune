@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 18d3ce67b956c6c457605f6791618e28                            *
+// IMC XML MD5: b74b7b539df3601fb358d4b65474dd62                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -27356,135 +27356,6 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
-    //! AIS GPS.
-    class AisGpsFix: public Message
-    {
-    public:
-      //! Type.
-      enum TypeEnum
-      {
-        //! Stand Alone.
-        GFT_STANDALONE = 0x00,
-        //! Differential.
-        GFT_DIFFERENTIAL = 0x01,
-        //! Dead Reckoning.
-        GFT_DEAD_RECKONING = 0x02,
-        //! Manual Input.
-        GFT_MANUAL_INPUT = 0x03,
-        //! Simulation.
-        GFT_SIMULATION = 0x04
-      };
-
-      //! Validity.
-      enum ValidityBits
-      {
-        //! Valid Date.
-        GFV_VALID_DATE = 0x0001,
-        //! Valid Time.
-        GFV_VALID_TIME = 0x0002,
-        //! Valid Position.
-        GFV_VALID_POS = 0x0004,
-        //! Valid Course Over Ground.
-        GFV_VALID_COG = 0x0008,
-        //! Valid Speed Over Ground.
-        GFV_VALID_SOG = 0x0010,
-        //! Valid Horizontal Accuracy Estimate.
-        GFV_VALID_HACC = 0x0020,
-        //! Valid Vertical Accuracy Estimate.
-        GFV_VALID_VACC = 0x0040,
-        //! Valid Horizontal Dilution of Precision.
-        GFV_VALID_HDOP = 0x0080,
-        //! Valid Vertical Dilution of Precision.
-        GFV_VALID_VDOP = 0x0100
-      };
-
-      //! Validity.
-      uint16_t validity;
-      //! Type.
-      uint8_t type;
-      //! UTC Year.
-      uint16_t utc_year;
-      //! UTC Month.
-      uint8_t utc_month;
-      //! UTC Day.
-      uint8_t utc_day;
-      //! UTC Time of Fix.
-      fp32_t utc_time;
-      //! Latitude WGS-84.
-      fp64_t lat;
-      //! Longitude WGS-84.
-      fp64_t lon;
-      //! Height above WGS-84 ellipsoid.
-      fp32_t height;
-      //! Number of Satellites.
-      uint8_t satellites;
-      //! Course Over Ground.
-      fp32_t cog;
-      //! Speed Over Ground.
-      fp32_t sog;
-      //! Horizontal Dilution of Precision.
-      fp32_t hdop;
-      //! Vertical Dilution of Precision.
-      fp32_t vdop;
-      //! Horizontal Accuracy Estimate.
-      fp32_t hacc;
-      //! Vertical Accuracy Estimate.
-      fp32_t vacc;
-
-      static uint16_t
-      getIdStatic(void)
-      {
-        return 920;
-      }
-
-      AisGpsFix(void);
-
-      AisGpsFix*
-      clone(void) const
-      {
-        return new AisGpsFix(*this);
-      }
-
-      void
-      clear(void);
-
-      bool
-      fieldsEqual(const Message& msg__) const;
-
-      int
-      validate(void) const;
-
-      uint8_t*
-      serializeFields(uint8_t* bfr__) const;
-
-      uint16_t
-      deserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      getId(void) const
-      {
-        return AisGpsFix::getIdStatic();
-      }
-
-      const char*
-      getName(void) const
-      {
-        return "AisGpsFix";
-      }
-
-      unsigned
-      getFixedSerializationSize(void) const
-      {
-        return 56;
-      }
-
-      void
-      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
-    };
-
     //! Single Current Cell.
     class SingleCurrentCell: public Message
     {
@@ -27555,6 +27426,83 @@ namespace DUNE
       {
         return IMC::getSerializationSize(depth) + IMC::getSerializationSize(vel) + IMC::getSerializationSize(dir);
       }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Gamma Gain Scheduling.
+    class Gamma: public Message
+    {
+    public:
+      //! Latitude WGS-84.
+      fp64_t lat;
+      //! Longitude WGS-84.
+      fp64_t lon;
+      //! Ground Speed.
+      fp32_t sog;
+      //! Current Longitudinal Speed.
+      fp32_t uc;
+      //! Cell Depth.
+      fp32_t depth;
+      //! Value.
+      fp32_t value;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 2014;
+      }
+
+      Gamma(void);
+
+      Gamma*
+      clone(void) const
+      {
+        return new Gamma(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return Gamma::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "Gamma";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 32;
+      }
+
+      fp64_t
+      getValueFP(void) const;
+
+      void
+      setValueFP(fp64_t val);
 
       void
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;

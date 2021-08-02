@@ -86,12 +86,14 @@ namespace Autonomy
       //! L3 entities.
       int m_opt_ent,m_ctd_ent,m_adcp_ent,m_eco_ent,m_par_ent,m_tbl_ent,m_opt_temp_ent,m_ctd_temp_ent;
       //! L3 data timestamp vectors.
-      std::string m_opt_tmst,m_ctd_tmst,m_adcp_tmst,m_eco_tmst,m_eco_tmst_ISO,m_tbl_tmst,m_gpsfix_tmst,m_par_tmst,m_par_tmst_ISO;
+      std::string m_opt_tmst,m_ctd_tmst,m_adcp_tmst,m_eco_tmst,m_eco_tmst_ISO,m_tbl_tmst,m_gpsfix_tmst,m_par_tmst,m_par_tmst_ISO,m_adcp_tmst_ISO;
+      //! Last received info.
+      std::string m_par_reduced, m_dom_reduced, m_turb_reduced, m_chl_reduced, m_temp_opt_reduced, m_airsat_reduced, m_dox_reduced, m_temp_ctd_reduced, m_cond_reduced, m_sal_reduced, m_ss_reduced, m_depth_reduced, m_pres_reduced, depth_found_r, vel_found_r, dir_found_r;
       //! Iridium-ready L3 science messages.
       IMC::Temperature m_temp_l3_ctd,m_temp_l3_opt,m_temp_l2;
       IMC::AirSaturation m_airsat;
       IMC::Chlorophyll m_chl;
-      IMC::CurrentProfile m_cp;
+      IMC::SingleCurrentCell m_cp;
       IMC::Depth m_depth;
       IMC::DissolvedOrganicMatter m_dom;
       IMC::DissolvedOxygen m_dox;
@@ -152,7 +154,7 @@ namespace Autonomy
         bind<IMC::Temperature>(this);
         bind<IMC::AirSaturation>(this);
         bind<IMC::Chlorophyll>(this);
-        bind<IMC::CurrentProfile>(this);
+        bind<IMC::SingleCurrentCell>(this);
         bind<IMC::Depth>(this);
         bind<IMC::DissolvedOrganicMatter>(this);
         bind<IMC::DissolvedOxygen>(this);
@@ -303,13 +305,16 @@ namespace Autonomy
       }
 
       void
-      consume(const IMC::CurrentProfile * msg)
+      consume(const IMC::SingleCurrentCell * msg)
       {
         if(msg->getSource() != getSystemId())
         {
-          m_adcp_tmst = Time::Format::getTimeDateISO(msg->getTimeStamp());
+          m_adcp_tmst_ISO = Time::Format::getTimeDateISO(msg->getTimeStamp());
           // Received from L3.
+          m_cp = *msg;
 
+          //debug("IMC::SingleCurrentCell message arrived in L2!");
+          //debug("ADCP timestamp %s",m_adcp_tmst_ISO.c_str());
         }
       }
 
@@ -1185,51 +1190,58 @@ namespace Autonomy
         {
           ss << "L3 is off!";
           reply(origin,ss.str());
-        } else if(!m_l3_el)
+          return;
+        }
+        if(!m_l3_el)
         {
           ss << "DUNE L3 is damaged!";
           reply(origin,ss.str());
-        } else
+          return;
+        }
+        
+        // L3 is ON and ready.
+        if(args.compare("report") == 0)
         {
-          if(args.compare("report") == 0)
+          if(m_sensors_status.ctd == 0 || (m_sensors_status.ctd == 1 && m_sensors_status.ctd_dur != 0.0))
           {
-            if(m_sensors_status.ctd == 0 || (m_sensors_status.ctd == 1 && m_sensors_status.ctd_dur != 0.0))
-            {
-              std::string m_lat_str = std::to_string(m_lat);
-              std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
-              std::string m_lon_str = std::to_string(m_lon);
-              std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
-              
-              std::string m_temp_ctd_s = std::to_string(m_temp_l3_ctd.value);
-              std::string m_temp_ctd_reduced = m_temp_ctd_s.substr(0,m_temp_ctd_s.size()-4);
-              std::string m_cond_s = std::to_string(m_cond.value);
-              std::string m_cond_reduced = m_cond_s.substr(0,m_cond_s.size()-4);
-              std::string m_sal_s = std::to_string(m_sal.value);
-              std::string m_sal_reduced = m_sal_s.substr(0,m_sal_s.size()-4);
-              std::string m_ss_s = std::to_string(m_ss.value);
-              std::string m_ss_reduced = m_ss_s.substr(0,m_ss_s.size()-4);
-              std::string m_depth_s = std::to_string(m_depth.value);
-              std::string m_depth_reduced = m_depth_s.substr(0,m_depth_s.size()-4);
-              std::string m_pres_s = std::to_string(m_pres.value);
-              std::string m_pres_reduced = m_pres_s.substr(0,m_pres_s.size()-7);
+            std::string m_lat_str = std::to_string(m_lat);
+            std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+            std::string m_lon_str = std::to_string(m_lon);
+            std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+            
+            std::string m_temp_ctd_s = std::to_string(m_temp_l3_ctd.value);
+            m_temp_ctd_reduced = m_temp_ctd_s.substr(0,m_temp_ctd_s.size()-4);
+            std::string m_cond_s = std::to_string(m_cond.value);
+            m_cond_reduced = m_cond_s.substr(0,m_cond_s.size()-4);
+            std::string m_sal_s = std::to_string(m_sal.value);
+            m_sal_reduced = m_sal_s.substr(0,m_sal_s.size()-4);
+            std::string m_ss_s = std::to_string(m_ss.value);
+            m_ss_reduced = m_ss_s.substr(0,m_ss_s.size()-4);
+            std::string m_depth_s = std::to_string(m_depth.value);
+            m_depth_reduced = m_depth_s.substr(0,m_depth_s.size()-4);
+            std::string m_pres_s = std::to_string(m_pres.value);
+            m_pres_reduced = m_pres_s.substr(0,m_pres_s.size()-7);
 
-              if(m_sensors_status.ctd == 0)
-                ss << "(CTD) ";
-              else if(m_sensors_status.ctd == 1 && m_sensors_status.ctd_dur != 0.0)
-                ss << "(CTD-P) ";
+            if(m_sensors_status.ctd == 0)
+              ss << "(CTD) ";
+            else if(m_sensors_status.ctd == 1 && m_sensors_status.ctd_dur != 0.0)
+              ss << "(CTD-P) ";
 
-              ss << m_ctd_tmst << "/" << m_lat_reduced << " " << m_lon_reduced << "/S:" << m_sal_reduced << "/C:" << m_cond_reduced << "/T:" << m_temp_ctd_reduced << "/SS:" << m_ss_reduced << "/D:" << m_depth_reduced << "/P:" << m_pres_reduced;
-              reply(origin,ss.str());
-            } else
-            {
-              ss << "CTD is not sampling!";
-              reply(origin,ss.str());
-            }
+            ss << m_ctd_tmst << "/" << m_lat_reduced << " " << m_lon_reduced << "/S:" << m_sal_reduced << "/C:" << m_cond_reduced << "/T:" << m_temp_ctd_reduced << "/SS:" << m_ss_reduced << "/D:" << m_depth_reduced << "/P:" << m_pres_reduced;
+            reply(origin,ss.str());
           } else
           {
-            ss << "Be more specific!";
+            if(!m_ctd_tmst.empty())
+              ss << "(CTD) last " << m_ctd_tmst << "/S:" << m_sal_reduced << "/C:" << m_cond_reduced << "/T:" << m_temp_ctd_reduced << "/SS:" << m_ss_reduced << "/D:" << m_depth_reduced << "/P:" << m_pres_reduced;
+            else
+              ss << "CTD never sampled!";
+
             reply(origin,ss.str());
           }
+        } else
+        {
+          ss << "Be more specific!";
+          reply(origin,ss.str());
         }
       }
 
@@ -1242,45 +1254,52 @@ namespace Autonomy
         {
           ss << "L3 is off!";
           reply(origin,ss.str());
-        } else if(!m_l3_el)
+          return;
+        }
+        if(!m_l3_el)
         {
           ss << "DUNE L3 is damaged!";
           reply(origin,ss.str());
-        } else
+          return;
+        }
+
+        // L3 is ON and ready.
+        if(args.compare("report") == 0)
         {
-          if(args.compare("report") == 0)
+          if(m_sensors_status.opt == 0 || (m_sensors_status.opt == 1 && m_sensors_status.opt_dur != 0.0))
           {
-            if(m_sensors_status.opt == 0 || (m_sensors_status.opt == 1 && m_sensors_status.opt_dur != 0.0))
-            {
-              std::string m_lat_str = std::to_string(m_lat);
-              std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
-              std::string m_lon_str = std::to_string(m_lon);
-              std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
-              
-              std::string m_temp_opt_s = std::to_string(m_temp_l3_opt.value);
-              std::string m_temp_opt_reduced = m_temp_opt_s.substr(0,m_temp_opt_s.size()-4);
-              std::string m_airsat_s = std::to_string(m_airsat.value);
-              std::string m_airsat_reduced = m_airsat_s.substr(0,m_airsat_s.size()-4);
-              std::string m_dox_s = std::to_string(m_dox.value);
-              std::string m_dox_reduced = m_dox_s.substr(0,m_dox_s.size()-4);
+            std::string m_lat_str = std::to_string(m_lat);
+            std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+            std::string m_lon_str = std::to_string(m_lon);
+            std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+            
+            std::string m_temp_opt_s = std::to_string(m_temp_l3_opt.value);
+            m_temp_opt_reduced = m_temp_opt_s.substr(0,m_temp_opt_s.size()-4);
+            std::string m_airsat_s = std::to_string(m_airsat.value);
+            m_airsat_reduced = m_airsat_s.substr(0,m_airsat_s.size()-4);
+            std::string m_dox_s = std::to_string(m_dox.value);
+            m_dox_reduced = m_dox_s.substr(0,m_dox_s.size()-4);
 
-              if(m_sensors_status.opt == 0)
-                ss << "(OPT) ";
-              else if(m_sensors_status.opt == 1 && m_sensors_status.opt_dur != 0.0)
-                ss << "(OPT-P) ";
+            if(m_sensors_status.opt == 0)
+              ss << "(OPT) ";
+            else if(m_sensors_status.opt == 1 && m_sensors_status.opt_dur != 0.0)
+              ss << "(OPT-P) ";
 
-              ss << m_opt_tmst << "/" << m_lat_reduced << " " << m_lon_reduced << "/T:" << m_temp_opt_reduced << "/AS:" << m_airsat_reduced << "/DOX:" << m_dox_reduced;
-              reply(origin,ss.str());
-            } else
-            {
-              ss << "Optode is not sampling!";
-              reply(origin,ss.str());
-            }
+            ss << m_opt_tmst << "/" << m_lat_reduced << " " << m_lon_reduced << "/T:" << m_temp_opt_reduced << "/AS:" << m_airsat_reduced << "/DOX:" << m_dox_reduced;
+            reply(origin,ss.str());
           } else
           {
-            ss << "Be more specific!";
+            if(!m_opt_tmst.empty())
+              ss << "(OPT) last " << m_opt_tmst << "/T:" << m_temp_opt_reduced << "/AS:" << m_airsat_reduced << "/DOX:" << m_dox_reduced;
+            else
+              ss << "Optode never sampled!";
+
             reply(origin,ss.str());
           }
+        } else
+        {
+          ss << "Be more specific!";
+          reply(origin,ss.str());
         }
         
       }
@@ -1294,44 +1313,51 @@ namespace Autonomy
         {
           ss << "L3 is off!";
           reply(origin,ss.str());
-        } else if(!m_l3_el)
+          return;
+        }
+        if(!m_l3_el)
         {
           ss << "DUNE L3 is damaged!";
           reply(origin,ss.str());
-        } else
+          return;
+        }
+
+        // L3 is ON and ready.
+        if(args.compare("report") == 0)
         {
-          if(args.compare("report") == 0)
+          if((m_sensors_status.eco == 0) || (m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0.0))
           {
-            if((m_sensors_status.eco == 0) || (m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0.0))
-            {
-              std::string m_lat_str = std::to_string(m_lat);
-              std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
-              std::string m_lon_str = std::to_string(m_lon);
-              std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
-              std::string m_dom_s = std::to_string(m_dom.value);
-              std::string m_dom_reduced = m_dom_s.substr(0,m_dom_s.size()-4);
-              std::string m_turb_s = std::to_string(m_turb.value);
-              std::string m_turb_reduced = m_turb_s.substr(0,m_turb_s.size()-2);
-              std::string m_chl_s = std::to_string(m_chl.value);
-              std::string m_chl_reduced = m_chl_s.substr(0,m_chl_s.size()-2);
+            std::string m_lat_str = std::to_string(m_lat);
+            std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+            std::string m_lon_str = std::to_string(m_lon);
+            std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+            std::string m_dom_s = std::to_string(m_dom.value);
+            m_dom_reduced = m_dom_s.substr(0,m_dom_s.size()-4);
+            std::string m_turb_s = std::to_string(m_turb.value);
+            m_turb_reduced = m_turb_s.substr(0,m_turb_s.size()-2);
+            std::string m_chl_s = std::to_string(m_chl.value);
+            m_chl_reduced = m_chl_s.substr(0,m_chl_s.size()-2);
 
-              if(m_sensors_status.eco == 0)
-                ss << "(ECO) ";
-              else if(m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0.0)
-                ss << "(ECO-P) ";
+            if(m_sensors_status.eco == 0)
+              ss << "(ECO) ";
+            else if(m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0.0)
+              ss << "(ECO-P) ";
 
-              ss << m_eco_tmst_ISO << "/" << m_lat_reduced << " " << m_lon_reduced << "/FDOM:" << m_dom_reduced << "/TU:" << m_turb_reduced << "/CHLA:" << m_chl_reduced;
-              reply(origin,ss.str());
-            } else
-            {
-              ss << "EcoPuck is not sampling!";
-              reply(origin,ss.str());
-            }
+            ss << m_eco_tmst_ISO << "/" << m_lat_reduced << " " << m_lon_reduced << "/FDOM:" << m_dom_reduced << "/TU:" << m_turb_reduced << "/CHLA:" << m_chl_reduced;
+            reply(origin,ss.str());
           } else
           {
-            ss << "Be more specific!";
+            if(!m_eco_tmst_ISO.empty())
+              ss << "(ECO) last " << m_eco_tmst_ISO << "/FDOM:" << m_dom_reduced << "/TU:" << m_turb_reduced << "/CHLA:" << m_chl_reduced;
+            else
+              ss << "EcoPuck never sampled!";
+
             reply(origin,ss.str());
           }
+        } else
+        {
+          ss << "Be more specific!";
+          reply(origin,ss.str());
         }
       }
 
@@ -1344,49 +1370,52 @@ namespace Autonomy
         {
           ss << "L3 is off!";
           reply(origin,ss.str());
-        } else if(!m_l3_el)
+          return;
+        }
+        if(!m_l3_el)
         {
           ss << "DUNE L3 is damaged!";
           reply(origin,ss.str());
-        } else
+          return;
+        }
+        
+        // L3 is ON and ready.
+        if(args.compare("report") == 0)
         {
-          if(args.compare("report") == 0)
+          if(((m_sensors_status.par == 0) || (m_sensors_status.par == 1 && m_sensors_status.par_dur != 0.0)) && ((m_sensors_status.eco == 0) || (m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0.0)))
           {
-            if(((m_sensors_status.par == 0) || (m_sensors_status.par == 1 && m_sensors_status.par_dur != 0.0)) && ((m_sensors_status.eco == 0) || (m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0.0)))
-            {
-              std::string m_lat_str = std::to_string(m_lat);
-              std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
-              std::string m_lon_str = std::to_string(m_lon);
-              std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
-              std::string m_dom_s = std::to_string(m_dom.value);
-              std::string m_dom_reduced = m_dom_s.substr(0,m_dom_s.size()-4);
-              std::string m_turb_s = std::to_string(m_turb.value);
-              std::string m_turb_reduced = m_turb_s.substr(0,m_turb_s.size()-4);
-              std::string m_chl_s = std::to_string(m_chl.value);
-              std::string m_chl_reduced = m_chl_s.substr(0,m_chl_s.size()-4);
-              std::string m_par_s = std::to_string(m_par.value);
-              std::string m_par_reduced = m_par_s.substr(0,m_par_s.size()-4);
+            std::string m_lat_str = std::to_string(m_lat);
+            std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+            std::string m_lon_str = std::to_string(m_lon);
+            std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+            std::string m_dom_s = std::to_string(m_dom.value);
+            m_dom_reduced = m_dom_s.substr(0,m_dom_s.size()-4);
+            std::string m_turb_s = std::to_string(m_turb.value);
+            m_turb_reduced = m_turb_s.substr(0,m_turb_s.size()-4);
+            std::string m_chl_s = std::to_string(m_chl.value);
+            m_chl_reduced = m_chl_s.substr(0,m_chl_s.size()-4);
+            std::string m_par_s = std::to_string(m_par.value);
+            m_par_reduced = m_par_s.substr(0,m_par_s.size()-4);
 
-              ss << "(RAD) " << m_lat_reduced << " " << m_lon_reduced << "/" << m_par_tmst_ISO << "/PAR:" << m_par_reduced << "/" << m_eco_tmst_ISO << "/FDOM:" << m_dom_reduced << "/TU:" << m_turb_reduced << "/CHLA:" << m_chl_reduced;
-              reply(origin,ss.str());
-            } else if(((m_sensors_status.par == 0) || (m_sensors_status.par == 1 && m_sensors_status.par_dur != 0.0)) && ((m_sensors_status.eco == 1 && m_sensors_status.eco_dur == 0.0)))
-            {
-              ss << "EcoPuck is off";
-              reply(origin,ss.str());
-            } else if(((m_sensors_status.eco == 0) || (m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0.0)) && ((m_sensors_status.par == 1 && m_sensors_status.par_dur == 0.0)))
-            {
-              ss << "EcoPAR is off";
-              reply(origin,ss.str());
-            } else if(((m_sensors_status.eco == 1 && m_sensors_status.eco_dur == 0.0)) && ((m_sensors_status.par == 1 && m_sensors_status.par_dur == 0.0)))
-            {
-              ss << "EcoPuck and EcoPAR are off";
-              reply(origin,ss.str());
-            }
-          } else
+            ss << "(RAD) " << m_lat_reduced << " " << m_lon_reduced << "/" << m_par_tmst_ISO << "/PAR:" << m_par_reduced << "/" << m_eco_tmst_ISO << "/FDOM:" << m_dom_reduced << "/TU:" << m_turb_reduced << "/CHLA:" << m_chl_reduced;
+            reply(origin,ss.str());
+          } else if(((m_sensors_status.par == 0) || (m_sensors_status.par == 1 && m_sensors_status.par_dur != 0.0)) && ((m_sensors_status.eco == 1 && m_sensors_status.eco_dur == 0.0)))
           {
-            ss << "Be more specific!";
+            ss << "EcoPuck is off";
+            reply(origin,ss.str());
+          } else if(((m_sensors_status.eco == 0) || (m_sensors_status.eco == 1 && m_sensors_status.eco_dur != 0.0)) && ((m_sensors_status.par == 1 && m_sensors_status.par_dur == 0.0)))
+          {
+            ss << "EcoPAR is off";
+            reply(origin,ss.str());
+          } else if(((m_sensors_status.eco == 1 && m_sensors_status.eco_dur == 0.0)) && ((m_sensors_status.par == 1 && m_sensors_status.par_dur == 0.0)))
+          {
+            ss << "EcoPuck and EcoPAR are off";
             reply(origin,ss.str());
           }
+        } else
+        {
+          ss << "Be more specific!";
+          reply(origin,ss.str());
         }
       }
 
@@ -1399,40 +1428,47 @@ namespace Autonomy
         {
           ss << "L3 is off!";
           reply(origin,ss.str());
-        } else if(!m_l3_el)
+          return;
+        }
+        if(!m_l3_el)
         {
           ss << "DUNE L3 is damaged!";
           reply(origin,ss.str());
-        } else
+          return;
+        }
+        
+        // L3 is ON and ready.
+        if(args.compare("report") == 0)
         {
-          if(args.compare("report") == 0)
+          if((m_sensors_status.par == 0) || (m_sensors_status.par == 1 && m_sensors_status.par_dur != 0.0))
           {
-            if((m_sensors_status.par == 0) || (m_sensors_status.par == 1 && m_sensors_status.par_dur != 0.0))
-            {
-              std::string m_lat_str = std::to_string(m_lat);
-              std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
-              std::string m_lon_str = std::to_string(m_lon);
-              std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
-              std::string m_par_s = std::to_string(m_par.value);
-              std::string m_par_reduced = m_par_s.substr(0,m_par_s.size()-4);
-              
-              if(m_sensors_status.par == 0)
-                ss << "(PAR) ";
-              else if(m_sensors_status.par == 1 && m_sensors_status.par_dur != 0.0)
-                ss << "(PAR-P) ";
+            std::string m_lat_str = std::to_string(m_lat);
+            std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+            std::string m_lon_str = std::to_string(m_lon);
+            std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+            std::string m_par_s = std::to_string(m_par.value);
+            m_par_reduced = m_par_s.substr(0,m_par_s.size()-4);
+            
+            if(m_sensors_status.par == 0)
+              ss << "(PAR) ";
+            else if(m_sensors_status.par == 1 && m_sensors_status.par_dur != 0.0)
+              ss << "(PAR-P) ";
 
-              ss << m_par_tmst_ISO << "/" << m_lat_reduced << " " << m_lon_reduced << "/PAR:" << m_par_reduced;
-              reply(origin,ss.str());
-            } else
-            {
-              ss << "EcoPAR is not sampling!";
-              reply(origin,ss.str());
-            }
+            ss << m_par_tmst_ISO << "/" << m_lat_reduced << " " << m_lon_reduced << "/PAR:" << m_par_reduced;
+            reply(origin,ss.str());
           } else
           {
-            ss << "Be more specific!";
+            if(!m_par_tmst_ISO.empty())
+              ss << "(PAR) last " << m_par_tmst_ISO << "/PAR:" << m_par_reduced;
+            else
+              ss << "PAR never sampled!";
+
             reply(origin,ss.str());
           }
+        } else
+        {
+          ss << "Be more specific!";
+          reply(origin,ss.str());
         }
       }
 
@@ -1445,46 +1481,49 @@ namespace Autonomy
         {
           ss << "L3 is off!";
           reply(origin,ss.str());
-        } else if(!m_l3_el)
+          return;
+        }
+        if(!m_l3_el)
         {
           ss << "DUNE L3 is damaged!";
           reply(origin,ss.str());
-        } else
+          return;
+        }
+        
+        // L3 is ON and ready.
+        if(args.compare("report") == 0)
         {
-          if(args.compare("report") == 0)
+          if(m_sensors_status.tbl == 0 || (m_sensors_status.tbl == 1 && m_sensors_status.tbl_dur != 0.0))
           {
-            if(m_sensors_status.tbl == 0 || (m_sensors_status.tbl == 1 && m_sensors_status.tbl_dur != 0.0))
-            {
-              std::string m_lat_str = std::to_string(m_lat);
-              std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
-              std::string m_lon_str = std::to_string(m_lon);
-              std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
-              
-              std::string m_sn_s = std::to_string(m_tblive.serial_no);
-              std::string m_temp_tbl_s = std::to_string(m_tblive.temperature);
-              std::string m_temp_tbl_reduced = m_temp_tbl_s.substr(0,m_temp_tbl_s.size()-4);
-              std::string m_anl_s = std::to_string(m_tblive.avg_noise_level);
-              std::string m_pnl_s = std::to_string(m_tblive.peak_noise_level);
-              std::string m_rlf_s = std::to_string(m_tblive.recv_listen_freq);
-              std::string m_rma_s = std::to_string(m_tblive.recv_mem_addr);
+            std::string m_lat_str = std::to_string(m_lat);
+            std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+            std::string m_lon_str = std::to_string(m_lon);
+            std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+            
+            std::string m_sn_s = std::to_string(m_tblive.serial_no);
+            std::string m_temp_tbl_s = std::to_string(m_tblive.temperature);
+            std::string m_temp_tbl_reduced = m_temp_tbl_s.substr(0,m_temp_tbl_s.size()-4);
+            std::string m_anl_s = std::to_string(m_tblive.avg_noise_level);
+            std::string m_pnl_s = std::to_string(m_tblive.peak_noise_level);
+            std::string m_rlf_s = std::to_string(m_tblive.recv_listen_freq);
+            std::string m_rma_s = std::to_string(m_tblive.recv_mem_addr);
 
-              if(m_sensors_status.tbl == 0)
-                ss << "(TBL) ";
-              else if(m_sensors_status.tbl == 1 && m_sensors_status.tbl_dur != 0.0)
-                ss << "(TBL-P) ";
+            if(m_sensors_status.tbl == 0)
+              ss << "(TBL) ";
+            else if(m_sensors_status.tbl == 1 && m_sensors_status.tbl_dur != 0.0)
+              ss << "(TBL-P) ";
 
-              ss << m_tbl_tmst << "/" << m_lat_reduced << " " << m_lon_reduced << "/SN:" << m_sn_s << "/T:" << m_temp_tbl_reduced << "/ANL:" << m_anl_s << "/PNL:" << m_pnl_s << "/RLF:" << m_rlf_s << "/RMA:" << m_rma_s;
-              reply(origin,ss.str());
-            } else
-            {
-              ss << "TBLive is not sampling!";
-              reply(origin,ss.str());
-            }
+            ss << m_tbl_tmst << "/" << m_lat_reduced << " " << m_lon_reduced << "/SN:" << m_sn_s << "/T:" << m_temp_tbl_reduced << "/ANL:" << m_anl_s << "/PNL:" << m_pnl_s << "/RLF:" << m_rlf_s << "/RMA:" << m_rma_s;
+            reply(origin,ss.str());
           } else
           {
-            ss << "Be more specific!";
+            ss << "TBLive is not sampling!";
             reply(origin,ss.str());
           }
+        } else
+        {
+          ss << "Be more specific!";
+          reply(origin,ss.str());
         }
       }
 
@@ -1492,27 +1531,133 @@ namespace Autonomy
       void
       handleADCPReportCommand(const std::string& origin, const std::string& args)
       {
-        // TO BE DEFINED.
-
-        /*
+        std::stringstream ss;
         if(m_pwr_settings.l3 == 1)
         {
           ss << "L3 is off!";
           reply(origin,ss.str());
+          return;
+        }
+        if(!m_l3_el)
+        {
+          ss << "DUNE L3 is damaged!";
+          reply(origin,ss.str());
+          return;
+        }
+        // If m_cp does not exist, the sensor was never turned on since last dune restart.
+        if(m_adcp_tmst_ISO.empty())
+        {
+          ss << "ADCP never sampled!";
+          reply(origin,ss.str());
+          return;
+        }
+
+        debug("Received ADCP request");
+
+        double depth_wanted = atof(args.c_str());
+        debug("DEPTH WANTED %f",depth_wanted);
+        
+        std::string m_lat_str = std::to_string(m_lat);
+        std::string m_lat_reduced = m_lat_str.substr(0,m_lat_str.size()-2);
+        std::string m_lon_str = std::to_string(m_lon);
+        std::string m_lon_reduced = m_lon_str.substr(0,m_lon_str.size()-2);
+
+        double depth_found, vel_found, dir_found;
+        int index;
+
+        std::stringstream stream_depth(m_cp.depth);
+        std::vector<double> depths;
+
+        while(stream_depth.good())
+        {
+          std::string substr;
+          getline(stream_depth, substr, ';');
+          depths.push_back(atof(substr.c_str()));
+        }
+
+        debug("We got %d measurements from SingleCurrentCell",depths.size());
+
+        bool found_exact = false;
+        std::vector<double> differences;
+
+        for(unsigned int i=0;i<depths.size(); i++)
+        {
+          if(depth_wanted == depths[i])
+          {
+            index = i;
+            found_exact = true;
+            debug("FOUND EXACT");
+            break;
+          } else // keep track of difference to find the closest depth.
+          {
+            debug("NOT FOUND EXACT");
+            double diff = std::fabs(depth_wanted - depths[i]);
+            differences.push_back(diff);
+          }
+        }
+
+        int closest_index;
+        if(!found_exact)
+        {
+          closest_index = std::min_element(differences.begin(),differences.end()) - differences.begin();
+        }
+
+        std::stringstream stream_vel(m_cp.vel);
+        std::vector<double> vels;
+
+        while(stream_vel.good())
+        {
+          std::string substr;
+          getline(stream_vel, substr, ';');
+          vels.push_back(atof(substr.c_str()));
+        }
+
+        std::stringstream stream_dir(m_cp.dir);
+        std::vector<double> dirs;
+
+        while(stream_dir.good())
+        {
+          std::string substr;
+          getline(stream_dir, substr, ';');
+          dirs.push_back(atof(substr.c_str()));
+        }
+        
+        if(!found_exact)
+        {
+          depth_found = depths[closest_index];
+          vel_found = vels[closest_index];
+          dir_found = dirs[closest_index];
         } else
         {
-          if(args.compare("report") == 0)
-          {
-            Time::BrokenDown bdt;
-            std::stringstream ss;
-            ss << "(ADCP) " << std::to_string(bdt.hour) << ":" << std::to_string(bdt.minutes) << ":" << std::to_string(bdt.seconds) << std::to_string(m_lat) << " " << std::to_string(m_lon);
-          } else
-          {
-            std::stringstream ss;
-            ss << "Be more specific!";
-            reply(origin,ss.str());
-          }
-        }*/
+          depth_found = depths[index];
+          vel_found = vels[index];
+          dir_found = dirs[index];
+        }
+
+        debug("DEPTH: %f, VEL: %f, DIR: %f", depth_found,vel_found,dir_found);
+
+        std::string depth_found_str = std::to_string(depth_found);
+        std::string vel_found_str = std::to_string(vel_found);
+        std::string dir_found_str = std::to_string(Angles::degrees(dir_found));
+
+        depth_found_r = depth_found_str.substr(0,5);
+        vel_found_r = vel_found_str.substr(0,5);
+        dir_found_r = dir_found_str.substr(0,5);
+
+        if(m_sensors_status.adcp == 0 || (m_sensors_status.adcp == 1 && m_sensors_status.adcp_dur != 0.0))
+        {
+          if(m_sensors_status.adcp == 0)
+            ss << "(ADCP) ";
+          else if(m_sensors_status.adcp == 1 && m_sensors_status.adcp_dur != 0.0)
+            ss << "(ADCP-P) ";
+
+          ss << m_adcp_tmst_ISO << "/" << m_lat_reduced << " " << m_lon_reduced << "/DP:" << depth_found_r << "/S:" << vel_found_r << "/D:" << dir_found_r;
+          reply(origin,ss.str());
+        } else
+        {
+          ss << "(ADCP) last " << m_adcp_tmst_ISO << "/DP:" << depth_found_r << "/S:" << vel_found_r << "/D:" << dir_found_r;
+          reply(origin,ss.str());
+        }
       }
 
       //! Execute command 'REBOOT'

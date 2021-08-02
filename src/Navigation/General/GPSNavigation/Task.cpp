@@ -176,7 +176,7 @@ namespace Navigation
         void
         consume(const IMC::EulerAngles* msg)
         {
-          if (msg->getSourceEntity() == m_gps_eid)
+          if (msg->getSourceEntity() == resolveEntity("HemisphereGPS"))
           {
             m_estate.phi = msg->phi;
             m_estate.theta = msg->theta;
@@ -190,8 +190,11 @@ namespace Navigation
         void
         consume(const IMC::GpsFix* msg)
         {
-          if (msg->getSourceEntity() != m_gps_eid)
+          //debug("Got GpsFix from %s",resolveEntity(msg->getSourceEntity()).c_str());
+          if(msg->getSourceEntity() != m_gps_eid)
             return;
+
+          debug("Using GpsFix from %s",resolveEntity(msg->getSourceEntity()).c_str());
 
           if ((msg->validity & IMC::GpsFix::GFV_VALID_POS) == 0)
           {

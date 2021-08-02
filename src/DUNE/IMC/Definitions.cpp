@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 18d3ce67b956c6c457605f6791618e28                            *
+// IMC XML MD5: b74b7b539df3601fb358d4b65474dd62                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -29189,154 +29189,6 @@ namespace DUNE
       IMC::toJSON(os__, "value", value, nindent__);
     }
 
-    AisGpsFix::AisGpsFix(void)
-    {
-      m_header.mgid = 920;
-      clear();
-    }
-
-    void
-    AisGpsFix::clear(void)
-    {
-      validity = 0;
-      type = 0;
-      utc_year = 0;
-      utc_month = 0;
-      utc_day = 0;
-      utc_time = 0;
-      lat = 0;
-      lon = 0;
-      height = 0;
-      satellites = 0;
-      cog = 0;
-      sog = 0;
-      hdop = 0;
-      vdop = 0;
-      hacc = 0;
-      vacc = 0;
-    }
-
-    bool
-    AisGpsFix::fieldsEqual(const Message& msg__) const
-    {
-      const IMC::AisGpsFix& other__ = static_cast<const AisGpsFix&>(msg__);
-      if (validity != other__.validity) return false;
-      if (type != other__.type) return false;
-      if (utc_year != other__.utc_year) return false;
-      if (utc_month != other__.utc_month) return false;
-      if (utc_day != other__.utc_day) return false;
-      if (utc_time != other__.utc_time) return false;
-      if (lat != other__.lat) return false;
-      if (lon != other__.lon) return false;
-      if (height != other__.height) return false;
-      if (satellites != other__.satellites) return false;
-      if (cog != other__.cog) return false;
-      if (sog != other__.sog) return false;
-      if (hdop != other__.hdop) return false;
-      if (vdop != other__.vdop) return false;
-      if (hacc != other__.hacc) return false;
-      if (vacc != other__.vacc) return false;
-      return true;
-    }
-
-    int
-    AisGpsFix::validate(void) const
-    {
-      if (lat < -1.5707963267948966 || lat > 1.5707963267948966) return false;
-      if (lon < -3.141592653589793 || lon > 3.141592653589793) return false;
-      return true;
-    }
-
-    uint8_t*
-    AisGpsFix::serializeFields(uint8_t* bfr__) const
-    {
-      uint8_t* ptr__ = bfr__;
-      ptr__ += IMC::serialize(validity, ptr__);
-      ptr__ += IMC::serialize(type, ptr__);
-      ptr__ += IMC::serialize(utc_year, ptr__);
-      ptr__ += IMC::serialize(utc_month, ptr__);
-      ptr__ += IMC::serialize(utc_day, ptr__);
-      ptr__ += IMC::serialize(utc_time, ptr__);
-      ptr__ += IMC::serialize(lat, ptr__);
-      ptr__ += IMC::serialize(lon, ptr__);
-      ptr__ += IMC::serialize(height, ptr__);
-      ptr__ += IMC::serialize(satellites, ptr__);
-      ptr__ += IMC::serialize(cog, ptr__);
-      ptr__ += IMC::serialize(sog, ptr__);
-      ptr__ += IMC::serialize(hdop, ptr__);
-      ptr__ += IMC::serialize(vdop, ptr__);
-      ptr__ += IMC::serialize(hacc, ptr__);
-      ptr__ += IMC::serialize(vacc, ptr__);
-      return ptr__;
-    }
-
-    uint16_t
-    AisGpsFix::deserializeFields(const uint8_t* bfr__, uint16_t size__)
-    {
-      const uint8_t* start__ = bfr__;
-      bfr__ += IMC::deserialize(validity, bfr__, size__);
-      bfr__ += IMC::deserialize(type, bfr__, size__);
-      bfr__ += IMC::deserialize(utc_year, bfr__, size__);
-      bfr__ += IMC::deserialize(utc_month, bfr__, size__);
-      bfr__ += IMC::deserialize(utc_day, bfr__, size__);
-      bfr__ += IMC::deserialize(utc_time, bfr__, size__);
-      bfr__ += IMC::deserialize(lat, bfr__, size__);
-      bfr__ += IMC::deserialize(lon, bfr__, size__);
-      bfr__ += IMC::deserialize(height, bfr__, size__);
-      bfr__ += IMC::deserialize(satellites, bfr__, size__);
-      bfr__ += IMC::deserialize(cog, bfr__, size__);
-      bfr__ += IMC::deserialize(sog, bfr__, size__);
-      bfr__ += IMC::deserialize(hdop, bfr__, size__);
-      bfr__ += IMC::deserialize(vdop, bfr__, size__);
-      bfr__ += IMC::deserialize(hacc, bfr__, size__);
-      bfr__ += IMC::deserialize(vacc, bfr__, size__);
-      return bfr__ - start__;
-    }
-
-    uint16_t
-    AisGpsFix::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
-    {
-      const uint8_t* start__ = bfr__;
-      bfr__ += IMC::reverseDeserialize(validity, bfr__, size__);
-      bfr__ += IMC::deserialize(type, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(utc_year, bfr__, size__);
-      bfr__ += IMC::deserialize(utc_month, bfr__, size__);
-      bfr__ += IMC::deserialize(utc_day, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(utc_time, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(lat, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(lon, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(height, bfr__, size__);
-      bfr__ += IMC::deserialize(satellites, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(cog, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(sog, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(hdop, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(vdop, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(hacc, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(vacc, bfr__, size__);
-      return bfr__ - start__;
-    }
-
-    void
-    AisGpsFix::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
-    {
-      IMC::toJSON(os__, "validity", validity, nindent__);
-      IMC::toJSON(os__, "type", type, nindent__);
-      IMC::toJSON(os__, "utc_year", utc_year, nindent__);
-      IMC::toJSON(os__, "utc_month", utc_month, nindent__);
-      IMC::toJSON(os__, "utc_day", utc_day, nindent__);
-      IMC::toJSON(os__, "utc_time", utc_time, nindent__);
-      IMC::toJSON(os__, "lat", lat, nindent__);
-      IMC::toJSON(os__, "lon", lon, nindent__);
-      IMC::toJSON(os__, "height", height, nindent__);
-      IMC::toJSON(os__, "satellites", satellites, nindent__);
-      IMC::toJSON(os__, "cog", cog, nindent__);
-      IMC::toJSON(os__, "sog", sog, nindent__);
-      IMC::toJSON(os__, "hdop", hdop, nindent__);
-      IMC::toJSON(os__, "vdop", vdop, nindent__);
-      IMC::toJSON(os__, "hacc", hacc, nindent__);
-      IMC::toJSON(os__, "vacc", vacc, nindent__);
-    }
-
     SingleCurrentCell::SingleCurrentCell(void)
     {
       m_header.mgid = 2013;
@@ -29417,6 +29269,106 @@ namespace DUNE
       IMC::toJSON(os__, "depth", depth, nindent__);
       IMC::toJSON(os__, "vel", vel, nindent__);
       IMC::toJSON(os__, "dir", dir, nindent__);
+    }
+
+    Gamma::Gamma(void)
+    {
+      m_header.mgid = 2014;
+      clear();
+    }
+
+    void
+    Gamma::clear(void)
+    {
+      lat = 0;
+      lon = 0;
+      sog = 0;
+      uc = 0;
+      depth = 0;
+      value = 0;
+    }
+
+    bool
+    Gamma::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::Gamma& other__ = static_cast<const Gamma&>(msg__);
+      if (lat != other__.lat) return false;
+      if (lon != other__.lon) return false;
+      if (sog != other__.sog) return false;
+      if (uc != other__.uc) return false;
+      if (depth != other__.depth) return false;
+      if (value != other__.value) return false;
+      return true;
+    }
+
+    int
+    Gamma::validate(void) const
+    {
+      if (lat < -1.5707963267948966 || lat > 1.5707963267948966) return false;
+      if (lon < -3.141592653589793 || lon > 3.141592653589793) return false;
+      return true;
+    }
+
+    uint8_t*
+    Gamma::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(lat, ptr__);
+      ptr__ += IMC::serialize(lon, ptr__);
+      ptr__ += IMC::serialize(sog, ptr__);
+      ptr__ += IMC::serialize(uc, ptr__);
+      ptr__ += IMC::serialize(depth, ptr__);
+      ptr__ += IMC::serialize(value, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    Gamma::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(lat, bfr__, size__);
+      bfr__ += IMC::deserialize(lon, bfr__, size__);
+      bfr__ += IMC::deserialize(sog, bfr__, size__);
+      bfr__ += IMC::deserialize(uc, bfr__, size__);
+      bfr__ += IMC::deserialize(depth, bfr__, size__);
+      bfr__ += IMC::deserialize(value, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    Gamma::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(lat, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(lon, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(sog, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(uc, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(depth, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(value, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    fp64_t
+    Gamma::getValueFP(void) const
+    {
+      return static_cast<fp64_t>(value);
+    }
+
+    void
+    Gamma::setValueFP(fp64_t val)
+    {
+      value = static_cast<fp32_t>(val);
+    }
+
+    void
+    Gamma::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "lat", lat, nindent__);
+      IMC::toJSON(os__, "lon", lon, nindent__);
+      IMC::toJSON(os__, "sog", sog, nindent__);
+      IMC::toJSON(os__, "uc", uc, nindent__);
+      IMC::toJSON(os__, "depth", depth, nindent__);
+      IMC::toJSON(os__, "value", value, nindent__);
     }
   }
 }

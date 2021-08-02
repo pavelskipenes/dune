@@ -526,7 +526,7 @@ namespace Control
         }
 
         void
-        onEntityReservation(void) //???? not needed!
+        onEntityReservation(void)
         {
           //! Called to ensure unique identifiers by reserving entity identifiers.
           PathController::onEntityReservation();
@@ -562,7 +562,7 @@ namespace Control
               m_lon_obst = msg->lon;
 
               // Distance between ASV - Obstacle
-              double distance = WGS84::distance(m_lat_asv, m_lon_asv, 0, m_lat_obst, m_lon_obst, 0);
+              double distance = WGS84::distance(m_lat_asv, m_lon_asv, 0, Angles::radians(m_lat_obst), Angles::radians(m_lon_obst), 0);
 
               //spew("Distance from obstacle %s is %0.1f",msg->mmsi.c_str(), distance);
               trace("Received Obstacle from AIS with MMSI: %s, longitude %f and latitude %f, distance: %0.1f", msg->mmsi.c_str(), m_lon_obst, m_lat_obst, distance);
@@ -724,7 +724,7 @@ namespace Control
           Math::Matrix m_contours_to_cas;
 
           // Retrieve contours from ENC database.
-          if(m_timer.overflow())
+          /*if(m_timer.overflow())
           {
             m_timer.reset();
             inf("CAS: retrieving info");
@@ -753,7 +753,7 @@ namespace Control
             }
             DepareData::DEPAREVector dep_vec = m_dp->getSquare(m_lat_asv, m_lon_asv, m_args.drval2, 5000.0);
             m_dp->writeCSVfile(dep_vec, m_args.debug_path + "useful_depare.csv");
-          }
+          }*/
         }
 
         void
@@ -765,7 +765,7 @@ namespace Control
           //! LOS Navigation Law (called Pure Pursuit in Dune) - desired course is the LOS angle.
           m_heading.value = ts.los_angle;
 
-          debug("CAS - DESIRED COURSE: %f", Angles::radians(m_heading.value));
+          debug("CAS - DESIRED COURSE: %f", Angles::degrees(m_heading.value));
 
           //! CAS: Running every 5 seconds when obstacles or ground are nearby.
           if((obst_vec.size() > 0 && (m_timestamp_new - m_timestamp_prev) > 5.0))

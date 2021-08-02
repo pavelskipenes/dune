@@ -124,7 +124,7 @@ namespace Monitors
         .units(Units::Second)
         .visibility(Tasks::Parameter::VISIBILITY_USER)
         .scope(Tasks::Parameter::SCOPE_IDLE)
-        .defaultValue("300.0")
+        .defaultValue("3600.0")
         .minimumValue("60.0");
 
         bind<IMC::FuelLevel>(this);
@@ -269,14 +269,6 @@ namespace Monitors
       {
         if (msg->validity & IMC::GpsFix::GFV_VALID_POS)
         {
-          //int lat_deg;
-          //double lat_min;
-          //Angles::convertDecimalToDM(Angles::degrees(msg->lat), lat_deg, lat_min);
-
-          //int lon_deg;
-          //double lon_min;
-          //Angles::convertDecimalToDM(Angles::degrees(msg->lon), lon_deg, lon_min);
-
           double m_lat = Angles::degrees(msg->lat);
           double m_lon = Angles::degrees(msg->lon);
 
