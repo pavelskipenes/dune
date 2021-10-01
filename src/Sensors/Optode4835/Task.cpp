@@ -91,6 +91,8 @@ namespace Sensors
       std::string elabel_depth;
       //! Salnity entity label.
       std::string elabel_salinity;
+      //! Science Sensors Timeout.
+      double m_sci_timeout;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -109,6 +111,8 @@ namespace Sensors
       SerialPort* m_uart;
       //! Watchdog.
       Counter<double> m_wdog;
+      //! Science Sensors Timer.
+      Counter<double> m_sci_timer;
       //! Save device raw data.
       IMC::DevDataText m_dev_data;
       //! Measured temperature
@@ -125,8 +129,8 @@ namespace Sensors
       unsigned m_depth_eid;
       //! Salinity entity id.
       unsigned m_salinity_eid;
-      //! Science sensors commands from L2.
-      IMC::ScienceSensors m_science;
+      //! Science sensors commands to L2.
+      IMC::ScienceSensorsReply m_science;
       //! Sampling duration timer.
       Counter<double> m_duration;
       //! Intervals between samplings.
@@ -145,7 +149,7 @@ namespace Sensors
         m_salinity(0.0),
         m_temperature(0.0),
         m_uart(NULL)
-      {
+        {
         // Define configuration parameters.
         param("Activate Sensor", m_args.activate)
         .scope(Tasks::Parameter::SCOPE_IDLE)
@@ -171,6 +175,11 @@ namespace Sensors
         param("Measurement String Identifier", m_args.cmd)
         .defaultValue("4835")
         .description("Measurement command string identifier");
+
+        param("Science Sensors Timeout", m_args.m_sci_timeout)
+        .defaultValue("60")
+        .units(Units::Second)
+        .description("IMC::ScienceSensors is sent at timer expiration");
 
         param("Entity Label - Temperature", m_args.elabel_temp)
         .defaultValue("SBE49FastCAT CTD Temperature")
@@ -208,6 +217,10 @@ namespace Sensors
           m_active = false;
           m_intervals.setTop(0.0);
           m_duration.setTop(0.0);
+
+          m_science.opt = 1;
+          m_science.opt_dur = 0.0;
+          m_science.opt_fr = 0.0;
         }
 
         // If sensor is off and Neptus wants to turn it on.
@@ -221,6 +234,10 @@ namespace Sensors
           {
             // Sensor is active.
             m_active = true;
+
+            m_science.opt = 0;
+            m_science.opt_dur = 0.0;
+            m_science.opt_fr = 0.0;
           }
           else
           {
@@ -241,10 +258,11 @@ namespace Sensors
       void 
       onEntityReservation(void)
       {
-        m_dev_data.setSourceEntity(reserveEntity("Optode4385 Device Data"));
-        m_temperature_msg.setSourceEntity(reserveEntity("Optode4385 Temperature"));
-        m_air_saturation.setSourceEntity(reserveEntity("Optode4385 Air Saturation"));
-        m_dissolved_oxygen.setSourceEntity(reserveEntity("Optode4385 Dissolved Oxygen"));
+        //m_dev_data.setSourceEntity(reserveEntity("Optode4385"));
+        //m_temperature_msg.setSourceEntity(reserveEntity("Optode4385"));
+        //m_air_saturation.setSourceEntity(reserveEntity("Optode4385"));
+        //m_dissolved_oxygen.setSourceEntity(reserveEntity("Optode4385"));
+        //m_science.setSourceEntity(reserveEntity("Optode4835"));
       }
 
       void
@@ -294,11 +312,17 @@ namespace Sensors
           {
             // turn on
             m_gpio->setValue(0);
+            m_science.opt = 0;
+            m_science.opt_dur = 0.0;
+            m_science.opt_fr = 0.0;
           }
           else
           {
             //turn off.
             m_gpio->setValue(1);
+            m_science.opt = 1;
+            m_science.opt_dur = 0.0;
+            m_science.opt_fr = 0.0;
           }
           
         }
@@ -308,6 +332,8 @@ namespace Sensors
         }
 
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+
+        m_sci_timer.setTop(m_args.m_sci_timeout);
       }
 
       //! Initialize sensor.
@@ -474,7 +500,7 @@ namespace Sensors
         m_dissolved_oxygen.value *= (1 + c_depth_factor * m_depth);
 
         // correct for salinity.
-        double Ts = std::log((c_temp_0 - m_temperature) / (c_temp_1 + m_temperature));
+        double Ts = std::log((c_temp_0 - m_temperature_msg.value) / (c_temp_1 + m_temperature_msg.value)); // Use temperature from Optode, not CTD (m_temperature).
         double f1 = m_salinity * (c_b0 + c_b1 * Ts + c_b2 * Ts * Ts + c_b3 * Ts * Ts * Ts);
         m_dissolved_oxygen.value *= std::exp(f1 + c_c0 * m_salinity * m_salinity);
 
@@ -577,10 +603,12 @@ namespace Sensors
       void
       consume(const IMC::ScienceSensors* msg)
       {
-        if (msg->getSource() != getSystemId())
+        if (msg->getSource() != getSystemId() && msg->opt != 3)
         {
           // Message is from L2.
-          m_science = *msg;
+          m_science.opt = msg->opt;
+          m_science.opt_dur = msg->opt_dur;
+          m_science.opt_fr = msg->opt_fr;
           
           if(m_science.opt == 2)
           {
@@ -652,48 +680,63 @@ namespace Sensors
           }
 
           // If sensor is active and sampling period expires.
-            if(m_active && m_duration.getTop()!=0.0 && m_duration.overflow())
-            {
-              // Stop communication.
-              stop();
-              // Wait 2 seconds and turn sensor off.
-              Delay::wait(2.0);
-              m_gpio->setValue(1);
-              // Sensor is not active.
-              m_active = false;
-              trace("Optode finished sampling: turning OFF");
-              
-              if(m_science.opt_fr > 0.0) //Samplings are periodical, not just one.
-              {
-                m_intervals.setTop(m_science.opt_fr);
-                spew("Optode sleeping for %d seconds",m_science.opt_fr);
-              }
-            }
+          if(m_active && m_duration.getTop()!=0.0 && m_duration.overflow())
+          {
+            // Stop communication.
+            stop();
+            // Wait 2 seconds and turn sensor off.
+            Delay::wait(2.0);
+            m_gpio->setValue(1);
+            // Sensor is not active.
+            m_active = false;
+            trace("Optode finished sampling: turning OFF");
 
-            // If sensor is inactive and sleeping period expires.
-            if(!m_active && m_intervals.getTop()!=0.0 && m_intervals.overflow())
+            // Sensor is off.
+            m_science.opt = 1;
+            
+            if(m_science.opt_fr > 0.0) //Samplings are periodical, not just one.
             {
-              // Turn sensor on.
-              m_gpio->setValue(0);
-              // Wait 2 seconds and initialize.
-              Delay::wait(2.0);
-              if(initializeSensor())
-              {
-                // Sensor is active.
-                m_active = true;
-                trace("Periodical: Optode ON");
-                m_duration.reset();
-                m_duration.setTop(m_science.opt_dur);
-              }
-              else
-              {
-                trace("Could not initialize optode sensor");
-              }
+              m_intervals.setTop(m_science.opt_fr);
+              spew("Optode sleeping for %d seconds",m_science.opt_fr);
             }
+          }
+
+          // If sensor is inactive and sleeping period expires.
+          if(!m_active && m_intervals.getTop()!=0.0 && m_intervals.overflow())
+          {
+            // Turn sensor on.
+            m_gpio->setValue(0);
+            // Wait 2 seconds and initialize.
+            Delay::wait(2.0);
+            if(initializeSensor())
+            {
+              // Sensor is active.
+              m_active = true;
+              trace("Periodical: Optode ON");
+              m_duration.reset();
+              m_duration.setTop(m_science.opt_dur);
+
+              // Sensor is on.
+              m_science.opt = 0;
+            }
+            else
+            {
+              trace("Could not initialize optode sensor");
+            }
+          }
 
           // If no instruction arrived from neptus, reset timer to avoid task from restarting
           if(!m_active)
             m_wdog.reset();
+
+          if(m_sci_timer.overflow())
+          {
+            m_science.setSource(getSystemId());
+            m_science.setDestination(0x8803);
+            dispatch(m_science, DF_LOOP_BACK);
+            debug("OPTODE, IMC::ScienceSensors OUT: %d %d %d", m_science.opt, m_science.opt_dur, m_science.opt_fr);
+            m_sci_timer.reset();
+          }
             
           waitForMessages(0.01);
         }

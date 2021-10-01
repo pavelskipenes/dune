@@ -76,6 +76,8 @@ namespace Sensors
       float tau;
       //! True to enable automatic activation/deactivation based on medium.
       bool auto_activation;
+      //! Science Sensors Timeout.
+      double m_sci_timeout;
     };
 
     struct Task: public Tasks::Task
@@ -88,6 +90,8 @@ namespace Sensors
       SerialPort* m_uart;
       //! Watchdog.
       Counter<double> m_wdog;
+      //! Science Sensors Timer.
+      Counter<double> m_sci_timer;
       //! Save device raw data.
       IMC::DevDataText m_dev_data;
       //! Temperature data.
@@ -104,8 +108,12 @@ namespace Sensors
       IMC::SoundSpeed m_sspeed;
       //! Received data line.
       std::string m_line;
-      //! Science sensors commands from L2.
-      IMC::ScienceSensors m_science;
+      //! Science sensors commands to L2.
+      IMC::ScienceSensorsReply m_science;
+      //! Current vessel latitude.
+      double m_current_lat;
+      //! Current vessel longitude.
+      double m_current_lon;
       //! Sampling duration timer.
       Counter<double> m_duration;
       //! Intervals between samplings.
@@ -206,9 +214,15 @@ namespace Sensors
         .maximumValue("10.0")
         .description("Conductivity cell thermal mass tau correction.");
 
+        param("Science Sensors Timeout", m_args.m_sci_timeout)
+        .defaultValue("60")
+        .units(Units::Second)
+        .description("IMC::ScienceSensors is sent at timer expiration");
+
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
 
         bind<IMC::ScienceSensors>(this);
+        bind<IMC::GpsFix>(this);
       }
 
       //! Update internal state with new parameter values.
@@ -228,6 +242,10 @@ namespace Sensors
           m_active = false;
           m_intervals.setTop(0.0);
           m_duration.setTop(0.0);
+
+          m_science.ctd = 1;
+          m_science.ctd_dur = 0.0;
+          m_science.ctd_fr = 0.0;
         }
 
         // If sensor is off and Neptus wants to turn it on.
@@ -243,6 +261,10 @@ namespace Sensors
             // Sensor is active.
             m_active = true;
             start();
+
+            m_science.ctd = 0;
+            m_science.ctd_dur = 0.0;
+            m_science.ctd_fr = 0.0;
           }
           else
           {
@@ -267,13 +289,13 @@ namespace Sensors
       void 
       onEntityReservation(void)
       {
-        m_dev_data.setSourceEntity(reserveEntity("SBE49FastCAT CTD Device Data"));
-        m_temp.setSourceEntity(reserveEntity("SBE49FastCAT CTD Temperature"));
-        m_cond.setSourceEntity(reserveEntity("SBE49FastCAT CTD Conductivity"));
-        m_press.setSourceEntity(reserveEntity("SBE49FastCAT CTD Pressure"));
-        m_depth.setSourceEntity(reserveEntity("SBE49FastCAT CTD Depth"));
-        m_salinity.setSourceEntity(reserveEntity("SBE49FastCAT CTD Salinity"));
-        m_sspeed.setSourceEntity(reserveEntity("SBE49FastCAT CTD Sound Speed"));
+        //m_dev_data.setSourceEntity(reserveEntity("SBE49FastCAT CTD"));
+        //m_temp.setSourceEntity(reserveEntity("SBE49FastCAT CTD"));
+        //m_cond.setSourceEntity(reserveEntity("SBE49FastCAT CTD"));
+        //m_press.setSourceEntity(reserveEntity("SBE49FastCAT CTD"));
+        //m_depth.setSourceEntity(reserveEntity("SBE49FastCAT CTD"));
+        //m_salinity.setSourceEntity(reserveEntity("SBE49FastCAT CTD"));
+        //m_sspeed.setSourceEntity(reserveEntity("SBE49FastCAT CTD"));
       }
 
       //! Try to connect to the device.
@@ -294,12 +316,20 @@ namespace Sensors
             spew("On resource acquisition: sensor ON");
             // turn on
             m_gpio->setValue(0);
+
+            m_science.ctd = 0;
+            m_science.ctd_dur = 0.0;
+            m_science.ctd_fr = 0.0;
           }
           else
           {
             spew("On resource acquisition: sensor OFF");
             //turn off.
             m_gpio->setValue(1);
+
+            m_science.ctd = 1;
+            m_science.ctd_dur = 0.0;
+            m_science.ctd_fr = 0.0;
           }
         }
         catch (std::runtime_error& e)
@@ -321,6 +351,7 @@ namespace Sensors
         }
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);        
         m_wdog.setTop(30.0);
+        m_sci_timer.setTop(m_args.m_sci_timeout);
       }
 
       //! Release resources.
@@ -533,12 +564,29 @@ namespace Sensors
       }
 
       void
+      consume(const IMC::GpsFix* msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          // Get LAT,LON from GPS.
+          m_current_lat = msg->lat;
+          m_current_lon = msg->lon;
+
+          //trace("NORTEK ADCP 500 - LAT,LON FROM L2 GPS: lat = %f lon = %f", m_current_lat, m_current_lon);
+        }
+        else
+          return;
+      }
+
+      void
       consume(const IMC::ScienceSensors* msg)
       {
-        if (msg->getSource() != getSystemId())
+        if (msg->getSource() != getSystemId() && msg->ctd != 3)
         {
           // Message is from L2.
-          m_science = *msg;
+          m_science.ctd = msg->ctd;
+          m_science.ctd_dur = msg->ctd_dur;
+          m_science.ctd_fr = msg->ctd_fr;
           
           if(m_science.ctd == 2)
           {
@@ -624,6 +672,9 @@ namespace Sensors
             // Sensor is not active.
             m_active = false;
             trace("CTD finished sampling: turning OFF");
+
+            // Sensor is off.
+            m_science.ctd = 1;
             
             if(m_science.ctd_fr > 0.0) //Samplings are periodical, not just one.
               m_intervals.setTop(m_science.ctd_fr);
@@ -646,6 +697,9 @@ namespace Sensors
 
               // Start sampling.
               start();
+
+              // Sensor is on.
+              m_science.ctd = 0;
             }
             else
             {
@@ -656,6 +710,15 @@ namespace Sensors
           // If no instruction arrived from neptus, reset timer to avoid task from restarting
           if(!m_active)
             m_wdog.reset();
+
+          if(m_sci_timer.overflow())
+          {
+            m_science.setSource(getSystemId());
+            m_science.setDestination(0x8803);
+            dispatch(m_science, DF_LOOP_BACK);
+            spew("CTD, IMC::ScienceSensors OUT: %d %d %d", m_science.ctd, m_science.ctd_dur, m_science.ctd_fr);
+            m_sci_timer.reset();
+          }
 
           waitForMessages(0.01);
         }

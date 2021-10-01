@@ -79,6 +79,15 @@ namespace Sensors
         Memory::clear( m_filter );
       }
 
+      //! Parsed measurement.
+      enum ParsedMeasurement
+      {
+        PARSED_CP = 0,
+        PARSED_DVL = 1,
+        PARSED_HEADER = 2,
+        NO_PARSED = 3
+      };
+
       //! Set variable data settings
       void set( uint16_t cp_ncells, float cp_csize, float cp_blank, int num_beams)
       {
@@ -90,7 +99,7 @@ namespace Sensors
       //! @param[in] timeout polling timeout.
       //! @return true if valid data was parsed, false otherwise.
       bool
-      readData( double timeout = 1.0 )
+      readData(IMC::CurrentProfile &cp, double timeout = 1.0)
       {
         uint8_t bfr[c_max_size];
         Counter<double> timer( timeout );
@@ -104,10 +113,22 @@ namespace Sensors
             m_raw_data.value.assign( bfr, bfr + rv );
             m_task->dispatch( m_raw_data );
 
+            ParsedMeasurement parsed;
             for ( size_t i = 0; i < rv; ++i )
             {
-              if ( !parse( bfr[i] ) )
+              parsed = parse(bfr[i]);
+              if (parsed == NO_PARSED)
                 continue;
+              else if(parsed == PARSED_CP)
+              {
+                cp = m_cp;
+              } else if(parsed == PARSED_DVL)
+              {
+
+              } else
+              {
+                // Header was parsed.
+              }
 
               return true;
             }
@@ -170,7 +191,7 @@ namespace Sensors
       //! Parse one byte of data.
       //! @param[in] byte data byte.
       //! @return true if a message was parsed, false otherwise.
-      bool
+      ParsedMeasurement
       parse( uint8_t byte )
       {
         switch ( m_state )
@@ -267,23 +288,30 @@ namespace Sensors
 
               // failed checksum.
               if ( checksumFailed() )
-                return false;
+                return NO_PARSED;
 
               if ( m_type == RT_STRING_DATA )
+              {
                 decodeHeader();
+                return PARSED_HEADER;
+              }
               else if ( m_type == RT_CURRENT_PROFILE )
+              {
                 decodeCurrentProfile();
+                return PARSED_CP;
+              }
               else
+              {
                 decodeBottomTrack();
-
-              return true;
+                return PARSED_DVL;
+              }     
             }
 
           default:
             break;
         }
 
-        return false;
+        return NO_PARSED;
       }
 
       //! Check if checksum matches.
@@ -354,6 +382,7 @@ namespace Sensors
         if ( m_cp_parser.parseCP( m_bfr.begin() + c_hdr_size, m_bfr.end(), m_cp ) )
         {
           m_cp.setTimeStamp( m_timestamp );
+          //m_cp.setSourceEntity(reserveEntity("Nortek500"));
           m_task->dispatch( m_cp, DF_KEEP_TIME );
         }
       }

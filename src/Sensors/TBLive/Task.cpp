@@ -81,6 +81,8 @@ namespace Sensors
       double sync_period;
       //! Triggers sensor on and off.
       bool activate;
+      //! Science Sensors Timeout.
+      double m_sci_timeout;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -103,10 +105,12 @@ namespace Sensors
       Time::Counter<float> m_sync_timer;
       //! Current Lat and Lon of vehicle.
       fp64_t m_current_lat, m_current_lon;
-      //! Science sensors commands from L2.
-      IMC::ScienceSensors m_science;
+      //! Science sensors commands to L2.
+      IMC::ScienceSensorsReply m_science;
       //! Sampling duration timer.
       Counter<double> m_duration;
+      //! Science Sensors Timer.
+      Counter<double> m_sci_timer;
       //! Intervals between samplings.
       Counter<double> m_intervals;
 
@@ -152,6 +156,11 @@ namespace Sensors
         .defaultValue("")
         .description("Sentence order");
 
+        param("Science Sensors Timeout", m_args.m_sci_timeout)
+        .defaultValue("60")
+        .units(Units::Second)
+        .description("IMC::ScienceSensors is sent at timer expiration");
+
         for (unsigned i = 0; i < c_max_init_cmds; ++i)
         {
           std::string cmd_label = String::str("Initialization String %u - Command", i);
@@ -186,6 +195,10 @@ namespace Sensors
           m_active = false;
           m_intervals.setTop(0.0);
           m_duration.setTop(0.0);
+
+          m_science.tbl = 1;
+          m_science.tbl_dur = 0.0;
+          m_science.tbl_fr = 0.0;
         }
 
         // If sensor is off and Neptus wants to turn it on.
@@ -200,6 +213,10 @@ namespace Sensors
             // Sensor is active.
             m_active = true;
             spew("On update parameters: TBLive ON");
+
+            m_science.tbl = 0;
+            m_science.tbl_dur = 0.0;
+            m_science.tbl_fr = 0.0;
           }
           else
           {
@@ -232,12 +249,18 @@ namespace Sensors
             spew("On resource acquisition: sensor ON");
             // turn on
             m_gpio->setValue(0);
+            m_science.tbl = 0;
+            m_science.tbl_dur = 0.0;
+            m_science.tbl_fr = 0.0;
           }
           else
           {
             spew("On resource acquisition: sensor OFF");
             //turn off.
             m_gpio->setValue(1);
+            m_science.tbl = 1;
+            m_science.tbl_dur = 0.0;
+            m_science.tbl_fr = 0.0;
           }
           
         }
@@ -247,6 +270,8 @@ namespace Sensors
         }
 
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+
+        m_sci_timer.setTop(m_args.m_sci_timeout);
       }
 
       bool
@@ -667,10 +692,12 @@ namespace Sensors
       void
       consume(const IMC::ScienceSensors* msg)
       {
-        if (msg->getSource() != getSystemId())
+        if (msg->getSource() != getSystemId() && msg->tbl != 3)
         {
           // Message is from L2.
-          m_science = *msg;
+          m_science.tbl = msg->tbl;
+          m_science.tbl_dur = msg->tbl_dur;
+          m_science.tbl_fr = msg->tbl_fr;
           
           if(m_science.tbl == 2)
           {
@@ -746,6 +773,9 @@ namespace Sensors
             // Sensor is not active.
             m_active = false;
             trace("TBLive finished sampling: turning OFF");
+
+            // Sensor is off.
+            m_science.tbl = 1;
             
             if(m_science.tbl_fr > 0.0) //Samplings are periodical, not just one.
               m_intervals.setTop(m_science.tbl_fr);
@@ -765,13 +795,26 @@ namespace Sensors
               trace("Periodical: TBLive ON");
               m_duration.reset();
               m_duration.setTop(m_science.tbl_dur);
+
+              // Sensor is on.
+              m_science.tbl = 0;
             }
             else
             {
               trace("Could not initialize TBLive sensor");
             }
           }
-        }
+
+          if(m_sci_timer.overflow())
+          {
+            m_science.setSource(getSystemId());
+            m_science.setDestination(0x8803);
+            dispatch(m_science, DF_LOOP_BACK);
+            spew("TBLIVE, IMC::ScienceSensors OUT: %d %d %d", m_science.tbl, m_science.tbl_dur, m_science.tbl_fr);
+            m_sci_timer.reset();
+          }
+
+                  }
       }
     };
   }

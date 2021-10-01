@@ -41,7 +41,7 @@ namespace Sensors
     using DUNE_NAMESPACES;
 
     //! Data input timeout.
-    static const double c_data_timeout = 10.0;
+    static const double c_data_timeout = 120.0;
     //! Data port offset.
     static const unsigned c_data_port = 2;
 
@@ -56,11 +56,23 @@ namespace Sensors
       unsigned uart_baud;
       //! Salnity entity label.
       std::string elabel_salinity;
+      //! Science Sensors Timeout.
+      double m_sci_timeout;
 
       //! ADCP position.
       std::vector<float> pos;
       //! ADCP orientation.
       std::vector<float> ang;
+      //! Amplitude limit.
+      double ampl_lim;
+      //! Correlation Limit.
+      double corr_lim;
+      //! Vehicle turning rate limit.
+      double pitch_rate;
+      //! Vehicle turning rate limit.
+      double roll_rate;
+      //! Vehicle turning rate limit.
+      //double yaw_rate;
 
       //! ADCP SETPLAN parameters
       unsigned miavg;
@@ -71,12 +83,25 @@ namespace Sensors
       unsigned diburst;
       double   sound_vel;
       std::string logfilename;
+
+      //! ADCP SETTMAVG parameters
+      unsigned avg_tel_enable;
+      unsigned celldivisor;
+      unsigned packetdivisor;
+      unsigned avg_tel_data;
+      unsigned store_vel;
+      unsigned store_ampl;
+      unsigned store_corr;
+      unsigned fo_enable;
+      unsigned so_enable;
+      unsigned data_format;
       
       //! ADCP SETAVG filter parameters
       unsigned ncells;
       double cellsize;
       double blank;
       std::string coord;
+      std::string coord_tel;
       double powerlevel;
       unsigned ainterval;
       double vrange;
@@ -100,24 +125,38 @@ namespace Sensors
       Parser* m_parser;
       //! Medium handler.
       Monitors::MediumHandler m_hand;
+      //! Raw CurrentProfile data.
+      IMC::CurrentProfile m_cp;
       //! Watchdog.
       Counter<double> m_wdog;
       //! List of entities.
       std::vector<unsigned> m_entities;
       //! Filtered entity.
       unsigned m_entity;
+      //! Science Sensors Timer.
+      Counter<double> m_sci_timer;
       //! True if pings are externally triggered.
       bool m_triggered;
       //! True if we're using serial link.
       bool m_serial;
-      //! Science sensors commands from L2.
-      IMC::ScienceSensors m_science;
       //! Sampling duration timer.
       Counter<double> m_duration;
       //! Intervals between samplings.
       Counter<double> m_intervals;
       //! Salinity entity id.
       unsigned m_salinity_eid;
+      //! Salinity arrived from CTD.
+      bool m_salinity_arrived;
+      //! Science sensors commands to L2.
+      IMC::ScienceSensorsReply m_science;
+      //! Euler Angles from GPS.
+      IMC::EulerAngles m_euler;
+      //! Vehicle Estimated State
+      IMC::EstimatedState m_estate;
+      //! Current vessel latitude.
+      double m_current_lat;
+      //! Current vessel longitude.
+      double m_current_lon;
       //! Configuration parameters.
       Arguments m_args;
       
@@ -133,7 +172,8 @@ namespace Sensors
         m_driver(NULL),
         m_parser(NULL),
         m_triggered(false),
-        m_serial(false)
+        m_serial(false),
+        m_salinity_arrived(false)
       {
         // Define configuration parameters.
         param("Activate Sensor", m_args.activate)
@@ -204,7 +244,7 @@ namespace Sensors
         .minimumValue("1300.0")
         .maximumValue("1700.0")
         .units(Units::MeterPerSecond)
-        .description("Sound velocity (0 will will set sensor to use measured sound velocity)");
+        .description("Sound velocity (0 will set sensor to use measured sound velocity)");
 
         param("Log File Name", m_args.logfilename)
         .defaultValue("Data.ad2cp")
@@ -232,6 +272,10 @@ namespace Sensors
 
         param("Coordinate System", m_args.coord)
         .defaultValue("ENU")
+        .description("Coordinate System (ENU, XYZ or BEAM)");
+
+        param("Telemetry Coordinate System", m_args.coord_tel)
+        .defaultValue("BEAM")
         .description("Coordinate System (ENU, XYZ or BEAM)");
         
         param("Power Level", m_args.powerlevel)
@@ -271,11 +315,96 @@ namespace Sensors
         .defaultValue("BROAD")
         .description("Bandwidth selection. (“NARROW”, “BROAD”)");
 
+        param("Averaging Telemetry Enable", m_args.avg_tel_enable)
+        .defaultValue("1")
+        .minimumValue("0")
+        .maximumValue("1")
+        .description("Enable/Disable ADCP mesaurement telemetry averaging");
+
+        param("Cell Divisor", m_args.celldivisor)
+        .defaultValue("1")
+        .minimumValue("0")
+        .maximumValue("1")
+        .description("Enable/Disable Cell Divisor");
+
+        param("Packet Divisor", m_args.packetdivisor)
+        .defaultValue("1")
+        .minimumValue("0")
+        .maximumValue("1")
+        .description("Enable/Disable Cell Divisor");
+
+        param("Average Telemetry Data", m_args.avg_tel_data)
+        .defaultValue("1")
+        .minimumValue("0")
+        .maximumValue("1")
+        .description("Average Telemetry Data");
+
+        param("Store Velocity", m_args.store_vel)
+        .defaultValue("1")
+        .minimumValue("0")
+        .maximumValue("1")
+        .description("Store Velocity Data");
+
+        param("Store Amplitude", m_args.store_ampl)
+        .defaultValue("1")
+        .minimumValue("0")
+        .maximumValue("1")
+        .description("Store Amplitude Data");
+
+        param("Store Correlation", m_args.store_corr)
+        .defaultValue("1")
+        .minimumValue("0")
+        .maximumValue("1")
+        .description("Store Correlation Data");
+
+        param("File Output Enable", m_args.fo_enable)
+        .defaultValue("1")
+        .minimumValue("0")
+        .maximumValue("1")
+        .description("Enable File Output");
+
+        param("Telemetry Serial Output Enable", m_args.so_enable)
+        .defaultValue("1")
+        .minimumValue("0")
+        .maximumValue("1")
+        .description("Enable Serial Output");
+
+        param("Data Format", m_args.data_format)
+        .defaultValue("100")
+        .description("Data Format");
+
         param("Entity Label - Salinity", m_args.elabel_salinity)
-        .defaultValue("SBE49FastCAT CTD Salinity")
+        .defaultValue("SBE49FastCAT CTD")
         .description("Entity label of the CTD");
 
+        param("Science Sensors Timeout", m_args.m_sci_timeout)
+        .defaultValue("60")
+        .units(Units::Second)
+        .description("IMC::ScienceSensors is sent at timer expiration");
+
+        param("Correlation Limit", m_args.corr_lim)
+        .defaultValue("50")
+        .maximumValue("100")
+        .minimumValue("0")
+        .description("Correlation above which measurement is discarded.");
+
+        param("Amplitude Limit", m_args.ampl_lim)
+        .defaultValue("0")
+        .units(Units::Decibel)
+        .description("Amplitude above which measurement is discarded.");
+
+        param("Vehicle Pitch Rate Limit", m_args.pitch_rate)
+        .defaultValue("0")
+        .description("Pitching rate above which measurement is discarded.");
+
+        param("Vehicle Roll Rate Limit", m_args.roll_rate)
+        .defaultValue("0")
+        .description("Roll rate above which measurement is discarded.");
+
         bind<IMC::Salinity>(this);
+        //bind<IMC::EulerAngles>(this);
+        bind<IMC::GpsFix>(this);
+        bind<IMC::EstimatedState>(this);
         bind<IMC::ScienceSensors>(this);
 
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
@@ -296,6 +425,10 @@ namespace Sensors
           trace("onUpdateParameters ADCP OFF");
           m_intervals.setTop(0.0);
           m_duration.setTop(0.0);
+
+          m_science.adcp = 1;
+          m_science.adcp_dur = 0.0;
+          m_science.adcp_fr = 0.0;
         }
 
         // If sensor is off and Neptus wants to turn it on.
@@ -308,6 +441,10 @@ namespace Sensors
           if(!initializeSensor())
             throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
           m_active = true;
+
+          m_science.adcp = 0;
+          m_science.adcp_dur = 0.0;
+          m_science.adcp_fr = 0.0;
           trace("onUpdateParameters ADCP ON");
         }
         
@@ -366,18 +503,28 @@ namespace Sensors
             Delay::wait(20.0);
             if(!initializeSensor())
               throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
+
+            m_science.adcp = 0;
+            m_science.adcp_dur = 0.0;
+            m_science.adcp_fr = 0.0;
           }
           else
           {
             trace("onResourceAcquisition ADCP OFF");
             //turn off.
             m_gpio->setValue(1);
+
+            m_science.adcp = 1;
+            m_science.adcp_dur = 0.0;
+            m_science.adcp_fr = 0.0;
           }
         }        
         catch (std::runtime_error& e)
         {
           throw RestartNeeded(e.what(), 30);
         }
+
+        m_sci_timer.setTop(m_args.m_sci_timeout);
 
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);  
       }
@@ -501,10 +648,176 @@ namespace Sensors
         if (msg->getSourceEntity() != m_salinity_eid)
           return;
 
+        if(m_salinity_arrived)
+          return;
+
+        spew("Salinity from CTD: %f",msg->value);
+
+        m_salinity_arrived = true;
+        
         if (isConnected())
         {
           m_driver->setSalinity(msg->value);
           m_wdog.reset();
+        }
+      }
+
+      /*
+      void
+      consume(const IMC::EulerAngles* msg)
+      {
+        if(msg->getSource() != getSystemId() && std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"GPS")==0)
+        {
+          // Get Euler Angles from GPS.
+          m_euler.theta = msg->theta;
+          m_euler.phi = msg->phi;
+          m_euler.psi = msg->psi;
+
+          trace("NORTEK ADCP 500 - EULER ANGLES FROM LEVEL 2 GPS: theta = %f phi = %f psi = %f", m_euler.theta, m_euler.phi, m_euler.psi);
+        }
+        else
+          return;
+      }*/
+
+      void
+      consume(const IMC::GpsFix* msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          // Get LAT,LON from GPS.
+          m_current_lat = msg->lat;
+          m_current_lon = msg->lon;
+
+          //trace("NORTEK ADCP 500 - LAT,LON FROM L2 GPS: lat = %f lon = %f", m_current_lat, m_current_lon);
+        }
+        else
+          return;
+      }
+
+      void
+      consume(const IMC::EstimatedState* msg)
+      {
+        if(msg->getSource() != getSystemId())
+        {
+          m_estate = *msg;
+
+          //trace("NORTEK ADCP 500 - EstimatedState from Level 2");
+        }
+        else
+          return;
+      }
+
+      //! Create single cell data as requested by user and dispatch.
+      void
+      createSingleCell(IMC::CurrentProfile cp)
+      {
+        // Create a vector that will contain each single cell.
+        IMC::SingleCurrentCell column_profile;
+        column_profile.lat = m_current_lat;
+        column_profile.lon = m_current_lon;
+
+        Matrix profile_average = Matrix(3, m_args.ncells, 0.0);
+        Matrix ncells_averaged = Matrix(1, m_args.ncells, 0.0);
+        Matrix single_profile = Matrix(3, m_args.ncells, 0.0);
+
+        // Set this limit high enough based on LOGS.
+        if(m_estate.p < m_args.roll_rate && m_estate.q < m_args.pitch_rate) //&& m_estate.r < m_args.turn_rate
+        {
+          double cell_beam_amplitude;
+          double cell_beam_correlation;
+
+          for(const auto cell:cp.prof)
+          {
+            // Construct velocities vector from cells.
+            bool cell_is_good = true;
+
+            std::vector<double> beam_velocities;
+
+            for(auto beam:cell->beams)
+            {
+              cell_beam_amplitude = beam->amp;
+              cell_beam_correlation = beam->cor;
+
+              if(cell_beam_amplitude > m_args.ampl_lim && cell_beam_correlation > m_args.corr_lim)
+              {
+                // Measurements in this Cell and Beam are good.
+                beam_velocities.push_back(beam->vel);
+                //spew("SINGLE BEAM VEL %f", beam->vel);
+                
+              } else
+              {
+                // Measurements in this Cell and Beam are not good.
+                cell_is_good = false;
+                spew("BAD MEASUREMENT - CELL DISCARDED");
+                break;
+              }
+
+              
+              
+              // put all the velocities in a matrix 1x3 = last two velocities need to be averages.
+              // Rotate velocities into body frame (check ADCP orientation)
+              // Use EstimatedState Vx and Vy and Vz (maybe) and add them to beam velocities. But need to be in the same coord sys (BODY FRAME or EARTH NED).
+              // Transform that to earth frame via rotation matrix using EulerAngles in all axes.
+              // DIRECTION is tangent of x and y.
+            }
+
+            //spew("BEAM VEL1 %f, BEAM VEL2 %f, BEAM VEL3 %f, BEAM VEL4 %f", beam_velocities[0],beam_velocities[1],beam_velocities[2],beam_velocities[3]);
+
+            
+            if(cell_is_good)
+            {
+              spew("Cell at depth %0.3f is good.",cell->pos);
+
+              // Rotate of 45deg about z, as the sensor is rotated with respect to the vessel.
+              double u_body = beam_velocities[0]*std::cos(Angles::radians(45))-beam_velocities[1]*std::sin(Angles::radians(45));
+              double v_body = beam_velocities[0]*std::sin(Angles::radians(45))+beam_velocities[1]*std::cos(Angles::radians(45));
+
+              // Add velocity/sog.
+              double u = m_estate.u - u_body; //u_body = u_r.
+              double v = m_estate.v - v_body;
+              double w = m_estate.w - (beam_velocities[2]+beam_velocities[3])/2;              
+
+              // Transform speed vectors from body to inertial frame.
+              //DUNE::Coordinates::BodyFixedFrame::toInertialFrame(m_estate.phi,m_estate.theta,m_estate.psi,u,v,w,&vx,&vy,&vz);
+              double u_c_ned = u*std::cos(m_estate.psi)*std::cos(m_estate.theta) + v*(std::cos(m_estate.psi)*std::sin(m_estate.theta)*std::sin(m_estate.phi) - std::sin(m_estate.psi)*std::cos(m_estate.phi)) + w*(std::sin(m_estate.psi)*std::sin(m_estate.phi) + std::cos(m_estate.psi)*std::cos(m_estate.phi)*std::sin(m_estate.theta));
+              double v_c_ned = u*std::sin(m_estate.psi)*std::cos(m_estate.theta) + v*(std::cos(m_estate.psi)*std::cos(m_estate.phi) + std::sin(m_estate.psi)*std::sin(m_estate.theta)*std::sin(m_estate.phi)) + w*(std::sin(m_estate.theta)*std::sin(m_estate.psi)*std::cos(m_estate.phi) - std::cos(m_estate.psi)*std::sin(m_estate.phi));
+              double w_c_ned = -u*std::sin(m_estate.theta) + v*std::cos(m_estate.theta)*std::sin(m_estate.phi) + w*std::cos(m_estate.theta)*std::cos(m_estate.phi);
+
+              // Compute 2D direction of current as atan(vy/vx), for the current cell.
+              double curr_direction = std::atan(v_c_ned/u_c_ned);
+
+              // Compute velocity magnitude in 2D inertial frame, for the current cell.
+              double curr_velocity = std::sqrt(std::pow(v_c_ned,2) + std::pow(u_c_ned,2));
+
+              //double depth_double = std::floor(cell->pos * 100) / 100;
+              //spew("GOOD CELL, depth DOUBLE: %f",depth_double);
+              std::string depth = std::to_string(cell->pos);
+              std::string depth_tuple = depth.substr(0, 5) + ";"; //"depth=" + 
+              std::string str_red = depth.substr(0, 5);
+              spew("GOOD CELL, depth STRING: depth=%s",str_red.c_str());
+
+              std::string velocity = std::to_string(curr_velocity);
+              std::string velocity_tuple = velocity.substr(0, 6) + ";"; //"vel=" +
+              std::string str_vel = velocity.substr(0, 6);
+              spew("GOOD CELL, velocity in Earth Frame: vel=%s",str_vel.c_str());
+
+              std::string direction = std::to_string(curr_direction);
+              std::string direction_tuple = direction.substr(0, 6) + ";"; //"dir=" + 
+              std::string str_dir = direction.substr(0, 6);
+              spew("GOOD CELL, direction in Earth Frame: dir=%s",str_dir.c_str());
+
+              column_profile.depth.append(depth_tuple);
+              column_profile.vel.append(velocity_tuple);
+              column_profile.dir.append(direction_tuple);
+
+            } else
+            {
+              spew("Cell at depth %0.3f is NOT good.",cell->pos);
+            }
+          }
+          spew("Dispatching profile...");
+          dispatch(column_profile);
+          
         }
       }
 
@@ -540,22 +853,25 @@ namespace Sensors
         m_driver = new Driver(this, m_handle, m_args.miavg, m_args.avg_enable, m_args.vert_dir,
                                               m_args.burst_enable, m_args.miburst, m_args.diburst,
                                               m_args.sound_vel, m_args.logfilename, 
-                                              m_args.ncells, m_args.cellsize, m_args.blank, m_args.coord,
+                                              m_args.ncells, m_args.cellsize, m_args.blank, m_args.coord, m_args.coord_tel,
                                               m_args.powerlevel, m_args.ainterval, m_args.vrange, m_args.nping,
-                                              m_args.nbeam, m_args.bandwidth);
+                                              m_args.nbeam, m_args.bandwidth, m_args.avg_tel_enable, m_args.celldivisor,
+                                              m_args.packetdivisor, m_args.avg_tel_data, m_args.store_vel, m_args.store_ampl,
+                                              m_args.store_corr, m_args.fo_enable, m_args.so_enable, m_args.data_format);
 
-
-        m_parser = new Parser( this, m_data_h, m_args.pos, m_args.ang, m_entities, m_entity,
-                               m_args.ncells, m_args.cellsize, m_args.blank, m_args.nbeam );
+        m_parser = new Parser(this, m_data_h, m_args.pos, m_args.ang, m_entities, m_entity,
+                               m_args.ncells, m_args.cellsize, m_args.blank, m_args.nbeam);
       }
 
       void
       consume(const IMC::ScienceSensors* msg)
       {
-        if (msg->getSource() != getSystemId())
+        if (msg->getSource() != getSystemId() && msg->adcp != 3)
         {
           // Message is from L2.
-          m_science = *msg;
+          m_science.adcp = msg->adcp;
+          m_science.adcp_dur = msg->adcp_dur;
+          m_science.adcp_fr = msg->adcp_fr;
           
           if(m_science.adcp == 2)
           {
@@ -594,8 +910,7 @@ namespace Sensors
             m_duration.setTop(0.0);
             trace("from Iridium: ADCP OFF.");
           }
-
-          // if m_science.eco == 3 -> do nothing.
+          // if m_science.adcp == 3 -> do nothing.
         }
       }
 
@@ -610,12 +925,19 @@ namespace Sensors
         {
           if(m_active)
           {
-            // Get data from ADCP
             if (!isParserOn())
               throw RestartNeeded(DTR("Failure to initialize ADCP parser"), 5);
 
-            if (m_parser->readData())
+            if (m_parser->readData(m_cp))
+            {
+              // Reset timer.
               m_wdog.reset();
+
+              // Manipulate raw ADCP data.
+              createSingleCell(m_cp);
+
+              spew("Received current profile from ADCP parser.");
+            }
 
             if (m_wdog.overflow())
             {
@@ -630,9 +952,12 @@ namespace Sensors
             m_gpio->setValue(1);
             // Sensor is not active.
             m_active = false;
-            trace("ECOPuck finished sampling: turning OFF");
+            trace("ADCP finished sampling: turning OFF");
+
+            // Sensor is off.
+            m_science.adcp = 1;
             
-            if(m_science.eco_fr > 0.0) //Samplings are periodical, not just one.
+            if(m_science.adcp_fr > 0.0) //Samplings are periodical, not just one.
               m_intervals.setTop(m_science.adcp_fr);
           }
 
@@ -650,11 +975,23 @@ namespace Sensors
               trace("Periodical: ADCP ON");
               m_duration.reset();
               m_duration.setTop(m_science.adcp_dur);
+
+              // Sensor is on.
+              m_science.adcp = 0;
             }
             else
             {
               trace("Could not initialize ADCP sensor");
             }
+          }
+
+          if(m_sci_timer.overflow())
+          {
+            m_science.setSource(getSystemId());
+            m_science.setDestination(0x8803);
+            dispatch(m_science, DF_LOOP_BACK);
+            debug("ADCP, IMC::ScienceSensors OUT: %d %d %d", m_science.adcp, m_science.adcp_dur, m_science.adcp_fr);
+            m_sci_timer.reset();
           }
           
           // If no instruction arrived from neptus, reset timer to avoid task from restarting

@@ -129,6 +129,7 @@ namespace Supervisors
         bind<IMC::VehicleCommand>(this);
         bind<IMC::PlanControl>(this);
         bind<IMC::GpsFix>(this);
+        bind<IMC::DevDataText>(this);
       }
 
       void
@@ -319,6 +320,15 @@ namespace Supervisors
         gpsfix_l3.setSource(getSystemId());
         dispatch(gpsfix_l3);
         spew("YUUUUUHUUUUUUUUUUUUUUUUUUUUUU");
+      }
+
+      void
+      consume(const IMC::DevDataText* msg)
+      {
+        if(msg->getSource() != getSystemId() && msg->value.compare("sleep") == 0)
+        {
+          std::system("sh /root/stop.sh");
+        }
       }
 
       //! Split comma separated list and translate labels, then join again

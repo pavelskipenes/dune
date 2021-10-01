@@ -48,7 +48,7 @@ namespace Sensors
     //! No input trigger.
     static const std::string c_cmd_trg_no = "INTSR";
     //! Command reply timeout.
-    static const float c_timeout = 3.0f;
+    static const float c_timeout = 10.0f;
 
     //! Driver class to configure Nortek Signature 500 ADCP.
     class Driver
@@ -70,9 +70,12 @@ namespace Sensors
       Driver(Tasks::Task* task, IO::Handle* handle, unsigned miavg, unsigned avg_enable, unsigned vd,
                                                     unsigned burst_enable, unsigned miburst, unsigned diburst,
                                                     float soundvel, std::string logfilename, 
-                                                    unsigned ncells, float cellsize, float blank, std::string coord,
+                                                    unsigned ncells, float cellsize, float blank, std::string coord, std::string coord_tel,
                                                     float powerlevel, unsigned ainterval, float vrange, unsigned nping,
-                                                    unsigned nbeam, std::string bandwidth):
+                                                    unsigned nbeam, std::string bandwidth, unsigned avg_tel_enable, 
+                                                    unsigned celldivisor, unsigned packetdivisor, unsigned avg_tel_data,
+                                                    unsigned store_vel, unsigned store_ampl,unsigned store_corr,
+                                                    unsigned fo_enable, unsigned so_enable,unsigned data_format):
         m_task(task),
         m_handle(handle),
 
@@ -88,12 +91,23 @@ namespace Sensors
         m_cp_cellsize(cellsize),
         m_cp_blank(blank),
         m_cp_coord(coord),
+        m_cp_coord_tel(coord_tel),
         m_cp_powerlevel(powerlevel),
         m_cp_ainterval(ainterval),
         m_cp_vrange(vrange),
         m_cp_nping(nping),
         m_cp_nbeam(nbeam),
         m_cp_bandwidth(bandwidth),
+        m_cp_avg_tel_enable(avg_tel_enable),
+        m_cp_celldivisor(celldivisor),
+        m_cp_packetdivisor(packetdivisor),
+        m_cp_avg_tel_data(avg_tel_data),
+        m_cp_store_vel(store_vel),
+        m_cp_store_ampl(store_ampl),
+        m_cp_store_corr(store_corr),
+        m_cp_fo_enable(fo_enable),
+        m_cp_so_enable(so_enable),
+        m_cp_data_format(data_format),
 
         m_salinity(35.0),
         m_cmd_mode(false),
@@ -203,6 +217,9 @@ namespace Sensors
           return false;
 
         if (!setAVGParams())
+          return false;
+        
+        if (!setMAVGParams())
           return false;
 
         if (!setAbsPressure())
@@ -318,7 +335,7 @@ namespace Sensors
       {
 
         std::string cmd;
-        cmd = String::str("SETPLAN,MIAVG=%d,AVG=%d,DIAVG=0,VD=%d,MV=10,SA=%.1f,BURST=%d,MIBURST=%d,DIBURST=%d,SV=%.1f,FN=\"%s\",SO=1,FREQ=500",
+        cmd = String::str("SETPLAN,MIAVG=%d,AVG=%d,DIAVG=0,VD=%d,MV=10,SA=%.1f,BURST=%d,MIBURST=%d,DIBURST=%d,SV=%.1f,FN=\"%s\",SO=1,FREQ=500,NSTT=0", // NSTT was not there.
                           m_cp_miavg, m_cp_avg_enable, m_cp_vd, m_salinity, 
                           m_cp_burst_enable, m_cp_miburst, m_cp_diburst, m_cp_soundvel, m_cp_logfilename.c_str());
         return sendCommand(cmd);
@@ -331,10 +348,24 @@ namespace Sensors
       {
 
         std::string cmd;
-        cmd = String::str("SETAVG,NC=%d,CS=%.1f,BD=%.1f,CY=\"%s\",PL=%.1f,AI=%d,VR=%.1f,DF=3,NPING=%d,NB=%d,CH=0,MUX=0,BW=\"%s\",ALTI=0,BT=0,ICE=0",
+        cmd = String::str("SETAVG,NC=%d,CS=%.1f,BD=%.1f,CY=\"%s\",PL=%.1f,AI=%d,VR=%.1f,DF=3,NPING=%d,NB=%d,CH=0,MUX=0,BW=\"%s\",ALTI=0,BT=0,ICE=0,ALTISTART=0.5,ALTIEND=70,RAWALTI=1", //CH=4
                           m_cp_ncells, m_cp_cellsize, m_cp_blank, m_cp_coord.c_str(), 
                           m_cp_powerlevel, m_cp_ainterval, m_cp_vrange, m_cp_nping,
                           m_cp_nbeam, m_cp_bandwidth.c_str());
+        return sendCommand(cmd);
+      }
+
+      //! Set Current Profiler's averaging mode telemetry parameters.
+      //! @return true if command succeeded, false otherwise.
+      bool
+      setMAVGParams(void)
+      {
+
+        std::string cmd;
+        cmd = String::str("SETTMAVG,EN=%d,CD=%d,PD=%d,AVG=%d,TV=%d,TA=%d,TC=%d,CY=\"%s\",FO=%d,SO=%d,DF=%d",
+                          m_cp_avg_tel_enable, m_cp_celldivisor, m_cp_packetdivisor, m_cp_avg_tel_data, 
+                          m_cp_store_vel, m_cp_store_ampl, m_cp_store_corr, m_cp_coord_tel.c_str(),
+                          m_cp_fo_enable, m_cp_so_enable, m_cp_data_format);
         return sendCommand(cmd);
       }
 
@@ -457,12 +488,25 @@ namespace Sensors
       float m_cp_cellsize;
       float m_cp_blank;
       std::string m_cp_coord;
+      std::string m_cp_coord_tel;
       float m_cp_powerlevel;
       unsigned m_cp_ainterval;
       float m_cp_vrange;
       unsigned m_cp_nping;
       unsigned m_cp_nbeam;
       std::string m_cp_bandwidth;
+
+      //! ADCP SETTMAVG parameters
+      unsigned m_cp_avg_tel_enable;
+      unsigned m_cp_celldivisor;
+      unsigned m_cp_packetdivisor;
+      unsigned m_cp_avg_tel_data;
+      unsigned m_cp_store_vel;
+      unsigned m_cp_store_ampl;
+      unsigned m_cp_store_corr;
+      unsigned m_cp_fo_enable;
+      unsigned m_cp_so_enable;
+      unsigned m_cp_data_format;
 
       //! Salinity value.
       double m_salinity;

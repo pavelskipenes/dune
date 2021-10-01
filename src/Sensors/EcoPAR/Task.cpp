@@ -24,7 +24,7 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: renalberto                                                       *
+// Author: Alberto Dallolio                                                 *
 //***************************************************************************
 
 // DUNE headers.
@@ -35,7 +35,7 @@ namespace Sensors
   //! Stop sampling.
   static const char* c_cmd_stop = "!!!!!";
   //! Continuous sampling command.
-  static const char* c_cmd_continuous = "$pkt=0";
+  static const char* c_cmd_continuous = "$pkt=3";
   //! Disable memory command.
   static const char* c_cmd_no_mem = "$rec=0";
   //! No engineering column command.
@@ -44,8 +44,10 @@ namespace Sensors
   static const char* c_cmd_store = "$sto";
   //! Command to restart sampling after being stopped.
   static const char* c_cmd_restart = "$run";
+  //! Close Bio-Wiper.
+  static const char* c_cmd_close = "$mvs=0";
 
-  namespace EcoPuck
+  namespace EcoPAR
   {
     using DUNE_NAMESPACES;
 
@@ -60,18 +62,14 @@ namespace Sensors
       unsigned baud;
       //! Input timeout.
       double timeout;
-      //! CDOM dark counts.
-      unsigned dom_dc;
-      //! CDOM scale factor.
-      double dom_sf;
-      //! Chlorophyll dark counts.
-      unsigned chl_dc;
-      //! Chlorophyll scale factor.
-      double chl_sf;
-      //! Turbidity meter dark counts.
-      unsigned turb_dc;
-      //! Turbidity meter scale factor.
-      double turb_sf;
+      //! Immersion Coefficient.
+      unsigned im;
+      //! Scaling factor.
+      double a0;
+      //! Voltage offset.
+      double a1;
+      //! Sensor Medium.
+      std::string smed;
       //! Science Sensors Timeout.
       double m_sci_timeout;
     };
@@ -88,12 +86,8 @@ namespace Sensors
       Counter<double> m_wdog;
       //! Science Sensors Timer.
       Counter<double> m_sci_timer;
-      //! Dissolved Organic Matter.
-      IMC::DissolvedOrganicMatter m_dom;
-      //! Turbidity Coefficient.
-      IMC::Turbidity m_turb;
-      //! Chlorophyll.
-      IMC::Chlorophyll m_chl;
+      //! Photosynthetically Active Radiation.
+      IMC::PAR m_par;
       //! Received data line.
       std::string m_line;
       //! Science sensors commands from L2.
@@ -130,44 +124,32 @@ namespace Sensors
         .description("Serial port Baud Rate");
 
         param("Input Timeout", m_args.timeout)
-        .defaultValue("5.0")
+        .defaultValue("20.0")
         .minimumValue("2.0")
         .units(Units::Second)
         .description("Amount of seconds to wait for data before reporting an error");
 
-        param("CDOM -- Dark Counts", m_args.dom_dc)
-        .defaultValue("62")
-        .description("Signal output of the meter in clean water with black tape over detector");
+        param("Sensor Medium", m_args.smed)
+        .defaultValue("Air")
+        .description("Sensor Medium");
 
-        param("CDOM -- Scale Factor", m_args.dom_sf)
-        .defaultValue("0.0916")
-        .description("Scale factor is used to derive instrument output concentration"
-                     " from the raw signal output of the fluorometer");
+        param("Immersion Coefficient", m_args.im)
+        .defaultValue("1.3589")
+        .description("Immersion Coefficient");
 
-        param("Chlorophyll -- Dark Counts", m_args.chl_dc)
-        .defaultValue("49")
-        .description("Signal output of the meter in clean water with black tape over detector");
+        param("Scaling Factor", m_args.a1)
+        .defaultValue("2908")
+        .description("Scaling Factor");
 
-        param("Chlorophyll -- Scale Factor", m_args.chl_sf)
-        .defaultValue("0.0073")
-        .description("Scale factor is used to derive instrument output concentration"
-                     " from the raw signal output of the fluorometer");
-
-        param("Turbidity -- Dark Counts", m_args.turb_dc)
-        .defaultValue("51")
-        .description("Signal output of the meter in clean water with black tape over detector");
-
-        param("Turbidity -- Scale Factor", m_args.turb_sf)
-        .defaultValue("0.0024")
-        .description("Scale factor is used to derive instrument output concentration"
-                     " from the raw signal output of the fluorometer");
+        param("Voltage Offset", m_args.a0)
+        .defaultValue("4393")
+        .description("Voltage Offset");
 
         param("Science Sensors Timeout", m_args.m_sci_timeout)
         .defaultValue("60")
         .units(Units::Second)
         .description("IMC::ScienceSensors is sent at timer expiration");
 
-        m_dom.type = IMC::DissolvedOrganicMatter::DT_COLORED;
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
 
         bind<IMC::ScienceSensors>(this);
@@ -182,18 +164,20 @@ namespace Sensors
         {
           // Stop communication.
           sendCommand(c_cmd_stop);
+          Delay::wait(10.0);
+          sendCommand(c_cmd_close);
           // Wait 2 seconds and turn sensor off.
           Delay::wait(2.0);
           m_gpio->setValue(1);
           // Sensor is not active.
           m_active = false;
-          trace("onUpdateParameters ECOPuck OFF");
+          trace("onUpdateParameters EcoPAR OFF");
           m_intervals.setTop(0.0);
           m_duration.setTop(0.0);
 
-          m_science.eco = 1;
-          m_science.eco_dur = 0.0;
-          m_science.eco_fr = 0.0;
+          m_science.par = 1;
+          m_science.par_dur = 0.0;
+          m_science.par_fr = 0.0;
         }
 
         // If sensor is off and Neptus wants to turn it on.
@@ -207,14 +191,14 @@ namespace Sensors
           {
             // Sensor is active.
             m_active = true;
-            trace("onUpdateParameters ECOPuck ON");
-            m_science.eco = 0;
-            m_science.eco_dur = 0.0;
-            m_science.eco_fr = 0.0;
+            trace("onUpdateParameters EcoPAR ON");
+            m_science.par = 0;
+            m_science.par_dur = 0.0;
+            m_science.par_fr = 0.0;
           }
           else
           {
-            trace("Could not initialize ECOPuck sensor");
+            trace("Could not initialize EcoPAR sensor");
           }
         }
 
@@ -223,15 +207,6 @@ namespace Sensors
 
       }
 
-      //! Reserve entity identifiers.
-      void
-      onEntityReservation(void)
-      {
-        //m_dom.setSourceEntity(reserveEntity("EcoPuck"));
-        //m_turb.setSourceEntity(reserveEntity("EcoPuck"));
-        //m_chl.setSourceEntity(reserveEntity("EcoPuck"));
-      }
-      
       //! Acquire resources.
       void
       onResourceAcquisition(void)
@@ -242,25 +217,25 @@ namespace Sensors
           m_uart->setCanonicalInput(true);
           m_uart->flush();
 
-          m_gpio = new Hardware::GPIO(243);
+          m_gpio = new Hardware::GPIO(75);
           m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
           if(m_active)
           {
-            trace("onResourceAcquisition ECOPuck ON");
+            trace("onResourceAcquisition EcoPAR ON");
             // turn on
             m_gpio->setValue(0);
-            m_science.eco = 0;
-            m_science.eco_dur = 0.0;
-            m_science.eco_fr = 0.0;
+            m_science.par = 0;
+            m_science.par_dur = 0.0;
+            m_science.par_fr = 0.0;
           }
           else
           {
-            trace("onResourceAcquisition ECOPuck OFF");
+            trace("onResourceAcquisition EcoPAR OFF");
             //turn off.
             m_gpio->setValue(1);
-            m_science.eco = 1;
-            m_science.eco_dur = 0.0;
-            m_science.eco_fr = 0.0;
+            m_science.par = 1;
+            m_science.par_dur = 0.0;
+            m_science.par_fr = 0.0;
           }
         }
         catch (std::runtime_error& e)
@@ -295,6 +270,8 @@ namespace Sensors
       onResourceRelease(void)
       {
         sendCommand(c_cmd_stop);
+        Delay::wait(5.0);
+        sendCommand(c_cmd_close);
         m_active = false;
         Memory::clear(m_uart);
         Memory::clear(m_gpio);
@@ -303,19 +280,19 @@ namespace Sensors
       void
       consume(const IMC::ScienceSensors* msg)
       {
-        if (msg->getSource() != getSystemId() && msg->eco != 3)
+        if (msg->getSource() != getSystemId() && msg->par != 3)
         {
           spew("Received IMC::ScienceSensors from L2");
 
           // Message is from L2.
-          m_science.eco = msg->eco;
-          m_science.eco_dur = msg->eco_dur;
-          m_science.eco_fr = msg->eco_fr;
+          m_science.par = msg->par;
+          m_science.par_dur = msg->par_dur;
+          m_science.par_fr = msg->par_fr;
           
-          if(m_science.eco == 2)
+          if(m_science.par == 2)
           {
             // implement sensor rebooting.
-          } else if(!m_active && m_science.eco == 0)
+          } else if(!m_active && m_science.par == 0)
           {
             // Turn sensor on.
             m_gpio->setValue(0);
@@ -325,11 +302,11 @@ namespace Sensors
             {
               // Sensor is active.
               m_active = true;
-              trace("from Iridium: ECOPuck ON");
-              if(m_science.eco_dur > 0.0)
+              trace("from Iridium: EcoPAR ON");
+              if(m_science.par_dur > 0.0)
               {
-                m_duration.setTop(m_science.eco_dur);
-                trace("Sampling duration set: %d",m_science.eco_dur);
+                m_duration.setTop(m_science.par_dur);
+                trace("Sampling duration set: %d",m_science.par_dur);
               } else
               {
                 trace("Sampling duration NOT set");
@@ -338,12 +315,14 @@ namespace Sensors
             }
             else
             {
-              trace("Could not initialize ECOPuck sensor");
+              trace("Could not initialize EcoPAR sensor");
             }
-          } else if(m_science.eco == 1)
+          } else if(m_science.par == 1)
           {
             // Stop communication.
             sendCommand(c_cmd_stop);
+            Delay::wait(10.0);
+            sendCommand(c_cmd_close);
             // Wait 2 seconds and turn sensor off.
             Delay::wait(2.0);
             m_gpio->setValue(1);
@@ -351,7 +330,7 @@ namespace Sensors
             m_active = false;
             m_intervals.setTop(0.0);
             m_duration.setTop(0.0);
-            trace("from Iridium: ECOPuck OFF.");
+            trace("from Iridium: EcoPAR OFF.");
           }
 
           // if m_science.eco == 3 -> do nothing.
@@ -363,28 +342,39 @@ namespace Sensors
       void
       process(const std::string& msg)
       {
-        unsigned turb, chl, dom;
-        int rv = std::sscanf(msg.c_str(),"%*s\t%*s\t%*u\t%u\t%*u\t%u\t%*u\t%u\t%*u\r\n",
-                             &turb, &chl, &dom);
+        std::string msg_sub = msg.substr(0,3);
 
-        if (rv == 3)
+        if(msg_sub.compare("mvs") == 0)
+          return;
+
+        unsigned par;
+        int rv = std::sscanf(msg.c_str(),"%*s\t%*s\t%u\r\n",
+                             &par);
+
+        double par_double = (double) par;
+
+        if (rv == 1)
         {
-          trace("counts: chlor: %u | fdom: %u | turbidity: %u", chl, dom, turb);
+          trace("counts: par: %u", par);
 
           double tstamp = Clock::getSinceEpoch();
-          m_turb.setTimeStamp(tstamp);
-          m_chl.setTimeStamp(tstamp);
-          m_dom.setTimeStamp(tstamp);
-          m_turb.value = m_args.turb_sf * (double)(turb - m_args.turb_dc);
-          m_chl.value = m_args.chl_sf * (double)(chl - m_args.chl_dc);
-          m_dom.value = m_args.dom_sf * (double)(dom - m_args.dom_dc);
+          m_par.setTimeStamp(tstamp);
 
-          dispatch(m_turb, DF_KEEP_TIME);
-          dispatch(m_dom, DF_KEEP_TIME);
-          dispatch(m_chl, DF_KEEP_TIME);
+          //! Compute exponential.
+          double ex = (par_double-m_args.a0)/m_args.a1;
+          double factor = std::pow(10,ex);
+          if(m_args.smed.compare("Air")==0)
+          {
+              m_par.value = 1.0*factor;
+          } else if(m_args.smed.compare("Water")==0)
+          {
+              m_par.value = m_args.im*factor;
+          }
 
-          trace("output: chlor: %f | fdom: %f | turbidity: %f",
-                m_chl.value, m_dom.value, m_turb.value);
+          dispatch(m_par, DF_KEEP_TIME);
+
+          trace("output PAR value: %f",
+                m_par.value);
 
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
           m_wdog.reset();
@@ -417,7 +407,7 @@ namespace Sensors
 
         char bfr[256];
 
-        if (!Poll::poll(*m_uart, 2.0))
+        if (!Poll::poll(*m_uart, 10.0))
           return;
 
         size_t rv = m_uart->readString(bfr, sizeof(bfr));
@@ -430,6 +420,7 @@ namespace Sensors
           if (bfr[i] == '\n')
           {
             spew("recv: %s", sanitize(m_line).c_str());
+
             process(m_line);
             m_line.clear();
           }
@@ -451,9 +442,7 @@ namespace Sensors
             // Get data from sensor
             listen();
 
-            trace("EcoPuck Dissolved Organic Matter: %.2f", m_dom.value);
-            trace("EcoPuck Turbidity: %.2f", m_turb.value);
-            trace("EcoPuck Chlorophyll: %.2f", m_chl.value);
+            trace("EcoPAR PAR: %.2f", m_par.value);
 
             // Not received communication for a while
             if (m_wdog.overflow())
@@ -466,20 +455,22 @@ namespace Sensors
           // If sensor is active and sampling period expires.
           if(m_active && m_duration.getTop()!=0.0 && m_duration.overflow())
           {
-            // Stop communication.
+            // Stop Bio-Wiper and communication.
             sendCommand(c_cmd_stop);
+            Delay::wait(10.0);
+            sendCommand(c_cmd_close);
             // Wait 2 seconds and turn sensor off.
             Delay::wait(2.0);
             m_gpio->setValue(1);
             // Sensor is not active.
             m_active = false;
-            trace("ECOPuck finished sampling: turning OFF");
+            trace("EcoPAR finished sampling: turning OFF");
 
             // Sensor is off.
-            m_science.eco = 1;
+            m_science.par = 1;
             
-            if(m_science.eco_fr > 0.0) //Samplings are periodical, not just one.
-              m_intervals.setTop(m_science.eco_fr);
+            if(m_science.par_fr > 0.0) //Samplings are periodical, not just one.
+              m_intervals.setTop(m_science.par_fr);
           }
 
           // If sensor is inactive and sleeping period expires.
@@ -493,16 +484,16 @@ namespace Sensors
             {
               // Sensor is active.
               m_active = true;
-              trace("Periodical: ECOPuck ON");
+              trace("Periodical: EcoPAR ON");
               m_duration.reset();
-              m_duration.setTop(m_science.eco_dur);
+              m_duration.setTop(m_science.par_dur);
 
               // Sensor is on.
-              m_science.eco = 0;
+              m_science.par = 0;
             }
             else
             {
-              trace("Could not initialize EcoPuck sensor");
+              trace("Could not initialize EcoPAR sensor");
             }
           }
 
@@ -515,7 +506,7 @@ namespace Sensors
             m_science.setSource(getSystemId());
             m_science.setDestination(0x8803);
             dispatch(m_science, DF_LOOP_BACK);
-            debug("ECOPUCK, IMC::ScienceSensors OUT: %d %d %d", m_science.eco, m_science.eco_dur, m_science.eco_fr);
+            debug("EcoPAR, IMC::ScienceSensors OUT: %d %d %d", m_science.par, m_science.par_dur, m_science.par_fr);
             m_sci_timer.reset();
           }
           

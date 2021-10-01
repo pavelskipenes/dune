@@ -174,7 +174,7 @@ namespace Sensors
 
       for ( size_t c = 0; c < m_ncells; ++c )
       {
-        cp_cell.cellposition = m_blank + m_csize * c;
+        cp_cell.pos = m_blank + m_csize * c;
         cp_cell.beams.clear();
 
         for(size_t b = 0; b < m_nbeams; ++b)

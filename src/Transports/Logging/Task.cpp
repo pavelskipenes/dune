@@ -82,6 +82,10 @@ namespace Transports
       IMC::LoggingControl m_log_ctl;
       // True if logging is enabled.
       bool m_active;
+      //! Task restart timer.
+      Counter<double> m_timer;
+      //! year string.
+      std::string year;
       // Task arguments.
       Arguments m_args;
 
@@ -128,6 +132,8 @@ namespace Transports
       onResourceInitialization(void)
       {
         bind(this, m_args.messages);
+
+        m_timer.setTop(60);
 
         // Initialize entity state.
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
@@ -342,6 +348,11 @@ namespace Transports
         / Time::Format::getDateSafe(ref_time)
         / Time::Format::getTimeSafe(ref_time) + dir_label;
 
+        std::string year_month_day = Time::Format::getDateSafe(ref_time);
+        year = year_month_day.substr(0,4);
+        //std::string b = Time::Format::getTimeSafe(ref_time) + dir_label;
+        debug("year: %s",year.c_str());
+
         // Create log directory.
         m_dir.create();
 
@@ -438,6 +449,10 @@ namespace Transports
         while (!stopping())
         {
           waitForMessages(1.0);
+
+          if(m_timer.overflow() && year.compare("2021")!=0)
+            throw RestartNeeded(DTR("Restart Transports/Logging"), 5);
+
           if (m_active)
           {
             try

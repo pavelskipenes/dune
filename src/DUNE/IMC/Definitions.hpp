@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 15a453bf8cd23a70e3e712d94358e1ce                            *
+// IMC XML MD5: d42cead96ccbcb8f221e1aa539695508                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -26677,7 +26677,7 @@ namespace DUNE
     {
     public:
       //! Cell Position.
-      fp32_t cellposition;
+      fp32_t pos;
       //! Beams Measurements.
       MessageList<ADCPBeam> beams;
 
@@ -27133,6 +27133,12 @@ namespace DUNE
       uint32_t eco_dur;
       //! EcoPuck activation frequency.
       uint32_t eco_fr;
+      //! EcoPAR.
+      int8_t par;
+      //! EcoPAR duration.
+      uint32_t par_dur;
+      //! EcoPAR activation frequency.
+      uint32_t par_fr;
 
       static uint16_t
       getIdStatic(void)
@@ -27181,8 +27187,170 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 45;
+        return 54;
       }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Reply L3 Scientific Sensors.
+    class ScienceSensorsReply: public Message
+    {
+    public:
+      //! ADCP.
+      int8_t adcp;
+      //! ADCP duration.
+      uint32_t adcp_dur;
+      //! ADCP activation frequency.
+      uint32_t adcp_fr;
+      //! CTD.
+      int8_t ctd;
+      //! CTD duration.
+      uint32_t ctd_dur;
+      //! CTD activation frequency.
+      uint32_t ctd_fr;
+      //! OPTODE.
+      int8_t opt;
+      //! OPTODE duration.
+      uint32_t opt_dur;
+      //! OPTODE activation frequency.
+      uint32_t opt_fr;
+      //! TBLive.
+      int8_t tbl;
+      //! TBLive duration.
+      uint32_t tbl_dur;
+      //! TBLive activation frequency.
+      uint32_t tbl_fr;
+      //! EcoPuck.
+      int8_t eco;
+      //! EcoPuck duration.
+      uint32_t eco_dur;
+      //! EcoPuck activation frequency.
+      uint32_t eco_fr;
+      //! EcoPAR.
+      int8_t par;
+      //! EcoPAR duration.
+      uint32_t par_dur;
+      //! EcoPAR activation frequency.
+      uint32_t par_fr;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 2011;
+      }
+
+      ScienceSensorsReply(void);
+
+      ScienceSensorsReply*
+      clone(void) const
+      {
+        return new ScienceSensorsReply(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return ScienceSensorsReply::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "ScienceSensorsReply";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 54;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Photosynthetically Active Radiation.
+    class PAR: public Message
+    {
+    public:
+      //! Value.
+      fp32_t value;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 2012;
+      }
+
+      PAR(void);
+
+      PAR*
+      clone(void) const
+      {
+        return new PAR(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return PAR::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "PAR";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 4;
+      }
+
+      fp64_t
+      getValueFP(void) const;
+
+      void
+      setValueFP(fp64_t val);
 
       void
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
@@ -27311,6 +27479,81 @@ namespace DUNE
       getFixedSerializationSize(void) const
       {
         return 56;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Single Current Cell.
+    class SingleCurrentCell: public Message
+    {
+    public:
+      //! Latitude WGS-84.
+      fp64_t lat;
+      //! Longitude WGS-84.
+      fp64_t lon;
+      //! Cell Depth.
+      std::string depth;
+      //! Water Velocity.
+      std::string vel;
+      //! Direction.
+      std::string dir;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 2013;
+      }
+
+      SingleCurrentCell(void);
+
+      SingleCurrentCell*
+      clone(void) const
+      {
+        return new SingleCurrentCell(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return SingleCurrentCell::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "SingleCurrentCell";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 16;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(depth) + IMC::getSerializationSize(vel) + IMC::getSerializationSize(dir);
       }
 
       void
