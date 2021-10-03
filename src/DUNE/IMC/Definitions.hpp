@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: b74b7b539df3601fb358d4b65474dd62                            *
+// IMC XML MD5: c756834414c77941d0284c7a239957ac                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -27435,6 +27435,8 @@ namespace DUNE
     class Gamma: public Message
     {
     public:
+      //! Source.
+      std::string source;
       //! Latitude WGS-84.
       fp64_t lat;
       //! Longitude WGS-84.
@@ -27496,6 +27498,12 @@ namespace DUNE
       getFixedSerializationSize(void) const
       {
         return 32;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(source);
       }
 
       fp64_t

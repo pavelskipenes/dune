@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: b74b7b539df3601fb358d4b65474dd62                            *
+// IMC XML MD5: c756834414c77941d0284c7a239957ac                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -29280,6 +29280,7 @@ namespace DUNE
     void
     Gamma::clear(void)
     {
+      source.clear();
       lat = 0;
       lon = 0;
       sog = 0;
@@ -29292,6 +29293,7 @@ namespace DUNE
     Gamma::fieldsEqual(const Message& msg__) const
     {
       const IMC::Gamma& other__ = static_cast<const Gamma&>(msg__);
+      if (source != other__.source) return false;
       if (lat != other__.lat) return false;
       if (lon != other__.lon) return false;
       if (sog != other__.sog) return false;
@@ -29313,6 +29315,7 @@ namespace DUNE
     Gamma::serializeFields(uint8_t* bfr__) const
     {
       uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(source, ptr__);
       ptr__ += IMC::serialize(lat, ptr__);
       ptr__ += IMC::serialize(lon, ptr__);
       ptr__ += IMC::serialize(sog, ptr__);
@@ -29326,6 +29329,7 @@ namespace DUNE
     Gamma::deserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(source, bfr__, size__);
       bfr__ += IMC::deserialize(lat, bfr__, size__);
       bfr__ += IMC::deserialize(lon, bfr__, size__);
       bfr__ += IMC::deserialize(sog, bfr__, size__);
@@ -29339,6 +29343,7 @@ namespace DUNE
     Gamma::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(source, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(lat, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(lon, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(sog, bfr__, size__);
@@ -29363,6 +29368,7 @@ namespace DUNE
     void
     Gamma::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
     {
+      IMC::toJSON(os__, "source", source, nindent__);
       IMC::toJSON(os__, "lat", lat, nindent__);
       IMC::toJSON(os__, "lon", lon, nindent__);
       IMC::toJSON(os__, "sog", sog, nindent__);
