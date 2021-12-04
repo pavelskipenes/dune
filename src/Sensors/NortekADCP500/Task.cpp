@@ -157,6 +157,14 @@ namespace Sensors
       double m_current_lat;
       //! Current vessel longitude.
       double m_current_lon;
+      //! Timer beam vel averaging.
+      Counter<double> m_timer;
+      //! Average factor.
+      int m_avg_zero,m_avg_one;
+      //! Average last velocity value.
+      double m_beam_velocity_zero_avg_last,m_beam_velocity_one_avg_last;
+      //! Average velocity value.
+      double m_beam_velocity_zero_avg,m_beam_velocity_one_avg;
       //! Configuration parameters.
       Arguments m_args;
       
@@ -173,7 +181,9 @@ namespace Sensors
         m_parser(NULL),
         m_triggered(false),
         m_serial(false),
-        m_salinity_arrived(false)
+        m_salinity_arrived(false),
+        m_avg_zero(0),
+        m_avg_one(0)
       {
         // Define configuration parameters.
         param("Activate Sensor", m_args.activate)
@@ -485,6 +495,8 @@ namespace Sensors
       void
       onResourceAcquisition(void)
       {
+        m_timer.setTop(15.0);
+
         consumeMessages();
 
         try
@@ -761,16 +773,34 @@ namespace Sensors
               // DIRECTION is tangent of x and y.
             }
 
-            //spew("BEAM VEL1 %f, BEAM VEL2 %f, BEAM VEL3 %f, BEAM VEL4 %f", beam_velocities[0],beam_velocities[1],beam_velocities[2],beam_velocities[3]);
 
+            //spew("BEAM VEL1 %f, BEAM VEL2 %f, BEAM VEL3 %f, BEAM VEL4 %f", beam_velocities[0],beam_velocities[1],beam_velocities[2],beam_velocities[3]);
             
             if(cell_is_good)
             {
-              spew("Cell at depth %0.3f is good.",cell->pos);
+              //spew("Cell at depth %0.3f is good.",cell->pos);
 
               // Rotate of 45deg about z, as the sensor is rotated with respect to the vessel.
-              double u_body = beam_velocities[0]*std::cos(Angles::radians(45))-beam_velocities[1]*std::sin(Angles::radians(45));
-              double v_body = beam_velocities[0]*std::sin(Angles::radians(45))+beam_velocities[1]*std::cos(Angles::radians(45));
+
+              if(m_avg_zero==0)
+                m_beam_velocity_zero_avg = beam_velocities[0];
+              else
+                m_beam_velocity_zero_avg = ((m_beam_velocity_zero_avg_last * m_avg_zero + beam_velocities[0]) / (m_avg_zero + 1));
+              m_avg_zero++;
+              m_beam_velocity_zero_avg_last = m_beam_velocity_zero_avg;
+
+              if(m_avg_one==0)
+                m_beam_velocity_one_avg = beam_velocities[1];
+              else
+                m_beam_velocity_one_avg = ((m_beam_velocity_one_avg_last * m_avg_one + beam_velocities[1]) / (m_avg_one + 1));
+              m_avg_zero++;
+              m_beam_velocity_one_avg_last = m_beam_velocity_one_avg;
+
+              
+              double u_body = m_beam_velocity_zero_avg*std::cos(Angles::radians(45))-m_beam_velocity_one_avg*std::sin(Angles::radians(45));
+              double v_body = m_beam_velocity_zero_avg*std::sin(Angles::radians(45))+m_beam_velocity_one_avg*std::cos(Angles::radians(45));
+
+              debug("ADCP TASK: relative u %.3f, relative v %.3f",u_body,v_body);
 
               // Add velocity/sog.
               double u = m_estate.u - u_body; //u_body = u_r.
@@ -794,17 +824,17 @@ namespace Sensors
               std::string depth = std::to_string(cell->pos);
               std::string depth_tuple = depth.substr(0, 5) + ";"; //"depth=" + 
               std::string str_red = depth.substr(0, 5);
-              spew("GOOD CELL, depth STRING: depth=%s",str_red.c_str());
+              //spew("GOOD CELL, depth STRING: depth=%s",str_red.c_str());
 
               std::string velocity = std::to_string(curr_velocity);
               std::string velocity_tuple = velocity.substr(0, 6) + ";"; //"vel=" +
               std::string str_vel = velocity.substr(0, 6);
-              spew("GOOD CELL, velocity in Earth Frame: vel=%s",str_vel.c_str());
+              //spew("GOOD CELL, velocity in Earth Frame: vel=%s",str_vel.c_str());
 
               std::string direction = std::to_string(curr_direction);
               std::string direction_tuple = direction.substr(0, 6) + ";"; //"dir=" + 
               std::string str_dir = direction.substr(0, 6);
-              spew("GOOD CELL, direction in Earth Frame: dir=%s",str_dir.c_str());
+              //spew("GOOD CELL, direction in Earth Frame: dir=%s",str_dir.c_str());
 
               column_profile.depth.append(depth_tuple);
               column_profile.vel.append(velocity_tuple);
@@ -812,10 +842,10 @@ namespace Sensors
 
             } else
             {
-              spew("Cell at depth %0.3f is NOT good.",cell->pos);
+              //spew("Cell at depth %0.3f is NOT good.",cell->pos);
             }
           }
-          spew("Dispatching profile...");
+          //spew("Dispatching profile...");
           dispatch(column_profile);
           
         }
@@ -928,15 +958,14 @@ namespace Sensors
             if (!isParserOn())
               throw RestartNeeded(DTR("Failure to initialize ADCP parser"), 5);
 
-            if (m_parser->readData(m_cp))
+            if(m_parser->readData(m_cp))
             {
               // Reset timer.
               m_wdog.reset();
 
               // Manipulate raw ADCP data.
               createSingleCell(m_cp);
-
-              spew("Received current profile from ADCP parser.");
+              //spew("Received current profile from ADCP parser.");
             }
 
             if (m_wdog.overflow())
