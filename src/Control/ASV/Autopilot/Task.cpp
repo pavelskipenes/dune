@@ -206,10 +206,10 @@ namespace Control
           m_des_head_arrived(false),
           m_gain_sch(false),
           m_service(true),
-          m_avg_adcp(0.0),
-          m_avg_adcp_old(0.0),
-          m_avg_sog(0.0),
-          m_avg_sog_old(0.0)
+          m_avg_adcp(0),
+          m_avg_adcp_old(0),
+          m_avg_sog(0),
+          m_avg_sog_old(0)
         {
           param("Enable Gain Scheduling", m_args.en_gain_sch)
           .defaultValue("true")
@@ -690,8 +690,8 @@ namespace Control
           m_gamma_adcp.sog = m_sog; m_gamma_adcp_old.sog = m_sog; m_gamma_sog.sog = m_sog; m_gamma_sog_old.sog = m_sog;
           m_gamma_adcp.depth = m_shallowest_depth; m_gamma_adcp_old.depth = m_shallowest_depth; m_gamma_sog_old.depth = m_shallowest_depth;
 
-          double u_c_body = m_shallowest_vel*std::cos(m_heading-m_shallowest_dir);
-          double v_c_body = m_shallowest_vel*std::sin(m_heading-m_shallowest_dir);
+          double u_c_body = m_shallowest_vel*std::cos(m_shallowest_dir-m_heading);
+          double v_c_body = m_shallowest_vel*std::sin(m_shallowest_dir-m_heading);
           debug("u_c_body %f - v_c_body %f",u_c_body,v_c_body);
           m_gamma_adcp.uc = u_c_body;
           m_gamma_adcp_old.uc = u_c_body;
@@ -700,21 +700,24 @@ namespace Control
           m_U_r = std::sqrt(std::pow(m_u_r,2) + std::pow(m_v_r,2));
             
           m_gamma_adcp.value = m_u_r*m_U_r*(1.0 - (m_u*u_c_body)/std::pow(m_sog,2) - (k*m_u*m_u_r)/std::pow(m_sog,2));
-          debug("GAMMA TERMS USING ADCP - u: %.3f, u_c_body: %.3f, u_r: %.3f, U_r: %.3f, U: %.3f, gamma: %f",m_u,u_c_body,m_u_r,m_U_r,m_sog,m_gamma_adcp.value);
+          //debug("GAMMA TERMS USING ADCP - u: %.3f, u_c_body: %.3f, u_r: %.3f, U_r: %.3f, U: %.3f, gamma: %f",m_u,u_c_body,m_u_r,m_U_r,m_sog,m_gamma_adcp.value);
 
           m_gamma_adcp_old.value = 1.0 - (m_u*u_c_body)/std::pow(m_sog,2) - (k*m_u*m_u_r)/std::pow(m_sog,2);
-          debug("GAMMA TERMS USING ADCP (OLD) - u: %.3f, u_c_body: %.3f, u_r: %.3f, U: %.3f, gamma: %f",m_u,u_c_body,m_u_r,m_sog,m_gamma_adcp_old.value);
+          //debug("GAMMA TERMS USING ADCP (OLD) - u: %.3f, u_c_body: %.3f, u_r: %.3f, U: %.3f, gamma: %f",m_u,u_c_body,m_u_r,m_sog,m_gamma_adcp_old.value);
 
           dispatch(m_gamma_adcp);
           dispatch(m_gamma_adcp_old);
 
           m_gamma_sog.uc = 0; m_gamma_sog_old.uc = 0;
-          m_gamma_sog.value = std::pow(m_u,2)*(1.0 - (k*std::pow(m_u,2))/std::pow(m_sog,2));
-          debug("GAMMA TERMS USING SOG - u: %.3f, u_r: %.3f, U: %.3f, gamma: %f",m_u,m_u_r,m_sog,m_gamma_sog.value);
+          m_gamma_sog.value = m_u*m_sog*(1.0 - (k*std::pow(m_u,2))/std::pow(m_sog,2));
+          //debug("GAMMA TERMS USING SOG - u: %.3f, u_r: %.3f, U: %.3f, gamma: %f",m_u,m_u_r,m_sog,m_gamma_sog.value);
           m_gamma_sog_old.value = 1.0 - (k*std::pow(m_u,2))/std::pow(m_sog,2);
-          debug("GAMMA TERMS USING SOG (OLD) - u: %.3f, U: %.3f, gamma: %f",m_u,m_sog,m_gamma_sog_old.value);
+          //debug("GAMMA TERMS USING SOG (OLD) - u: %.3f, U: %.3f, gamma: %f",m_u,m_sog,m_gamma_sog_old.value);
 
           dispatch(m_gamma_sog);
+          dispatch(m_gamma_sog_old);
+
+          debug("SPEEDS - u: %.3f, v: %.3f, u_c_body: %.3f, v_c_body: %.3f, u_r: %.3f, v_r: %.3f, U: %.3f, U_r: %.3f",m_u,m_v,u_c_body,v_c_body,m_u_r,m_v_r,m_sog,m_U_r);
 
           debug("GAMMAS - ADCP: %f, ADCP (OLD): %f, SOG: %f, SOG (OLD): %f", m_gamma_adcp.value, m_gamma_adcp_old.value, m_gamma_sog.value, m_gamma_sog_old.value);
 
@@ -989,22 +992,22 @@ namespace Control
               m_timer_gs.reset();
 
               float Kp,Ki;
-              if(m_sch_source.compare("adcp") && m_gamma_avg_adcp!=0)
+              if(m_sch_source.compare("adcp")==0 && m_gamma_avg_adcp!=0)
               {
                 debug("Gamma with ADCP value %f averaged over %.3f seconds.",m_gamma_avg_adcp,m_gs_interval);
                 Kp = (0.4/m_gamma_avg_adcp)*m_args.course_gains_trans[0];
                 Ki = (0.4/m_gamma_avg_adcp)*m_args.course_gains_trans[1];
-              } else if(m_sch_source.compare("adcp_old") && m_gamma_avg_adcp_old!=0)
+              } else if(m_sch_source.compare("adcp_old")==0 && m_gamma_avg_adcp_old!=0)
               {
                 debug("Gamma with ADCP (OLD) value %f averaged over %.3f seconds.",m_gamma_avg_adcp_old,m_gs_interval);
                 Kp = (0.4/m_gamma_avg_adcp_old)*m_args.course_gains_trans[0];
                 Ki = (0.4/m_gamma_avg_adcp_old)*m_args.course_gains_trans[1];
-              } else if(m_sch_source.compare("sog") && m_gamma_avg_sog!=0)
+              } else if(m_sch_source.compare("sog")==0 && m_gamma_avg_sog!=0)
               {
                 debug("Gamma with SOG value %f averaged over %.3f seconds.",m_gamma_avg_sog,m_gs_interval);
                 Kp = (0.4/m_gamma_avg_sog)*m_args.course_gains_trans[0];
                 Ki = (0.4/m_gamma_avg_sog)*m_args.course_gains_trans[1];
-              } else if(m_sch_source.compare("sog_old") && m_gamma_avg_sog_old!=0)
+              } else if(m_sch_source.compare("sog_old")==0 && m_gamma_avg_sog_old!=0)
               {
                 debug("Gamma with SOG (OLD) value %f averaged over %.3f seconds.",m_gamma_avg_sog_old,m_gs_interval);
                 Kp = (0.4/m_gamma_avg_sog_old)*m_args.course_gains_trans[0];
