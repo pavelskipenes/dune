@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: c756834414c77941d0284c7a239957ac                            *
+// IMC XML MD5: d90ab8a30587da18e36034b3b517c553                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -716,5 +716,7 @@
 #define DUNE_IMC_SINGLECURRENTCELL 2013
 //! Gamma identification number.
 #define DUNE_IMC_GAMMA 2014
+//! Imu identification number.
+#define DUNE_IMC_IMU 1310
 
 #endif

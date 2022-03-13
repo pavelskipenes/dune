@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: c756834414c77941d0284c7a239957ac                            *
+// IMC XML MD5: d90ab8a30587da18e36034b3b517c553                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -17487,6 +17487,8 @@ namespace DUNE
       fp32_t width;
       //! Area -- Length.
       fp32_t length;
+      //! Polygon vertices.
+      MessageList<PolygonVertex> vertices;
 
       static uint16_t
       getIdStatic(void)
@@ -17538,8 +17540,30 @@ namespace DUNE
         return 53;
       }
 
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return vertices.getSerializationSize();
+      }
+
       void
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+
+    protected:
+      void
+      setTimeStampNested(double value__);
+
+      void
+      setSourceNested(uint16_t value__);
+
+      void
+      setSourceEntityNested(uint8_t value__);
+
+      void
+      setDestinationNested(uint16_t value__);
+
+      void
+      setDestinationEntityNested(uint8_t value__);
     };
 
     //! Get Operational Limits.
@@ -27514,6 +27538,91 @@ namespace DUNE
 
       void
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Imu.
+    class Imu: public Message
+    {
+    public:
+      //! Acceleration.
+      InlineMessage<Acceleration> acceleration;
+      //! AngularVelocity.
+      InlineMessage<AngularVelocity> angular_velocity;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 1310;
+      }
+
+      Imu(void);
+
+      Imu*
+      clone(void) const
+      {
+        return new Imu(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return Imu::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "Imu";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 0;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return acceleration.getSerializationSize() + angular_velocity.getSerializationSize();
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+
+    protected:
+      void
+      setTimeStampNested(double value__);
+
+      void
+      setSourceNested(uint16_t value__);
+
+      void
+      setSourceEntityNested(uint8_t value__);
+
+      void
+      setDestinationNested(uint16_t value__);
+
+      void
+      setDestinationEntityNested(uint8_t value__);
     };
   }
 }

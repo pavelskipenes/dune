@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: c756834414c77941d0284c7a239957ac                            *
+// IMC XML MD5: d90ab8a30587da18e36034b3b517c553                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -18808,6 +18808,7 @@ namespace DUNE
     {
       m_header.mgid = 504;
       clear();
+      vertices.setParent(this);
     }
 
     void
@@ -18825,6 +18826,7 @@ namespace DUNE
       orientation = 0;
       width = 0;
       length = 0;
+      vertices.clear();
     }
 
     bool
@@ -18843,6 +18845,7 @@ namespace DUNE
       if (orientation != other__.orientation) return false;
       if (width != other__.width) return false;
       if (length != other__.length) return false;
+      if (vertices != other__.vertices) return false;
       return true;
     }
 
@@ -18876,6 +18879,7 @@ namespace DUNE
       ptr__ += IMC::serialize(orientation, ptr__);
       ptr__ += IMC::serialize(width, ptr__);
       ptr__ += IMC::serialize(length, ptr__);
+      ptr__ += vertices.serialize(ptr__);
       return ptr__;
     }
 
@@ -18895,6 +18899,7 @@ namespace DUNE
       bfr__ += IMC::deserialize(orientation, bfr__, size__);
       bfr__ += IMC::deserialize(width, bfr__, size__);
       bfr__ += IMC::deserialize(length, bfr__, size__);
+      bfr__ += vertices.deserialize(bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -18914,6 +18919,7 @@ namespace DUNE
       bfr__ += IMC::reverseDeserialize(orientation, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(width, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(length, bfr__, size__);
+      bfr__ += vertices.reverseDeserialize(bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -18932,6 +18938,37 @@ namespace DUNE
       IMC::toJSON(os__, "orientation", orientation, nindent__);
       IMC::toJSON(os__, "width", width, nindent__);
       IMC::toJSON(os__, "length", length, nindent__);
+      vertices.toJSON(os__, "vertices", nindent__);
+    }
+
+    void
+    OperationalLimits::setTimeStampNested(double value__)
+    {
+      vertices.setTimeStamp(value__);
+    }
+
+    void
+    OperationalLimits::setSourceNested(uint16_t value__)
+    {
+      vertices.setSource(value__);
+    }
+
+    void
+    OperationalLimits::setSourceEntityNested(uint8_t value__)
+    {
+      vertices.setSourceEntity(value__);
+    }
+
+    void
+    OperationalLimits::setDestinationNested(uint16_t value__)
+    {
+      vertices.setDestination(value__);
+    }
+
+    void
+    OperationalLimits::setDestinationEntityNested(uint8_t value__)
+    {
+      vertices.setDestinationEntity(value__);
     }
 
     GetOperationalLimits::GetOperationalLimits(void)
@@ -29375,6 +29412,140 @@ namespace DUNE
       IMC::toJSON(os__, "uc", uc, nindent__);
       IMC::toJSON(os__, "depth", depth, nindent__);
       IMC::toJSON(os__, "value", value, nindent__);
+    }
+
+    Imu::Imu(void)
+    {
+      m_header.mgid = 1310;
+      clear();
+      acceleration.setParent(this);
+      angular_velocity.setParent(this);
+    }
+
+    void
+    Imu::clear(void)
+    {
+      acceleration.clear();
+      angular_velocity.clear();
+    }
+
+    bool
+    Imu::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::Imu& other__ = static_cast<const Imu&>(msg__);
+      if (acceleration != other__.acceleration) return false;
+      if (angular_velocity != other__.angular_velocity) return false;
+      return true;
+    }
+
+    int
+    Imu::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    Imu::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += acceleration.serialize(ptr__);
+      ptr__ += angular_velocity.serialize(ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    Imu::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += acceleration.deserialize(bfr__, size__);
+      bfr__ += angular_velocity.deserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    Imu::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += acceleration.reverseDeserialize(bfr__, size__);
+      bfr__ += angular_velocity.reverseDeserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    Imu::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      acceleration.toJSON(os__, "acceleration", nindent__);
+      angular_velocity.toJSON(os__, "angular_velocity", nindent__);
+    }
+
+    void
+    Imu::setTimeStampNested(double value__)
+    {
+      if (!acceleration.isNull())
+      {
+        acceleration.get()->setTimeStamp(value__);
+      }
+
+      if (!angular_velocity.isNull())
+      {
+        angular_velocity.get()->setTimeStamp(value__);
+      }
+    }
+
+    void
+    Imu::setSourceNested(uint16_t value__)
+    {
+      if (!acceleration.isNull())
+      {
+        acceleration.get()->setSource(value__);
+      }
+
+      if (!angular_velocity.isNull())
+      {
+        angular_velocity.get()->setSource(value__);
+      }
+    }
+
+    void
+    Imu::setSourceEntityNested(uint8_t value__)
+    {
+      if (!acceleration.isNull())
+      {
+        acceleration.get()->setSourceEntity(value__);
+      }
+
+      if (!angular_velocity.isNull())
+      {
+        angular_velocity.get()->setSourceEntity(value__);
+      }
+    }
+
+    void
+    Imu::setDestinationNested(uint16_t value__)
+    {
+      if (!acceleration.isNull())
+      {
+        acceleration.get()->setDestination(value__);
+      }
+
+      if (!angular_velocity.isNull())
+      {
+        angular_velocity.get()->setDestination(value__);
+      }
+    }
+
+    void
+    Imu::setDestinationEntityNested(uint8_t value__)
+    {
+      if (!acceleration.isNull())
+      {
+        acceleration.get()->setDestinationEntity(value__);
+      }
+
+      if (!angular_velocity.isNull())
+      {
+        angular_velocity.get()->setDestinationEntity(value__);
+      }
     }
   }
 }

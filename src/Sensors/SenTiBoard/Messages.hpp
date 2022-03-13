@@ -174,7 +174,6 @@ namespace Sensors
         	checksum_c = calcChecksum(chr_arr+1,size__-6); //XOR checksum of everything between $ and *
 
         	std::string hmr_string(chr_arr, size__);
-        	//std::cout << hmr_string << std::endl;
 
         	std::stringstream hmr_ss(hmr_string);
         	std::getline(hmr_ss, msg_type, ',');
@@ -232,37 +231,16 @@ namespace Sensors
 		convertRawPtntccd(void)
         {
         	compareChecksum();
-            /*
-            std::cout << "raw_tilt_x: " << raw_tilt_x << std::endl;
-            std::cout << "raw_tilt_y: " << raw_tilt_y << std::endl;
-            */
         	tilt_x = atan(std::stod(raw_tilt_x, nullptr))/32767.0;
         	tilt_y = atan(std::stod(raw_tilt_y, nullptr))/32767.0;
-        	/*
-            std::cout << "raw_mag_x: " << raw_mag_x << std::endl;
-            std::cout << "raw_mag_y: " << raw_mag_y << std::endl;
-            std::cout << "raw_mag_z: " << raw_mag_z << std::endl;
-            std::cout << "raw mag_t: " << raw_mag_t << std::endl;
-            */
+
+        	heading = std::stod(raw_heading, nullptr);
+
         	mag_x = std::stod(raw_mag_x, nullptr)*2.0/32767.0;
         	mag_y = std::stod(raw_mag_y, nullptr)*2.0/32767.0;
         	mag_z = std::stod(raw_mag_z, nullptr)*2.0/32767.0;
-        	mag_t = std::stod(raw_mag_t, nullptr)*2.0/32767.0; // Guessing that it is the same conversion factor as with the single axis.
-            /*
-        	std::cout << "mag_x: " << mag_x << std::endl;
-            std::cout << "mag_y: " << mag_y << std::endl;
-            std::cout << "mag_z: " << mag_z << std::endl;
-            std::cout << "mag_t: " << mag_t << std::endl;
-            */
-            if (raw_heading.size() > 0)
-            {
-                heading = std::stod(raw_heading, nullptr);
-                /*
-                std::cout << "raw_heading: " << raw_heading << std::endl;
-                std::cout << "heading: " << heading << std::endl;
-                */
-            }
-            //std::cout << "checksum: " << checksum_str << std::endl;
+
+        	mag_t = std::stod(raw_mag_t, nullptr); // Unknown conversion factor.
         }
 
         void
@@ -278,7 +256,7 @@ namespace Sensors
         	mag_y = std::stod(raw_mag_y, nullptr)*2.0/32767.0;
         	mag_z = std::stod(raw_mag_z, nullptr)*2.0/32767.0;
 
-        	mag_t = std::stod(raw_mag_t, nullptr)*2.0/32767.0; // Guessing that it is the same conversion factor as with the single axis.
+        	mag_t = std::stod(raw_mag_t, nullptr); // Unknown conversion factor.
         }
 
         void
@@ -329,6 +307,7 @@ namespace Sensors
 
       ADIS(const SenTiBoard::Packet* pkt)
       {
+	prod_ids.resize(1,0);
         readTimes(pkt->data, 12);
         deserializeFields(pkt->data + 12, pkt->getLength() - 12);
       }
@@ -519,7 +498,7 @@ namespace Sensors
     private:
       uint16_t header;
       uint16_t length;
-      uint8_t payload[1024];
+      uint8_t payload[2048];
       uint8_t cka, ckb;
     };
 

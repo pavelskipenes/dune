@@ -97,10 +97,8 @@ namespace Control
         //! List of asv states
         Eigen::Matrix<double, 6, 1, Eigen::DontAlign> asv_state;
 
-        //! Outgoing desired heading message.
+        //! Desired heading message.
         IMC::DesiredHeading m_heading;
-        //! Outgoing desired speed message.
-        IMC::DesiredSpeed m_speed;
         //! Vector of obstacles
         std::vector<IMC::AisInfo> obst_vec;
         // Create matrix with past, current and next waypoint.
@@ -399,7 +397,6 @@ namespace Control
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
 
           // Register handler routines.
-          bind<IMC::DesiredPath>(this);
           bind<IMC::AisInfo>(this);
           bind<IMC::GpsFix>(this);
         }
@@ -686,26 +683,6 @@ namespace Control
           }*/
         }
 
-        //! From PathController.
-        void
-        consume(const IMC::DesiredPath* dpath)
-        {          
-          // Speed reference
-          m_speed.value = dpath->speed; //Maneuver speed reference.
-          m_speed.speed_units = dpath->speed_units; //Maneuver speed reference units.
-          spew("Speed from Desired path: %0.2f", m_speed.value);
-        }
-
-        /*void
-        consume(const IMC::PeekDesiredPath* ppath)
-        {
-          m_nextpath_lat = ppath->dpath->end_lat;
-          m_nextpath_lon = ppath->dpath->end_lon;
-          trace("NEXT NEXT WAYPOINT: lat %f - long %f",c_degrees_per_radian*m_nextpath_lat, c_degrees_per_radian*m_nextpath_lon);
-
-          m_more_than_one = true;
-        }*/
-
         //! From GPS Task
         void
         consume(const IMC::GpsFix* msg)
@@ -880,9 +857,6 @@ namespace Control
             m_heading.value += psi_os;
             m_heading.off = c_degrees_per_radian*psi_os;
 
-            //! New speed offset.
-            //m_speed.value += u_os;
-
             //! Normalize angle
             m_heading.value = Angles::normalizeRadian(m_heading.value);
 
@@ -899,12 +873,9 @@ namespace Control
           } else if (obst_vec.size() == 0 && (m_timestamp_new - m_timestamp_prev > 1.0) && !m_static_obst)
           {
             debug("No static nor dynamic obstacles!");
-            //spew("Desired Speed: %f", m_speed.value);
             m_timestamp_prev = m_timestamp_new;
             dispatch(m_heading);
           }
-
-          dispatch(m_speed);
         }
       };
     }

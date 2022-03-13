@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: c756834414c77941d0284c7a239957ac                            *
+// IMC XML MD5: d90ab8a30587da18e36034b3b517c553                            *
 //***************************************************************************
 
 MESSAGE(1, EntityState)
@@ -372,4 +372,5 @@ MESSAGE(2011, ScienceSensorsReply)
 MESSAGE(2012, PAR)
 MESSAGE(2013, SingleCurrentCell)
 MESSAGE(2014, Gamma)
+MESSAGE(1310, Imu)
 #undef MESSAGE

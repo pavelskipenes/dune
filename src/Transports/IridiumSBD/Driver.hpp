@@ -246,6 +246,14 @@ namespace Transports
         return m_queued_mt;
       }
 
+      //! Retrieve the count of MT SBD messages waiting at the GSS.
+      //! @return count of MT SBD messages queued at the GSS.
+      std::string
+      getCSQ(void)
+      {
+        return readValue("+CSQ");
+      }
+
     private:
       //! Message buffer types.
       enum BufferType

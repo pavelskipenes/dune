@@ -51,7 +51,7 @@ namespace Sensors
     {
     public:
       uint8_t header[8];
-      uint8_t data[1024];
+      uint8_t data[2048];
 
       Packet(void):
         id(0),

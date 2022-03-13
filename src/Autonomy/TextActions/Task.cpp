@@ -790,6 +790,10 @@ namespace Autonomy
           handleRadiationReportCommand(origin,args);
         else if (cmd == "actuation")
           handleActuationCommand(origin,args);
+        else if (cmd == "fence")
+          handleFenceCommand(origin,args);
+        else if (cmd == "camera")
+          handleCameraCommand(origin,args);
         else
           handlePlanGeneratorCommand(origin, cmd, args);
       }
@@ -1059,6 +1063,101 @@ namespace Autonomy
           ss << "Vehicle is executing!";
           reply(origin,ss.str());
         }
+      }
+
+      //! Execute command 'FENCE'
+      void
+      handleFenceCommand(const std::string& origin, const std::string& args)
+      {
+        std::stringstream ss;
+        bool executing = m_pcs->state == PlanControlState::PCS_EXECUTING;
+        if(executing)
+        {
+          IMC::OperationalLimits limits;
+          IMC::MessageList<IMC::PolygonVertex> locations;
+
+          //int pos = std::count(s.begin(), s.end(), ';');
+          // Get the first occurrence
+          size_t pos = args.find(";");
+          // Repeat till end is reached
+          std::vector<size_t> loc_pos;
+          while(pos != std::string::npos)
+          {
+            // Add position to the vector
+            loc_pos.push_back(pos);
+            // Get the next occurrence from the current position
+            pos = args.find(";", pos + 1);
+          }
+
+          for(int i=0; i<loc_pos.size(); i++)
+          {
+            if(i==0)
+            {
+              std::string pair = args.substr(0,loc_pos[0]);
+              size_t comma_pos = pair.find(",");
+              double pair_double[2];
+              pair_double[0] = std::stod(pair.substr(0,comma_pos-1));
+              pair_double[1] = std::stod(pair.substr(comma_pos+1,pair.length()-1));
+              IMC::PolygonVertex vertex;
+              vertex.lat = pair_double[0];
+              vertex.lon = pair_double[1];
+              locations.push_back(vertex);
+              debug("LAT: %f, LON: %f",pair_double[0],pair_double[1]);
+            } else
+            {
+              std::string pair = args.substr(loc_pos[i-1]+1,loc_pos[i]-1);
+              size_t comma_pos = pair.find(",");
+              double pair_double[2];
+              pair_double[0] = std::stod(pair.substr(0,comma_pos-1));
+              pair_double[1] = std::stod(pair.substr(comma_pos+1,pair.length()-1));
+              IMC::PolygonVertex vertex;
+              vertex.lat = pair_double[0];
+              vertex.lon = pair_double[1];
+              locations.push_back(vertex);
+              debug("LAT: %f, LON: %f",pair_double[0],pair_double[1]);
+            }
+          }
+
+          limits.mask = limits.mask | IMC::OPL_POLYGON;
+          limits.setDestinationEntity(resolveEntity("Operational Limits"));
+          limits.vertices = locations;
+          dispatch(limits);
+
+          ss << "Applying geofence..";
+          reply(origin,ss.str());
+        } else
+        {
+          ss << "USV is not MANEUVERING!";
+          reply(origin,ss.str());
+        }
+      }
+
+            //! Execute command 'CAMERA'
+      void
+      handleCameraCommand(const std::string& origin, const std::string& args)
+      {
+        std::stringstream ss;
+
+        char what[32];
+        std::sscanf(args.c_str(), "%s", what);
+
+        if(!strcmp(what, "frame"))
+        {
+          debug("Frame wanted via Iridium!");
+          ss << "Sending frame command to camera..";
+          reply(origin,ss.str());
+        } else if(!strcmp(what, "video"))
+        {
+          debug("Video wanted via Iridium!");
+          ss << "Sending video command to camera..";
+          reply(origin,ss.str());
+        }
+
+        // Send command to Sensors/Camera.
+        IMC::DevDataText cmd;
+        cmd.value = args;
+        cmd.setDestinationEntity(resolveEntity("Camera"));
+        dispatch(cmd);
       }
 
       //! Execute command 'RESTART'

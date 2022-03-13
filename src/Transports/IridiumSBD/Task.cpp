@@ -50,8 +50,6 @@ namespace Transports
     //! %Task arguments.
     struct Arguments
     {
-      //! Triggers sensor on and off.
-      bool activate;
       //! Serial port device.
       std::string uart_dev;
       //! Serial port baud rate.
@@ -64,10 +62,6 @@ namespace Transports
 
     struct Task: public DUNE::Tasks::Task
     {
-      //! GPIO state handle
-      Hardware::GPIO* m_gpio;
-      //! Indicates sensor state.
-      bool m_active;
       //! Serial port handle.
       SerialPort* m_uart;
       //! Driver handler.
@@ -88,20 +82,12 @@ namespace Transports
       //! @param[in] ctx context.
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
-        m_gpio(NULL),
-        m_active(false),
         m_uart(NULL),
         m_driver(NULL),
         m_tx_request(NULL)
       {
         //paramActive(Tasks::Parameter::SCOPE_GLOBAL,
         //            Tasks::Parameter::VISIBILITY_USER);
-
-        param("Activate Sensor", m_args.activate)
-        .scope(Tasks::Parameter::SCOPE_IDLE)
-        .visibility(Tasks::Parameter::VISIBILITY_USER)
-        .defaultValue("false")
-        .description("Controls sensor activation/deactivation");
 
         param("Serial Port - Device", m_args.uart_dev)
         .defaultValue("")
@@ -147,26 +133,6 @@ namespace Transports
       void
       onUpdateParameters(void)
       {
-        // If sensor is on and Neptus wants to turn it off.
-        if(m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
-        {
-          // Wait 2 seconds and turn sensor off.
-          Delay::wait(2.0);
-          m_gpio->setValue(1);
-          // Sensor is not active.
-          m_active = false;
-        }
-
-        // If sensor is off and Neptus wants to turn it on.
-        if(!m_active && paramChanged(m_args.activate) && getEntityState() == IMC::EntityState::ESTA_NORMAL)
-        {
-          // Turn sensor on.
-          m_gpio->setValue(0);
-          // Wait 2 seconds and initialize.
-          Delay::wait(2.0);
-          m_active = true;
-        }
-
         if (paramChanged(m_args.mbox_check_per))
           m_mbox_check_timer.setTop(m_args.mbox_check_per);
 
@@ -187,19 +153,9 @@ namespace Transports
           debug("manufacturer: %s", m_driver->getManufacturer().c_str());
           debug("model: %s", m_driver->getModel().c_str());
           debug("IMEI: %s", m_driver->getIMEI().c_str());
-
-          m_gpio = new Hardware::GPIO(60);
-          m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
-          if(m_active)
-          {
-            // turn on
-            m_gpio->setValue(0);
-          }
-          else
-          {
-            //turn off.
-            m_gpio->setValue(1);
-          }
+          debug("Queued: %u",m_driver->getQueuedMT());
+          debug("RSSI: %d",m_driver->getRSSI());
+          //debug("CSQ: %s",m_driver->getCSQ().c_str());
         }
         catch (std::runtime_error& e)
         {
