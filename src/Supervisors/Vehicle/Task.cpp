@@ -448,7 +448,7 @@ namespace Supervisors
           IMC::TransmissionRequest req;
           req.setDestination(m_ctx.resolver.id());
           req.data_mode = TransmissionRequest::DMODE_TEXT;
-          req.txt_data = "AutoNaut in ERROR mode!";
+          req.txt_data = "(A) AutoNaut in ERROR mode!";
           req.deadline = Clock::getSinceEpoch() + m_args.reply_timeout;
           req.req_id = ++m_reqid;
 
@@ -463,7 +463,7 @@ namespace Supervisors
           IMC::TransmissionRequest req;
           req.setDestination(m_ctx.resolver.id());
           req.data_mode = TransmissionRequest::DMODE_TEXT;
-          req.txt_data = "AutoNaut in DRIFTING!";
+          req.txt_data = "(A) AutoNaut in DRIFTING!";
           req.deadline = Clock::getSinceEpoch() + m_args.reply_timeout;
           req.req_id = ++m_reqid;
 

@@ -77,7 +77,7 @@ namespace Sensors
       //! Indicates camera state.
       bool m_active;
       //! Enable/disable modes.
-      bool m_broadcast, m_man_frame, m_man_video, m_video_saved, m_transmit;
+      bool m_broadcast, m_man_frame, m_man_video, m_video_saved, m_transmit, m_frame_taken, m_video_taken;
       //! Video length.
       int m_video_length;
       //! Automaitc routines.
@@ -99,7 +99,9 @@ namespace Sensors
         //m_gpio(NULL),
         m_active(false),
         m_broadcast(false),
-        m_transmit(false)
+        m_transmit(false),
+        m_frame_taken(false),
+        m_video_taken(false)
       {
         // Define configuration parameters.
         param("Stream broadcast", m_args.broadcast)
@@ -200,7 +202,7 @@ namespace Sensors
             if(!m_active)
               turnOnandWait();
             else
-              recordAndTransmitFrame();
+              recordAndTransmitFrame("man");
           }
         }
 
@@ -212,7 +214,7 @@ namespace Sensors
             if(!m_active)
               turnOnandWait();
             else
-              recordVideo();
+              recordVideo("man");
           }
         }
 
@@ -224,6 +226,7 @@ namespace Sensors
 
         if(paramChanged(m_args.auto_frame))
         {
+          m_man_frame = false; // Turn off manual frame capture in case it was ON.
           m_auto_frame = m_args.auto_frame;
           if(m_auto_frame)
             m_auto_frame_timer.setTop(m_auto_frame_period);
@@ -234,6 +237,7 @@ namespace Sensors
 
         if(paramChanged(m_args.auto_video))
         {
+          m_man_video = false; // Turn off manual frame capture in case it was ON.
           m_auto_video = m_args.auto_video;
           if(m_auto_video)
             m_auto_video_timer.setTop(m_auto_video_period);
@@ -314,7 +318,7 @@ namespace Sensors
           if(!m_active)
             turnOnandWait();
           else
-            recordAndTransmitFrame();
+            recordAndTransmitFrame("man");
         } else
         {
           char video[32], length[32];
@@ -326,15 +330,23 @@ namespace Sensors
           if(!m_active)
             turnOnandWait();
           else
-            recordVideo();
+            recordVideo("man");
         }
       }      
 
       void
-      recordAndTransmitFrame(void)
+      recordAndTransmitFrame(std::string mode)
       {
-        // Record.
-        std::string m_frame_rec_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash getFrameMan.sh >> /dev/null 2>&1");
+        std::string m_frame_rec_cmd, m_frame_transfer_cmd;
+        if(mode == "man")
+        {
+          m_frame_rec_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash getFrameMan.sh >> /dev/null 2>&1"); // Manual record.
+          m_frame_transfer_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash transmitFrameMan.sh >> /dev/null 2>&1");
+        } else
+        {
+          m_frame_rec_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash getFrameAuto.sh >> /dev/null 2>&1"); // Automatic record.
+          m_frame_transfer_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash transmitFrameAuto.sh >> /dev/null 2>&1");
+        }
         int ret = std::system(m_frame_rec_cmd.c_str())/256;
 
         if(m_transmit)
@@ -344,7 +356,6 @@ namespace Sensors
           int x = system("ping -c1 -s1 8.8.8.8  > /dev/null 2>&1");
           if (x==0){
             spew("Internet connection available, transferring frame to NTNU ... ");
-            std::string m_frame_transfer_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash transmitFrameMan.sh >> /dev/null 2>&1");
             int scp = std::system(m_frame_transfer_cmd.c_str())/256; // This function does not return if the NTNU server cannot be reached, and it will get stuck here.
           }else{
             spew("Internet connection NOT available ... ");
@@ -356,29 +367,39 @@ namespace Sensors
         {
           spew("Frame captured and transmitted. Camera turning off..");
           m_gpio->setValue(0);
+          m_active = false;
         }
       }
       
       void
-      recordVideo(void)
+      recordVideo(std::string mode)
       {
-        // Record.
-        std::string m_frame_rec_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash getVideoMan.sh ") + std::to_string(m_video_length) + String::str(" >> /dev/null 2>&1");
-        spew("Video string: %s", m_frame_rec_cmd.c_str());
-        int ret = std::system(m_frame_rec_cmd.c_str())/256;
+        std::string m_video_rec_cmd;
+        if(mode == "man")
+          m_video_rec_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash getVideoMan.sh ") + std::to_string(m_video_length) + String::str(" >> /dev/null 2>&1");
+        else
+          m_video_rec_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash getVideoAuto.sh ") + std::to_string(m_video_length) + String::str(" >> /dev/null 2>&1");
+
+        spew("Video string: %s", m_video_rec_cmd.c_str());
+        int ret = std::system(m_video_rec_cmd.c_str())/256;
 
         m_video_timer.setTop((double)m_video_length + 5.0);
         m_video_saved = false;
       }
 
       void
-      transmitVideo(void)
+      transmitVideo(std::string mode)
       {
+        std::string m_video_transfer_cmd;
+        if(mode == "man")
+          m_video_transfer_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash transmitVideoMan.sh >> /dev/null 2>&1");
+        else
+          m_video_transfer_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash transmitVideoAuto.sh >> /dev/null 2>&1");
+        
         // Transmit to NTNU server if internet connection is up.
         int x = system("ping -c1 -s1 8.8.8.8  > /dev/null 2>&1");
         if (x==0){
           spew("Internet connection available, transferring video to NTNU ... ");
-          std::string m_video_transfer_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash transmitVideoMan.sh >> /dev/null 2>&1");
           int scp = std::system(m_video_transfer_cmd.c_str())/256; // This function does not return if the NTNU server cannot be reached, and it will get stuck here.
         }else{
           spew("Internet connection NOT available ... ");
@@ -389,6 +410,7 @@ namespace Sensors
         {
           spew("Video captured and transmitted. Camera turning off..");
           m_gpio->setValue(0);
+          m_active = false;
         }
       }
 
@@ -404,40 +426,65 @@ namespace Sensors
           {
             m_man_video = false;
             spew("Camera has booted, recording video ...");
-            recordVideo();
+            recordVideo("man");
           } else if(m_camera_booting.overflow() && m_man_frame)
           {
             m_man_frame = false;
             spew("Camera has booted, recording frame ...");
-            recordAndTransmitFrame();
+            recordAndTransmitFrame("man");
           }
 
-          if(m_video_timer.overflow() && !m_video_saved && m_transmit)
+          if(m_video_timer.overflow() && !m_video_saved && m_transmit && m_man_video)
           {
             m_video_saved = true;
-            transmitVideo();
+            transmitVideo("man");
+          } else if(m_video_timer.overflow() && !m_video_saved && m_transmit && m_auto_video)
+          {
+            m_video_saved = true;
+            transmitVideo("auto");
           }
 
-          /*if(m_active && m_auto_frame_timer.overflow())
+          // Automatic routines.
+          if(m_auto_frame_timer.overflow() && m_auto_frame)
           {
-            spew("Automatically capturing frame ... ");
-            captureAndStoreFrame();
+            spew("Automatic frame record ...");
             m_auto_frame_timer.reset();
+            if(!m_active)
+              turnOnandWait();
+            else
+            {
+              recordAndTransmitFrame("auto");
+              return;
+            }
+            m_frame_taken = false;
           }
 
-          if(m_active && m_auto_video_timer.overflow())
+          if(m_camera_booting.overflow() && m_auto_frame && !m_frame_taken && m_active)
           {
-            spew("Automatically recording video ... ");
-            recordAndStoreVideo();
+            recordAndTransmitFrame("auto");
+            m_frame_taken = true;
+          }
+
+
+          if(m_auto_video_timer.overflow() && m_auto_video)
+          {
+            spew("Automatic video record ...");
             m_auto_video_timer.reset();
+            if(!m_active)
+              turnOnandWait();
+            else
+            {
+              recordVideo("auto");
+              return;
+            }
+            m_video_taken = false;
           }
 
-          if(m_active && m_video_length_timer.overflow() && !m_broadcast)
+          if(m_camera_booting.overflow() && m_auto_video && !m_video_taken && m_active)
           {
-            spew("Video recorded, turning off camera.");
-            m_gpio->setValue(0); // UNCOMMENT AFTER DEBUGGING.
-            m_active = false;
-          }*/
+            recordVideo("auto");
+            m_video_taken = true;
+          }
         }
       }
     };
