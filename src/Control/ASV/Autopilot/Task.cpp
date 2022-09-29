@@ -157,6 +157,10 @@ namespace Control
         IMC::SetThrusterActuation m_act_thrust;
         //! Speed Over Ground.
         double m_sog;
+        //! Lats, lons.
+        double m_lat,m_lon,m_lat_next_wp,m_lon_next_wp;
+        //! Distance to next wp.
+        double m_dist_to_wp;
         //! Vessel heading.
         double m_heading;
         //! Enable gain scheduling.
@@ -364,6 +368,8 @@ namespace Control
           bind<IMC::VehicleState>(this);
           bind<IMC::EulerAngles>(this);
           bind<IMC::SingleCurrentCell>(this);
+          bind<IMC::PathControlState>(this);
+          bind<IMC::DevDataText>(this);
         }
 
         void
@@ -473,6 +479,44 @@ namespace Control
         onResourceAcquisition(void)
         {
           m_timer_gs.setTop(60);
+        }
+
+        void
+        consume(const IMC::DevDataText * msg)
+        {
+          if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"Text Actions")==0 && msg->getDestinationEntity()==resolveEntity("Autopilot"))
+          {
+            debug("Gains arrived from Iridium.");
+            std::string m_cmd = msg->value;
+
+            std::vector<float> gains_ir;
+
+            // Parse command.
+            char p[32],i[32],d[32];
+            std::sscanf(m_cmd.c_str(), "%s %s %s", p, i, d);
+            std::string p_str,i_str,d_str;
+            p_str.append(p);
+            i_str.append(i);
+            d_str.append(d);
+            gains_ir.push_back(std::atof(p_str.c_str()));
+            gains_ir.push_back(std::atof(i_str.c_str()));
+            gains_ir.push_back(std::atof(d_str.c_str()));
+
+            reset();
+            setup(gains_ir);
+          }
+        }
+
+        void
+        consume(const IMC::PathControlState* pcs)
+        {
+          m_lat_next_wp = pcs->end_lat;
+          m_lon_next_wp = pcs->end_lon;
+          double dist_x,dist_y;
+          WGS84::displacement(m_lat, m_lon, 0,
+                          m_lat_next_wp, m_lon_next_wp, 0,
+                          &dist_x, &dist_y);
+          m_dist_to_wp = std::sqrt(std::pow(dist_x,2)+std::pow(dist_y,2));
         }
 
         //! Reset PIDs and actuation references.
@@ -593,7 +637,7 @@ namespace Control
 
           m_u = msg->u;
           m_v = msg->v;
-          trace("BODY frame speeds: u = %.3f, v = %.3f", m_u, m_v);
+          spew("BODY frame speeds: u = %.3f, v = %.3f", m_u, m_v);
         }
 
         void
@@ -635,6 +679,8 @@ namespace Control
           // Compute Time Delta.
           m_tstep = m_delta.getDelta();
           m_sog = msg->sog;
+          m_lat = msg->lat;
+          m_lon = msg->lon;
 
           if(!m_des_head_arrived || m_service)
           {
@@ -655,12 +701,12 @@ namespace Control
           if(m_args.heading_ctrl &&  msg->sog < m_args.speed_threshold)
           {
             error = Angles::normalizeRadian(m_desired_course - m_heading);
-            debug("Heading Control - Heading %0.3f, DHeading %0.3f, Error: %0.3f, SOG %0.3f",Angles::degrees(m_heading), Angles::degrees(m_desired_course), Angles::degrees(error), m_sog);
+            debug("Heading Control - COG %0.3f, Heading %0.3f, DHeading %0.3f, Error: %0.3f, SOG %0.3f, dist to wp: %0.3f", Angles::degrees(msg->cog), Angles::degrees(m_heading), Angles::degrees(m_desired_course), Angles::degrees(error), m_sog, m_dist_to_wp);
           }
           else
           {
             error = Angles::normalizeRadian(m_desired_course - msg->cog);
-            debug("Course Control - COG %0.3f, DCOG %0.3f, Error: %0.3f, SOG %0.3f",Angles::degrees(msg->cog), Angles::degrees(m_desired_course), Angles::degrees(error), m_sog);
+            debug("Course Control - HEAD: %.3f, COG %0.3f, DCOG %0.3f, Error: %0.3f, SOG %0.3f, dist to wp: %0.3f", Angles::degrees(m_heading), Angles::degrees(msg->cog), Angles::degrees(m_desired_course), Angles::degrees(error), m_sog, m_dist_to_wp);
           }
 
           // Derivative Error.
@@ -692,7 +738,7 @@ namespace Control
 
           double u_c_body = m_shallowest_vel*std::cos(m_shallowest_dir-m_heading);
           double v_c_body = m_shallowest_vel*std::sin(m_shallowest_dir-m_heading);
-          debug("u_c_body %f - v_c_body %f",u_c_body,v_c_body);
+          spew("u_c_body %f - v_c_body %f",u_c_body,v_c_body);
           m_gamma_adcp.uc = u_c_body;
           m_gamma_adcp_old.uc = u_c_body;
           m_u_r = m_u - u_c_body;
@@ -717,9 +763,9 @@ namespace Control
           dispatch(m_gamma_sog);
           dispatch(m_gamma_sog_old);
 
-          debug("SPEEDS - u: %.3f, v: %.3f, u_c_body: %.3f, v_c_body: %.3f, u_r: %.3f, v_r: %.3f, U: %.3f, U_r: %.3f",m_u,m_v,u_c_body,v_c_body,m_u_r,m_v_r,m_sog,m_U_r);
+          spew("SPEEDS - u: %.3f, v: %.3f, u_c_body: %.3f, v_c_body: %.3f, u_r: %.3f, v_r: %.3f, U: %.3f, U_r: %.3f",m_u,m_v,u_c_body,v_c_body,m_u_r,m_v_r,m_sog,m_U_r);
 
-          debug("GAMMAS - ADCP: %f, ADCP (OLD): %f, SOG: %f, SOG (OLD): %f", m_gamma_adcp.value, m_gamma_adcp_old.value, m_gamma_sog.value, m_gamma_sog_old.value);
+          spew("GAMMAS - ADCP: %f, ADCP (OLD): %f, SOG: %f, SOG (OLD): %f", m_gamma_adcp.value, m_gamma_adcp_old.value, m_gamma_sog.value, m_gamma_sog_old.value);
 
 
           //! Compute gamma average.
@@ -994,22 +1040,22 @@ namespace Control
               float Kp,Ki;
               if(m_sch_source.compare("adcp")==0 && m_gamma_avg_adcp!=0)
               {
-                debug("Gamma with ADCP value %f averaged over %.3f seconds.",m_gamma_avg_adcp,m_gs_interval);
+                trace("Gamma with ADCP value %f averaged over %.3f seconds.",m_gamma_avg_adcp,m_gs_interval);
                 Kp = (0.4/m_gamma_avg_adcp)*m_args.course_gains_trans[0];
                 Ki = (0.4/m_gamma_avg_adcp)*m_args.course_gains_trans[1];
               } else if(m_sch_source.compare("adcp_old")==0 && m_gamma_avg_adcp_old!=0)
               {
-                debug("Gamma with ADCP (OLD) value %f averaged over %.3f seconds.",m_gamma_avg_adcp_old,m_gs_interval);
+                trace("Gamma with ADCP (OLD) value %f averaged over %.3f seconds.",m_gamma_avg_adcp_old,m_gs_interval);
                 Kp = (0.4/m_gamma_avg_adcp_old)*m_args.course_gains_trans[0];
                 Ki = (0.4/m_gamma_avg_adcp_old)*m_args.course_gains_trans[1];
               } else if(m_sch_source.compare("sog")==0 && m_gamma_avg_sog!=0)
               {
-                debug("Gamma with SOG value %f averaged over %.3f seconds.",m_gamma_avg_sog,m_gs_interval);
+                trace("Gamma with SOG value %f averaged over %.3f seconds.",m_gamma_avg_sog,m_gs_interval);
                 Kp = (0.4/m_gamma_avg_sog)*m_args.course_gains_trans[0];
                 Ki = (0.4/m_gamma_avg_sog)*m_args.course_gains_trans[1];
               } else if(m_sch_source.compare("sog_old")==0 && m_gamma_avg_sog_old!=0)
               {
-                debug("Gamma with SOG (OLD) value %f averaged over %.3f seconds.",m_gamma_avg_sog_old,m_gs_interval);
+                trace("Gamma with SOG (OLD) value %f averaged over %.3f seconds.",m_gamma_avg_sog_old,m_gs_interval);
                 Kp = (0.4/m_gamma_avg_sog_old)*m_args.course_gains_trans[0];
                 Ki = (0.4/m_gamma_avg_sog_old)*m_args.course_gains_trans[1];
               }
@@ -1019,11 +1065,11 @@ namespace Control
               if(Ki < 0)
                 Ki = 0.0;
 
-              debug("GAIN-SCHEDULED GAINS Kp: %f, Ki: %f",Kp,Ki);
+              trace("GAIN-SCHEDULED GAINS Kp: %f, Ki: %f",Kp,Ki);
 
               if(m_args.use_new_gains)
               {
-                debug("Using gain-scheduled gains!!!!!!!!!!!!");
+                trace("Using gain-scheduled gains!!!!!!!!!!!!");
                 std::vector<float> gains{Kp,Ki,0.0};
                 //! Reset Course Controller.
                 reset();

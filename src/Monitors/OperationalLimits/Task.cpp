@@ -83,6 +83,8 @@ namespace Monitors
       int reply_timeout;
       //! Activate limits check.
       bool activate;
+      //! Drifting time before Iridium message is sent.
+      double drifting_timeout;
     };
 
     //! Period for testing the area operational limits
@@ -110,8 +112,10 @@ namespace Monitors
       LErrorMap m_errs;
       //! Limits in use.
       IMC::OperationalLimits m_ol;
-      //! Last EstimatedState message
+      //! Last EstimatedState message.
       IMC::EstimatedState m_estate;
+      //! USV speed over ground.
+      double m_sog;
       //! Error mask.
       uint8_t m_emask;
       //! Cache control message.
@@ -127,7 +131,9 @@ namespace Monitors
       //! Vertices of operational area.
       IMC::MessageList<IMC::PolygonVertex> m_oplims_loc;
       //! Timer.
-      Time::Counter<float> m_counter;
+      Time::Counter<float> m_counter; //m_counter_debug,bool sent_debug;
+      //! Drifting timer.
+      Time::Counter<float> m_timer_drifting;
       //! Check interval.
       double m_interval;
       //! Check vehicle state
@@ -136,6 +142,10 @@ namespace Monitors
       int m_reqid;
       //! Activate limits check.
       bool m_activate;
+      //! True if vessel is driting.
+      bool m_drifting;
+      //! Drifting timeout.
+      double m_drift_timeout;
 
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Periodic(name, ctx),
@@ -143,7 +153,9 @@ namespace Monitors
         m_use_cfg(true),
         m_max_depth(50.0),
         m_oplims_arrived(false),
-        m_reqid(0)
+        m_reqid(0),
+        m_drifting(false)
+        //sent_debug(false)
       {
         param("Activate limits check", m_args.activate)
         .defaultValue("true")
@@ -153,6 +165,10 @@ namespace Monitors
         .units(Units::Second)
         .defaultValue("600")
         .description("Interval between checks of the USV location");
+
+        param("Drifting timeout", m_args.drifting_timeout)
+          .defaultValue("300")
+          .minimumValue("1");
 
         param("Iridium Message timeout", m_args.reply_timeout)
           .defaultValue("60")
@@ -236,17 +252,34 @@ namespace Monitors
       }
 
       void
+      onResourceAcquisition(void)
+      {
+        m_timer_drifting.setTop(m_drift_timeout);
+      }
+
+      void
       onResourceInitialization(void)
       {
         m_counter.setTop(m_interval);
+        //m_counter_debug.setTop(60.0);
         m_activate = m_args.activate;
       }
 
       void
       onUpdateParameters(void)
       {
+        if(paramChanged(m_args.drifting_timeout))
+        {
+          m_drift_timeout = m_args.drifting_timeout;
+          m_timer_drifting.setTop(m_drift_timeout);
+          debug("Drift timer set.");
+        }
+
         if(paramChanged(m_args.interval))
+        {
           m_interval = m_args.interval;
+          m_counter.setTop(m_interval);
+        }
 
         if(paramChanged(m_args.activate))
           m_activate = m_args.activate;
@@ -366,6 +399,7 @@ namespace Monitors
           return;
 
         m_estate = *msg;
+        m_sog = std::sqrt(std::pow(m_estate.u,2)+std::pow(m_estate.v,2));
       }
 
       void
@@ -495,7 +529,9 @@ namespace Monitors
         {
           //trace("USV OUTSIDE OP AREA!");
           war(DTR("USV OUTSIDE OP AREA!"));
-          sendIridium();
+          std::string now = Time::Format::getTimeDateISO(Clock::getSinceEpoch());
+          std::string to_send = "(A) Sheep outside the fence! " + now + " " + std::to_string(Angles::degrees(m_estate.lat)) + " " + std::to_string(Angles::degrees(m_estate.lon)) + " - State: " + vehicleStateChar(m_vehiclestate);
+          sendIridium(to_send);
         }
         
         m_counter.reset();
@@ -504,12 +540,12 @@ namespace Monitors
       }
 
       void
-      sendIridium()
+      sendIridium(std::string msg)
       {
         IMC::TransmissionRequest req;
         req.setDestination(m_ctx.resolver.id());
         req.data_mode = TransmissionRequest::DMODE_TEXT;
-        req.txt_data = "(A) Sheep outside the fence! Loc: " + std::to_string(Angles::degrees(m_estate.lat)) + " " + std::to_string(Angles::degrees(m_estate.lon)) + " - State: " + vehicleStateChar(m_vehiclestate);
+        req.txt_data = msg;
         req.deadline = Clock::getSinceEpoch() + m_args.reply_timeout;
         req.req_id = ++m_reqid;
 
@@ -521,7 +557,33 @@ namespace Monitors
 
       void
       task(void)
-      {
+      {        
+        /*if(m_counter_debug.overflow() && !sent_debug)
+        {
+          sendIridium();
+          sent_debug = true;
+        }*/
+
+        //! If the vessel is drifting and it is in service mode, start counter.
+        if(!m_drifting && m_sog > 0.3 && m_vehiclestate == IMC::VehicleState::VS_SERVICE)
+        {
+          //! Drifting true and start counter.
+          m_drifting = true;
+          m_timer_drifting.reset();
+          m_timer_drifting.setTop(m_drift_timeout);
+        }
+
+        if(m_timer_drifting.overflow() && m_drifting && m_vehiclestate == IMC::VehicleState::VS_SERVICE)
+        {
+          debug("AutoNaut is drifting, sending ALARM ...");
+          std::string now = Time::Format::getTimeDateISO(Clock::getSinceEpoch());
+          std::string to_send = "(A) Sheep is DRIFTING! " + now + " " + std::to_string(Angles::degrees(m_estate.lat)) + " " + std::to_string(Angles::degrees(m_estate.lon)) + " - State: " + vehicleStateChar(m_vehiclestate);
+          sendIridium(to_send);
+          m_drifting = false;
+          m_timer_drifting.reset();
+          m_timer_drifting.setTop(m_drift_timeout);
+        }
+
         if(m_vehiclestate == IMC::VehicleState::VS_MANEUVER && m_activate)
         {
           double speed = std::sqrt(m_estate.vx * m_estate.vx + m_estate.vy * m_estate.vy + m_estate.vz * m_estate.vz);

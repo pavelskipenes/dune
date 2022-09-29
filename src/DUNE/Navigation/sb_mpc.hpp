@@ -45,22 +45,27 @@ namespace DUNE
 	~simulationBasedMpc();
 
 	/**
-	 *  @brief Sets the offset pair (u_os_best, psi_os_best) with the lowst cost
+	 * @brief Sets the offset pair (u_os_best, psi_os_best) with the lowst cost
 	 *
 	 * @param u_os_best The reference parameter to store the best speed offset.
 	 * @param psi_os_best The reference parameter to store the best heading offset.
 	 * @param u_d The nominal speed
 	 * @param psi_d The nominal heading
 	 * @param asv_state The state of the asv: x, y, psi, u, v, r.
+	 * @param waypoints The next waypoint.
+	 * @param dynamic_obst Boolean true if a dynamic (vessel) obstacle is present.
 	 * @param obst_states The states of the obstacles : x, y, u, v, A, B, C, D, id. (A, B, C, D - size from AIS)
-     * @param static_obst No-go zone defined to be on the left of a line when seen from the starting point of the line.
-     * @param waypoints The next waypoint.
+     * @param static_obst Boolean true if a static obstacle is present.
+	 * @param static_obst_states The position (bearing and range) of the static obstacle in the USV body frame.
+	 * @param grounding Cost of grounding based on several factors computed at high-level (i.e. weather).
+	 * @param cost Cost returned to DUNE Task.
+     
 	 */
 
-	void create(double T, double DT, double T_stat, double P, double Q, double D_CLOSE, double D_SAFE, double K_COLL, double PHI_AH, double PHI_OT, double PHI_HO, double PHI_CR, double KAPPA, double KAPPA_TC, double K_P, double K_CHI, double K_DP, double K_DCHI_SB, double K_DCHI_P, double K_CHI_SB, double K_CHI_P, double D_INIT, double ang_range, double granularity, double WP_R, double LOS_LA_DIST, double LOS_KI, int GUIDANCE_STRATEGY);
+	void create(double T, double DT, double T_stat, double P, double P_G, double Q, double D_CLOSE, double D_SAFE, double D_SAFE_LAND, double K_COLL, double PHI_AH, double PHI_OT, double PHI_HO, double PHI_CR, double KAPPA, double KAPPA_TC, double K_P, double K_CHI, double K_DP, double K_DCHI_SB, double K_DCHI_P, double K_CHI_SB, double K_CHI_P, double D_INIT, double ang_range, double granularity, double WP_R, double LOS_LA_DIST, double LOS_KI, int GUIDANCE_STRATEGY);
 	
 	// REMOVED: Matrix& predicted_traj, Matrix& colav_status, Matrix& obst_status.
-	void getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,10>& obst_states, const Eigen::Matrix<double,-1,2>& waypoints, bool static_obst, Math::Matrix contours);
+	void getBestControlOffset(double &u_os_best, double &psi_os_best, double u_d, double psi_d, const Eigen::Matrix<double,6,1>& asv_state, const Eigen::Matrix<double,-1,2>& waypoints, bool dynamic_obst, const Eigen::Matrix<double,-1,10>& obst_states, bool static_obst, Eigen::Matrix<double,-1,3> static_obst_states, double &cost_mra);
 
 	/**
 	 * @brief  Returns the simulation time (prediction horizon) [sec].
@@ -79,6 +84,10 @@ namespace DUNE
 	 */
 	double getP();
 	/**
+	 * @brief Returns the weight on time to evaluation instant for grounding
+	 */
+	double getP_G();
+	/**
 	 * @brief Returns the weight on distance at evaluation instant
 	 */
 	double getQ();
@@ -87,9 +96,13 @@ namespace DUNE
 	 */
 	double getDClose();
 	/**
-	 * @brief Returns the minimal distance which is considered as safe [m].
+	 * @brief Returns the minimum distance which is considered as safe [m].
 	 */
 	double getDSafe();
+	/**
+	 * @brief Returns the minimum distance which is considered as safe [m] for anti-grounding.
+	 */
+	double getDSafeLand();
 	/**
 	 * @brief Returns the collision cost
 	 */
@@ -192,9 +205,11 @@ namespace DUNE
     void setT_stat(double T_stat); 
 
 	void setP(double p);
+	void setP_G(double p_g);
 	void setQ(double q);
 	void setDClose(double d_close);
 	void setDSafe(double d_safe);
+	void setDSafeLand(double d_safe_land);
 	void setKColl(double k_coll);
 	void setPhiAH(double phi_AH);
 	void setPhiOT(double phi_OT);
@@ -231,7 +246,7 @@ namespace DUNE
 	private:
 
 	// bool AH_0, bool OBS_PASSED unused?
-	double costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, int &ik_return_to_path); //Eigen::Matrix<double,1,4> static_obst 
+	double costFunction(double P_ca, double Chi_ca, int k, bool SB_0, bool CRG_0, bool OTG_0, bool OT_0, bool HOT_0, double DIST_0, double u_d, int l, int &ik_return_to_path, bool dynamic_obst, bool static_obst, Eigen::Matrix<double,-1,3> static_obst_state, int chi_ca_itr); //Eigen::Matrix<double,1,4> static_obst 
 	double deltaP(double P_ca);
 	double deltaChi(double Chi_ca, double k_dchi_p, double k_dchi_sb); 
 	double sqrChi(double Chi_ca, double k_chi_p, double k_chi_sb); 
@@ -280,9 +295,11 @@ namespace DUNE
 
 	// Tuning Parameters
 	double P_;
+	double P_G_;
 	double Q_;
 	double D_CLOSE_;
 	double D_SAFE_;
+	double D_SAFE_LAND_;
 	double K_COLL_;
 	double PHI_AH_;
 	double PHI_OT_;

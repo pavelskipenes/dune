@@ -107,9 +107,7 @@ namespace DUNE
       //const int n_samp_;
       int m_n_samp; // possibility to set from sb_mpc
                 
-    };  
-  
-  
+    };
   }  
 }  
   

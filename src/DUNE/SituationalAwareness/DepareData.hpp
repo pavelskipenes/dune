@@ -66,6 +66,8 @@ namespace DUNE
       bool isDepthAbove(DEPAREVector DEPAREinputVector, double minDepth);
 
       bool writeCSVfile(DEPAREVector depths, std::string outputFile);
+
+      bool writeCSVfileCourseOffsets(double course, double bearing, double distance, double cost, std::string outputFile);
       
       DEPAREVector getWithinRadius(double Lat, double Lon, double radius);
 
@@ -81,7 +83,7 @@ namespace DUNE
 
       DEPAREVector getRectangle(double Lat, double Lon, double drval2, double east_from_center, double north_from_center);
 
-      Math::Matrix getCAS(double vessel_lat, double vessel_lon, double drval2, double size, double cog, std::vector<double> directions);
+      Math::Matrix getCAS(double vessel_lat, double vessel_lon, double drval2, double size, double cog, const Eigen::Matrix<double,-1,2> waypoints, std::vector<double> directions);
 
       double normalize_angle(double angle);
     private:

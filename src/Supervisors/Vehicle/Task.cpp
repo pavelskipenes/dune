@@ -69,8 +69,6 @@ namespace Supervisors
       double handle_timeout;
       //! timeout, in seconds, for replies
       int reply_timeout;
-      //! Drifting time before Iridium message is sent.
-      double drifting_timeout;
     };
 
     struct Task: public DUNE::Tasks::Periodic
@@ -107,14 +105,8 @@ namespace Supervisors
       float m_calib_timeout;
       //! Test timer
       Time::Counter<float> m_timer;
-      //! Drifting timer.
-      Time::Counter<float> m_timer_drifting;
       //! Send iridium
       bool m_iridium;
-      //! True if vessel is driting.
-      bool m_drifting;
-      //! Vessel SOG.
-      double m_sog;
       //! Task arguments.
       Arguments m_args;
 
@@ -125,8 +117,7 @@ namespace Supervisors
         m_reqid(0),
         m_scope_ref(0),
         m_man_sup(NULL),
-        m_iridium(false),
-        m_drifting(false)
+        m_iridium(false)
       {
         param("Vital Entities", m_args.vital_ents)
         .defaultValue("")
@@ -145,9 +136,9 @@ namespace Supervisors
           .defaultValue("60")
           .minimumValue("30");
 
-        param("Drifting timeout", m_args.drifting_timeout)
-          .defaultValue("300")
-          .minimumValue("30");
+        //param("Drifting timeout", m_args.drifting_timeout)
+        //  .defaultValue("300")
+        //  .minimumValue("1");
 
         bind<IMC::Abort>(this);
         bind<IMC::ControlLoops>(this);
@@ -155,7 +146,12 @@ namespace Supervisors
         bind<IMC::ManeuverControlState>(this);
         bind<IMC::VehicleCommand>(this);
         bind<IMC::PlanControl>(this);
-        bind<IMC::EstimatedState>(this);
+      }
+
+      void
+      onUpdateParameters(void)
+      {
+        
       }
 
       void
@@ -278,15 +274,6 @@ namespace Supervisors
         err("%s", m_vs.last_error.c_str());
 
         stopManeuver(true);
-      }
-
-      void
-      consume(const IMC::EstimatedState* msg)
-      {
-        if (msg->getDestination() != getSystemId())
-          return;
-
-        m_sog = msg->u;
       }
 
       void
@@ -458,6 +445,7 @@ namespace Supervisors
           dispatch(req);
         }
 
+        /*
         if(s == IMC::VehicleState::VS_SERVICE && m_drifting)
         {
           IMC::TransmissionRequest req;
@@ -473,7 +461,7 @@ namespace Supervisors
           dispatch(req);
 
           m_drifting = false;
-        }
+        }*/
       }
 
       void
@@ -747,20 +735,6 @@ namespace Supervisors
           reset();
           changeMode(IMC::VehicleState::VS_SERVICE);
           m_switch_time = -1.0;
-        }
-
-        //! If the vessel is drifting and it is in service mode, start counter.
-        if(!m_drifting && m_sog > 0.3 && serviceMode())
-        {
-          //! Drifting true and start counter.
-          m_drifting = true;
-          m_timer_drifting.reset();
-          m_timer_drifting.setTop(m_args.drifting_timeout);
-        }
-
-        if(m_timer_drifting.overflow())
-        {
-          sendIridium(IMC::VehicleState::VS_SERVICE);
         }
       }
 

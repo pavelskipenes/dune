@@ -400,6 +400,5 @@ namespace DUNE
 
       return angle;
     }
-
   }
 }

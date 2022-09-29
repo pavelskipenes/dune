@@ -42,7 +42,7 @@ namespace Monitors
     struct Arguments
     {
       //! Panels power entity label.
-      std::string elabel_panels;
+      std::string elabel_panelsBS1, elabel_panelsBS2;
       //! System power entity label.
       std::string elabel_system;
       //! Thruster power entity label.
@@ -56,7 +56,7 @@ namespace Monitors
     struct Task: public DUNE::Tasks::Periodic
     {
       //! GPS entity eid.
-      int m_panels_eid;
+      int m_panelsBS1_eid, m_panelsBS2_eid;
       //! IMU entity eid.
       int m_system_power_eid;
       //! Yaw entity eid.
@@ -70,7 +70,7 @@ namespace Monitors
       //! Confidence in fuel level.
       float m_fuel_conf;
       //! Batteries voltage
-      float m_bat_voltage;
+      float m_bat_voltageBS1, m_bat_voltageBS2;
       //! Executing plan's progress.
       float m_progress;
       //! PowerSettings.
@@ -88,7 +88,7 @@ namespace Monitors
       //! Satellites in view.
       int m_sat;
       //! Panels generated power.
-      double m_panels_power;
+      double m_panelsBS1_power, m_panelsBS2_power;
       //! System consumed power.
       double m_system_power;
       //! Thruster power.
@@ -105,7 +105,10 @@ namespace Monitors
         Tasks::Periodic(name, ctx),
         m_req(0)
       {
-        param("Entity Label - Panels Power", m_args.elabel_panels)
+        param("Entity Label - Panels Power BS1", m_args.elabel_panelsBS1)
+        .description("Entity label of 'Power' message");
+
+        param("Entity Label - Panels Power BS2", m_args.elabel_panelsBS2)
         .description("Entity label of 'Power' message");
 
         param("Entity Label - System Power", m_args.elabel_system)
@@ -139,7 +142,8 @@ namespace Monitors
 
         m_fuel = -1.0;
         m_fuel_conf = -1.0;
-        m_bat_voltage = -1.0;
+        m_bat_voltageBS1 = -1.0;
+        m_bat_voltageBS2 = -1.0;
         m_progress = -1.0;
         m_vstate = '?';
         m_in_mission = false;
@@ -157,11 +161,20 @@ namespace Monitors
       {
         try
         {
-          m_panels_eid = resolveEntity(m_args.elabel_panels);
+          m_panelsBS1_eid = resolveEntity(m_args.elabel_panelsBS1);
         }
         catch (...)
         {
-          m_panels_eid = 0;
+          m_panelsBS1_eid = 0;
+        }
+
+        try
+        {
+          m_panelsBS2_eid = resolveEntity(m_args.elabel_panelsBS2);
+        }
+        catch (...)
+        {
+          m_panelsBS2_eid = 0;
         }
 
         try
@@ -196,8 +209,10 @@ namespace Monitors
       void
       consume(const IMC::Power* msg)
       {
-        if(msg->getSourceEntity() == m_panels_eid)
-          m_panels_power = msg->value;
+        if(msg->getSourceEntity() == m_panelsBS1_eid)
+          m_panelsBS1_power = msg->value;
+        if(msg->getSourceEntity() == m_panelsBS2_eid)
+          m_panelsBS2_power = msg->value;
         else if(msg->getSourceEntity() == m_system_power_eid)
           m_system_power = msg->value;
         else if(msg->getSourceEntity() == m_thruster_power_eid)
@@ -231,7 +246,8 @@ namespace Monitors
         m_timer.setTop(m_args.report_periodicity);
         m_fuel = -1.0;
         m_fuel_conf = -1.0;
-        m_bat_voltage = -1.0;
+        m_bat_voltageBS1 = -1.0;
+        m_bat_voltageBS2 = -1.0;
         m_progress = -1.0;
         m_vstate = '?';
       }
@@ -282,7 +298,7 @@ namespace Monitors
           m_cog = Angles::degrees(m_cog);
           m_sat = msg->satellites;
 
-          double consumed_power = m_system_power + m_thruster_power;
+          //double consumed_power = m_system_power + m_thruster_power;
 
           Time::BrokenDown bdt;
 
@@ -290,9 +306,9 @@ namespace Monitors
               "%02u:%02u:%02u/", bdt.hour, bdt.minutes, bdt.seconds);
 
           std::string m_emsg_second = String::str(
-              "/b:%d/c:%d/s:%.2f/sat:%d/pp:%d/cp:%d/t:%d/s:%c/%d%d%d%d%d%d",
-              (int)m_bat_voltage, (int)m_cog,
-              m_sog, m_sat, (int)m_panels_power, (int)consumed_power, (int)m_ext_temp, vehicleStateChar(m_vstate), m_pwr_settings.l2, m_pwr_settings.l3, m_pwr_settings.iridium, m_pwr_settings.modem, m_pwr_settings.pumps, m_pwr_settings.vhf);
+              "/b:%d,%d/c:%d/s:%.2f/sat:%d/pp:%d,%d/cp:%d,%d/t:%d/s:%c/%d%d%d%d%d%d",
+              (int)m_bat_voltageBS1, (int)m_bat_voltageBS2, (int)m_cog,
+              m_sog, m_sat, (int)m_panelsBS1_power, (int)m_panelsBS2_power, (int)m_system_power, (int)m_thruster_power, (int)m_ext_temp, vehicleStateChar(m_vstate), m_pwr_settings.l2, m_pwr_settings.l3, m_pwr_settings.iridium, m_pwr_settings.modem, m_pwr_settings.pumps, m_pwr_settings.vhf);
 
           m_emsg = m_emsg_first + m_lat_reduced + "," + m_lon_reduced + m_emsg_second;
 
@@ -301,8 +317,8 @@ namespace Monitors
           /*m_emsg = String::str(
               "%02u:%02u:%02u/%f,%f/b:%d/c:%d/s:%.2f/sat:%d/pp:%d/cp:%d/t:%d/s:%c/%d%d%d%d%d%d",
               bdt.hour, bdt.minutes, bdt.seconds, m_lat, //getSystemName(), 
-              m_lon, (int)m_bat_voltage, (int)m_cog,
-              m_sog, m_sat, (int)m_panels_power, (int)consumed_power, (int)m_ext_temp, vehicleStateChar(m_vstate), m_pwr_settings.l2, m_pwr_settings.l3, m_pwr_settings.iridium, m_pwr_settings.modem, m_pwr_settings.pumps, m_pwr_settings.vhf);
+              m_lon, (int)m_bat_voltageBS1, (int)m_cog,
+              m_sog, m_sat, (int)m_panelsBS1_power, (int)consumed_power, (int)m_ext_temp, vehicleStateChar(m_vstate), m_pwr_settings.l2, m_pwr_settings.l3, m_pwr_settings.iridium, m_pwr_settings.modem, m_pwr_settings.pumps, m_pwr_settings.vhf);
           */
           //m_emsg += m_in_mission ? String::str(" / p:%d", (int)m_progress) : "";
         }
@@ -318,10 +334,10 @@ namespace Monitors
       void
       consume(const IMC::Voltage* msg)
       {
-        if(msg->getSourceEntity() != resolveEntity("Batteries"))
-          return;
-
-        m_bat_voltage = msg->value * 10;
+        if(msg->getSourceEntity() == resolveEntity("Parallel Battery Voltage"))
+          m_bat_voltageBS1 = msg->value * 10;
+        else if(msg->getSourceEntity() == resolveEntity("Single Battery Voltage"))
+          m_bat_voltageBS2 = msg->value * 10;
       }
 
       void
@@ -377,9 +393,9 @@ namespace Monitors
           std::string s;
           Time::BrokenDown bdt;
           s = String::str(
-              "(%s) %02u:%02u:%02u / Unknown Location / f:%d v:%d c:%d",
+              "(%s) %02u:%02u:%02u / Unknown Location / f:%d v:%d|%d c:%d",
               getSystemName(), bdt.hour, bdt.minutes, bdt.seconds, (int)m_fuel,
-              (int)m_bat_voltage, (int)m_fuel_conf);
+              (int)m_bat_voltageBS1, (int)m_bat_voltageBS2, (int)m_fuel_conf);
 
           s += m_in_mission ? String::str(" / p:%d", (int)m_progress) : "";
           s += String::str("/ s: %c", vehicleStateChar(m_vstate));

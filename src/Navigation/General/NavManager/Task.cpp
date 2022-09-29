@@ -66,6 +66,8 @@ namespace Navigation
         Counter<double> m_time_without_secondary_unit;
         //! Time without third GPS.
         Counter<double> m_time_without_third_unit;
+        //! GPS fix rejection.
+        IMC::GpsFixRejection m_main_rej, m_secondary_rej, m_third_rej;
         //! True if preferred GPS is not working.
         bool main_unit_lost;
         //! True if secondary GPS is not working.
@@ -80,6 +82,8 @@ namespace Navigation
         bool third_unit_ir_sent;
         //! Transmission request id
         int m_reqid;
+        //! Fix validity.
+        bool m_main_valid, m_secondary_valid, m_third_valid;
         //! Navigation units.
         //std::vector<std::string> m_units;
         //! Main system GpsFix message.
@@ -95,7 +99,10 @@ namespace Navigation
           main_unit_ir_sent(false),
           secondary_unit_ir_sent(false),
           third_unit_ir_sent(false),
-          m_reqid(0)
+          m_reqid(0),
+          m_main_valid(true),
+          m_secondary_valid(true),
+          m_third_valid(true)
         {
           // Define configuration parameters.
           param("Main unit", m_args.main_unit)
@@ -129,35 +136,67 @@ namespace Navigation
 
           if(m_args.main_unit.compare(resolveEntity(msg->getSourceEntity()).c_str())==0)
           {
-            debug("Got GpsFix from main unit: %s",resolveEntity(msg->getSourceEntity()).c_str());
             m_time_without_main_unit.reset();
             main_unit_lost = false;
 
+            if((msg->validity & IMC::GpsFix::GFV_VALID_POS) == 0)
+            {
+              debug("Got INVALID fix from main unit: %s",resolveEntity(msg->getSourceEntity()).c_str());
+              m_main_valid = false;
+              m_main_rej.reason = IMC::GpsFixRejection::RR_INVALID;
+              dispatch(m_main_rej, DF_KEEP_TIME);
+            }
+            else
+            {
+              trace("Got VALID fix from main unit: %s",resolveEntity(msg->getSourceEntity()).c_str());
+              m_main_valid = true;
+            }
           } else if(m_args.secondary_unit.compare(resolveEntity(msg->getSourceEntity()).c_str())==0)
           {
-            debug("Got GpsFix secondary unit: %s",resolveEntity(msg->getSourceEntity()).c_str());
             m_time_without_secondary_unit.reset();
             secondary_unit_lost = false;
+
+            if((msg->validity & IMC::GpsFix::GFV_VALID_POS) == 0)
+            {
+              debug("Got INVALID fix from secondary unit: %s",resolveEntity(msg->getSourceEntity()).c_str());
+              m_secondary_valid = false;
+              m_secondary_rej.reason = IMC::GpsFixRejection::RR_INVALID;
+              dispatch(m_secondary_rej, DF_KEEP_TIME);
+            }
+            else
+            {
+              trace("Got VALID fix from secondary unit: %s",resolveEntity(msg->getSourceEntity()).c_str());
+              m_secondary_valid = true;
+            }
           } else if(m_args.third_unit.compare(resolveEntity(msg->getSourceEntity()).c_str())==0)
           {
-            debug("Got GpsFix third unit: %s",resolveEntity(msg->getSourceEntity()).c_str());
             m_time_without_third_unit.reset();
             third_unit_lost = false;
+
+            if((msg->validity & IMC::GpsFix::GFV_VALID_POS) == 0)
+            {
+              debug("Got INVALID fix from third unit: %s",resolveEntity(msg->getSourceEntity()).c_str());
+              m_third_valid = false;
+              m_third_rej.reason = IMC::GpsFixRejection::RR_INVALID;
+              dispatch(m_third_rej, DF_KEEP_TIME);
+            }
+            else
+            {
+              trace("Got VALID fix from third unit: %s",resolveEntity(msg->getSourceEntity()).c_str());
+              m_third_valid = true;
+            }
           }
 
           //! Logic for unit choice.
-          if(m_args.main_unit.compare(resolveEntity(msg->getSourceEntity()).c_str())==0)
+          if(m_args.main_unit.compare(resolveEntity(msg->getSourceEntity()).c_str())==0 && m_main_valid)
           {
             debug("Using GpsFix from main unit: %s",resolveEntity(msg->getSourceEntity()).c_str());
-            m_time_without_main_unit.reset();
-            main_unit_lost = false;
-
             m_sys_fix = *msg;
             sendFix();
             return;
           }
 
-          if(m_args.secondary_unit.compare(resolveEntity(msg->getSourceEntity()).c_str())==0 && main_unit_lost) //m_time_without_main_unit.overflow()
+          if(m_args.secondary_unit.compare(resolveEntity(msg->getSourceEntity()).c_str())==0 && m_secondary_valid && (main_unit_lost || !m_main_valid)) //m_time_without_main_unit.overflow()
           {
             debug("Using GpsFix from secondary unit: %s",resolveEntity(msg->getSourceEntity()).c_str());            
             m_sys_fix = *msg;
@@ -165,7 +204,7 @@ namespace Navigation
             return;
           }
 
-          if(m_args.third_unit.compare(resolveEntity(msg->getSourceEntity()).c_str())==0 && main_unit_lost && secondary_unit_lost)
+          if(m_args.third_unit.compare(resolveEntity(msg->getSourceEntity()).c_str())==0 && m_third_valid && (main_unit_lost || !m_main_valid) && (secondary_unit_lost || !m_secondary_valid))
           {
             debug("Using GpsFix from third unit: %s",resolveEntity(msg->getSourceEntity()).c_str());
             m_sys_fix = *msg;
@@ -210,13 +249,13 @@ namespace Navigation
         //! Helper function to get a certain token from a string  
         std::string getToken(std::string toParse, std::string delim, int n_token = 1)
         {
-            std::string token;
-            for (int i = 0; i<n_token; i++)
-            {
-                token = toParse.substr(0, toParse.find(delim));
-                toParse.erase(0, toParse.find(delim) + delim.length());
-            }
-            return token;
+          std::string token;
+          for (int i = 0; i<n_token; i++)
+          {
+              token = toParse.substr(0, toParse.find(delim));
+              toParse.erase(0, toParse.find(delim) + delim.length());
+          }
+          return token;
         }
 
         void
@@ -242,49 +281,46 @@ namespace Navigation
           {
             waitForMessages(1.0);
 
-            if(m_time_without_main_unit.overflow())
+            if(m_time_without_main_unit.overflow() && !main_unit_lost)
             {
               debug("Main Gps disappeared");
               main_unit_lost = true;
             }
 
-            if(m_time_without_secondary_unit.overflow())
+            if(m_time_without_secondary_unit.overflow() && !secondary_unit_lost)
             {
               debug("Secondary Gps disappeared");
               secondary_unit_lost = true;
             }
 
-            if(m_time_without_third_unit.overflow())
+            if(m_time_without_third_unit.overflow() && !third_unit_lost)
             {
               debug("Third Gps disappeared");
               third_unit_lost = true;
             }
 
-            // Raise ERROR MODE if both GPS are out of service.
-            if(m_time_without_main_unit.overflow() && m_time_without_secondary_unit.overflow() && m_time_without_main_unit.overflow())
+            // Raise ERROR MODE if all GPSs are out of service.
+            if((m_time_without_main_unit.overflow() && m_time_without_secondary_unit.overflow() && m_time_without_main_unit.overflow()) || (!m_main_valid && !m_secondary_valid && !m_third_valid))
               setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_WAIT_GPS_FIX);
-            else if(m_time_without_main_unit.overflow() && main_unit_lost && !main_unit_ir_sent)
+            else if((main_unit_lost || !m_main_valid) && !main_unit_ir_sent)
             {
-              debug("Sending IR for main GPS");
-              main_unit_lost = true;
+              debug("Main GPS not working!");
               
               // Send iridium message.
               sendIridium("Main GPS not working!");
               main_unit_ir_sent = true;
               
-            } else if(m_time_without_secondary_unit.overflow() && secondary_unit_lost && !secondary_unit_ir_sent)
+            } else if((secondary_unit_lost || !m_secondary_valid) && !secondary_unit_ir_sent)
             {
-              debug("Sending IR for secondary GPS");
-              secondary_unit_lost = true;
+              debug("Secondary GPS not working!");
 
               // Send iridium message.
               sendIridium("Secondary GPS not working!");
               secondary_unit_ir_sent = true;
 
-            } else if(m_time_without_third_unit.overflow() && third_unit_lost && !third_unit_ir_sent)
+            } else if((third_unit_lost || !m_third_valid) && !third_unit_ir_sent)
             {
-              debug("Sending IR for third GPS");
-              third_unit_lost = true;
+              debug("Third GPS not working!");
 
               // Send iridium message.
               sendIridium("Third GPS not working!");

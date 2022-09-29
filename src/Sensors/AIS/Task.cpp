@@ -245,10 +245,12 @@ namespace Sensors
             //ais_msg.name = "NO NAME";
             ais_msg.nav_status = msg.nav_status;
             //ais_msg.type_and_cargo = 000;
-            ais_msg.lat = msg.y;
-            ais_msg.lon = msg.x;
-            ais_msg.course = msg.cog;
+            ais_msg.lat = Angles::radians(msg.y);
+            ais_msg.lon = Angles::radians(msg.x);
+            ais_msg.course = Angles::radians(msg.cog);
             ais_msg.speed = msg.sog;
+            double distance = WGS84::distance(own_vessel_fix.lat, own_vessel_fix.lon, 0, ais_msg.lat, ais_msg.lon, 0);
+            ais_msg.dist = distance;
 
             dispatch(ais_msg);
             
@@ -318,6 +320,8 @@ namespace Sensors
           ais_msg.c = msg.dim_c;
           ais_msg.d = msg.dim_d;
           ais_msg.draught = msg.draught;
+          //double distance = WGS84::distance(own_vessel_fix.lat, own_vessel_fix.lon, 0, ais_msg.lat, ais_msg.lon, 0);
+          //ais_msg.dist = distance;
 
           dispatch(ais_msg);
 

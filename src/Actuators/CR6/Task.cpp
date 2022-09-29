@@ -101,17 +101,15 @@ namespace Actuators
       //! Timer.
       Time::Counter<float> m_timer_reboot;
       //! Battery Voltage.
-      IMC::Voltage m_volt;
+      IMC::Voltage m_voltBS1, m_voltBS2;
+      //! Previous Battery Voltage value.
+      double m_voltBS1_prev, m_voltBS2_prev;
       //! Power Produced by Solar Panels.
-      IMC::Power m_panelspwr;
-      //! Power consumed by system.
-      IMC::Power m_syspwr;
-      //! Power consumed by thruster.
-      IMC::Power m_thrpwr;
-      //! Current consumed by system.
-      IMC::Current m_syscurr;
-      //! Current consumed by thruster.
-      IMC::Current m_thrcurr;
+      IMC::Power m_panelspwrBS1, m_panelspwrBS2;
+      //! Power consumed by system and thruster.
+      IMC::Power m_syspwr, m_thrpwr;
+      //! Current consumed by system and thryster.
+      IMC::Current m_syscurr, m_thrcurr, m_chargcurrBS1, m_chargcurrBS2;
       //! Dispatched power settings.
       IMC::PowerSettings m_pwr_settings;
       //! Power Settings String.
@@ -138,6 +136,8 @@ namespace Actuators
         thrust_max(100.0),
         rudder_max(45),
         rudder_cmd(0),
+        m_voltBS1_prev(0.0),
+        m_voltBS2_prev(0.0),
         pwr_sett_rec(false),
         m_do_send(true),
         m_reqid(0),
@@ -210,12 +210,16 @@ namespace Actuators
       void
       onEntityReservation(void)
       {
-        m_volt.setSourceEntity(reserveEntity("Batteries"));
-        m_panelspwr.setSourceEntity(reserveEntity("Panels Power"));
+        m_voltBS1.setSourceEntity(reserveEntity("Parallel Battery Voltage")); //"Batteries"
+        m_voltBS2.setSourceEntity(reserveEntity("Single Battery Voltage")); //"Batteries"
+        m_panelspwrBS1.setSourceEntity(reserveEntity("Panels Power BS1"));
+        m_panelspwrBS2.setSourceEntity(reserveEntity("Panels Power BS2"));
         m_syspwr.setSourceEntity(reserveEntity("System Consumed Power"));
         m_thrpwr.setSourceEntity(reserveEntity("Thruster Consumed Power"));
         m_syscurr.setSourceEntity(reserveEntity("System Consumed Current"));
         m_thrcurr.setSourceEntity(reserveEntity("Thruster Consumed Current"));
+        m_chargcurrBS1.setSourceEntity(reserveEntity("Charging Current BS1"));
+        m_chargcurrBS2.setSourceEntity(reserveEntity("Charging Current BS2"));
         m_pwr_settings.setSourceEntity(reserveEntity("Relay Power Settings"));
       }
 
@@ -320,7 +324,7 @@ namespace Actuators
             if (bfr[i] == '\n')
             {
               //setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-              spew("%s\n",m_line.c_str());
+              debug("%s\n",m_line.c_str());
               // Process NMEA sentence.
               if(!pwr_sett_rec)
                 extractNMEA(m_line);
@@ -369,53 +373,6 @@ namespace Actuators
             commas.push_back(i);
         }
 
-        std::string volt = proper.substr(commas[7]+1,5); //was 4 before.
-        m_volt.value = std::atof(volt.c_str());
-        //spew("Voltage:%f\n",m_volt.value);
-        dispatch(m_volt);
-
-        if(!m_iridium && m_volt.value<m_args.critical_voltage)
-        {
-          std::string volt_ir = std::to_string(m_args.critical_voltage);
-          std::string volt_ir_tr = volt_ir.substr(0,5);
-          IMC::TransmissionRequest req;
-          req.setDestination(m_ctx.resolver.id());
-          req.data_mode = TransmissionRequest::DMODE_TEXT;
-          req.txt_data = "Battery voltage is below "+volt_ir_tr+".";
-          req.deadline = Clock::getSinceEpoch() + 60;
-          req.req_id = ++m_reqid;
-
-          req.comm_mean = TransmissionRequest::CMEAN_SATELLITE;
-          req.destination = "";
-          inf("Sending via Iridium: '%s'", req.txt_data.c_str());
-          dispatch(req);
-
-          m_iridium = true;
-        }
-
-        std::string panels = proper.substr(commas[2]+1,5);
-        m_panelspwr.value = std::atof(panels.c_str());
-        //spew("Panels Power:%f\n",m_panelspwr.value);
-        dispatch(m_panelspwr);
-
-        std::string current = proper.substr(commas[3]+1,5);
-        std::string power = proper.substr(commas[4]+1,5);
-        m_syscurr.value = std::atof(current.c_str());
-        m_syspwr.value = std::atof(power.c_str());
-        //spew("Drawn Current:%f\n",m_syscurr.value);
-        //spew("Drawn Power:%f\n",m_syspwr.value);
-        dispatch(m_syscurr);
-        dispatch(m_syspwr);
-
-        std::string thruster_current = proper.substr(commas[5]+1,5);
-        std::string thruster_power = proper.substr(commas[6]+1,5);
-        m_thrcurr.value = std::atof(thruster_current.c_str());
-        m_thrpwr.value = std::atof(thruster_power.c_str());
-        //spew("Thruster Current:%f\n",m_thrcurr.value);
-        //spew("Thruster Power:%f\n",m_thrpwr.value);
-        dispatch(m_thrcurr);
-        dispatch(m_thrpwr);
-
         //! Power Settings
         std::stringstream pw1(proper.substr(commas[1]+1,1));
         int pwrsettings1_int = 0;
@@ -444,9 +401,92 @@ namespace Actuators
         m_pwr_settings.vhf= pwrsettings6_int;
 
         dispatch(m_pwr_settings);
-
         storePowerSettings();
 
+        // Panels generated power.
+        std::string pwrBS1 = proper.substr(commas[2]+1,5);
+        m_panelspwrBS1.value = std::atof(pwrBS1.c_str());
+        //spew("Panels Power:%f\n",m_panelspwrBS1.value);
+        dispatch(m_panelspwrBS1);
+
+        std::string pwrBS2 = proper.substr(commas[3]+1,5);
+        m_panelspwrBS2.value = std::atof(pwrBS2.c_str());
+        //spew("Panels Power:%f\n",m_panelspwrBS1.value);
+        dispatch(m_panelspwrBS2);
+
+        // Consumed current.
+        std::string currentBS1 = proper.substr(commas[4]+1,5);
+        m_syscurr.value = std::atof(currentBS1.c_str());
+        //spew("System Drawn Current:%f\n",m_syscurr.value);
+        dispatch(m_syscurr);
+
+        std::string currentBS2 = proper.substr(commas[5]+1,5);
+        m_thrcurr.value = std::atof(currentBS2.c_str());
+        //spew("System Drawn Current:%f\n",m_thrcurr.value);
+        dispatch(m_thrcurr);
+
+        // Generated current.
+        std::string chcurrentBS1 = proper.substr(commas[6]+1,5);
+        m_chargcurrBS1.value = std::atof(chcurrentBS1.c_str());
+        //spew("System Drawn Current:%f\n",m_chargcurrBS1.value);
+        dispatch(m_chargcurrBS1);
+
+        std::string chcurrentBS2 = proper.substr(commas[7]+1,5);
+        m_chargcurrBS2.value = std::atof(chcurrentBS2.c_str());
+        //spew("System Drawn Current:%f\n",m_chargcurrBS2.value);
+        dispatch(m_chargcurrBS2);
+
+        // Batteries voltage.
+        std::string voltBS1 = proper.substr(commas[8]+1,5); //was 4 before.
+        m_voltBS1.value = std::atof(voltBS1.c_str());
+        //spew("Voltage:%f\n",m_voltBS1.value);
+        dispatch(m_voltBS1);
+
+        std::string voltBS2 = proper.substr(commas[9]+1,5); //was 4 before.
+        m_voltBS2.value = std::atof(voltBS2.c_str());
+        //spew("Voltage:%f\n",m_voltBS2.value);
+        dispatch(m_voltBS2);
+
+        if(m_voltBS1_prev == 0.0)
+          m_voltBS1_prev = m_voltBS1.value;
+
+        if(m_voltBS2_prev == 0.0)
+          m_voltBS2_prev = m_voltBS2.value;
+
+        // Consumed power.
+        m_syspwr.value = m_syscurr.value * m_voltBS1.value;
+        m_thrpwr.value = m_thrcurr.value * m_voltBS2.value;
+        dispatch(m_syspwr);
+        dispatch(m_thrpwr);
+
+        if(!m_iridium && ((std::fabs(m_voltBS1_prev - m_voltBS1.value)<0.5 && m_voltBS1.value<m_args.critical_voltage) || (std::fabs(m_voltBS2_prev - m_voltBS2.value)<0.5 && m_voltBS2.value<m_args.critical_voltage)))
+        {
+          std::string msg;
+          
+          if(m_voltBS1.value<m_args.critical_voltage)
+          {
+            msg = "(A) Parallel batteries voltage is below ";
+          } else if(m_voltBS2.value<m_args.critical_voltage)
+            msg = "(A) Single battery voltage is below ";
+          else if(m_voltBS2_prev - m_voltBS2.value<0.5 && m_voltBS1.value<m_args.critical_voltage && m_voltBS2.value<m_args.critical_voltage)
+            msg = "(A) All batteries voltage is below ";
+
+          std::string volt_ir = std::to_string(m_args.critical_voltage);
+          std::string volt_ir_tr = volt_ir.substr(0,5);
+          IMC::TransmissionRequest req;
+          req.setDestination(m_ctx.resolver.id());
+          req.data_mode = TransmissionRequest::DMODE_TEXT;
+          req.txt_data = msg +volt_ir_tr+".";
+          req.deadline = Clock::getSinceEpoch() + 60;
+          req.req_id = ++m_reqid;
+
+          req.comm_mean = TransmissionRequest::CMEAN_SATELLITE;
+          req.destination = "";
+          inf("Sending via Iridium: '%s'", req.txt_data.c_str());
+          dispatch(req);
+
+          m_iridium = true;
+        }
       }
 
       void

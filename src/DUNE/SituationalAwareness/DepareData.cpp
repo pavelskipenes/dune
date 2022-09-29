@@ -186,6 +186,15 @@ namespace DUNE
         }
       return false;
     }
+    // This function should not be here permanently, since it has nothing to do with DepareData, but for now it is just very practical. It will be used only for a short time.
+    bool DepareData::writeCSVfileCourseOffsets(double course, double bearing, double distance, double cost, std::string outputFile)
+    {
+      std::ofstream file_;
+      file_.open(outputFile, std::ios_base::app);
+      file_ << course << "," << bearing << "," << distance << "," << cost << "\r\n";
+      
+      return false;
+    }
 
     DepareData::DEPAREVector DepareData::getCorridor(double startLat, double startLon, double endLat, double endLon, double steps, double corridorWidth) {
       float stepLat= (endLat-startLat)/steps;
@@ -205,38 +214,70 @@ namespace DUNE
       return getCorridor(startLat, startLon, endLat, endLon, distance/(gridSize/2*std::sqrt(2)), corridorWidth);
     }
 
-    Math::Matrix DepareData::getCAS(double vessel_lat, double vessel_lon, double drval2, double size, double cog, std::vector<double> directions){
+    Math::Matrix DepareData::getCAS(double vessel_lat, double vessel_lon, double drval2, double size, double cog, const Eigen::Matrix<double,-1,2> waypoints_, std::vector<double> directions){
       DepareData::DEPAREVector dep_vec = this->getSquare(vessel_lat, vessel_lon, drval2, size);
-      int offset = 2;
+      int offset = 5;
       Math::Matrix ranges(directions.size(),2);
       Math::Matrix ret(directions.size(),4,0.0);
 
+      Eigen::MatrixXd waypoints(waypoints_.rows(), waypoints_.cols()); waypoints = waypoints_;
+
+      double psi_path = atan2(waypoints(1,1) - waypoints(0,1),
+							waypoints(1,0) - waypoints(0,0)); // path course
+      
+      double psi_path_relative = atan2(waypoints(1,1) - vessel_lat,
+							waypoints(1,0) - vessel_lon); // path course, from asv current position to next waypoint
+
       for(int i=0; i<directions.size(); i++)
       {
-        ranges(i,0) = normalize_angle(cog + Angles::radians(directions[i] - offset));
-        ranges(i,1) = normalize_angle(cog + Angles::radians(directions[i] + offset));
-        //std::cout << "range 1 " << Angles::degrees(ranges(i,0)) << " range 2 " << Angles::degrees(ranges(i,1)) << std::endl;
+        ranges(i,0) = normalize_angle(psi_path_relative + Angles::radians(directions[i] - offset));
+        ranges(i,1) = normalize_angle(psi_path_relative + Angles::radians(directions[i] + offset));
       }
 
       for(DepareData::DEPAREVector::iterator itr = dep_vec.begin(); itr != dep_vec.end(); ++itr)
       {
         double bearing, range;
         WGS84::getNEBearingAndRange(vessel_lat, vessel_lon, itr->Lat, itr->Lon, &bearing, &range);
-        //std::cout << " bearing " << Angles::degrees(bearing) << " range " << range << std::endl;
-
         for(int j=0; j<ranges.rows(); j++)
         {
           if(bearing>=ranges(j,0) && bearing<=ranges(j,1) && range<size)
           {
-            ret(j,0)=itr->Lat;
-            ret(j,1)=itr->Lon;
-            ret(j,2)=Angles::degrees(bearing); //bearing; normalize_angle(bearing-cog)
-            ret(j,3)=range;
-            //std::cout << "Lat " << itr->Lat << " Lon " << itr->Lon << " bearing " << Angles::degrees(normalize_angle(bearing-cog)) << " range " << range;
+            if(ret(j,3) == 0.0)
+            {
+              ret(j,0)=itr->Lat;
+              ret(j,1)=itr->Lon;
+              ret(j,2)=Angles::degrees(bearing); //bearing; normalize_angle(bearing-cog)
+              ret(j,3)=range;
+            }
+            else if(range < ret(j,3)){ // In order to find the point with the shortest distance
+              ret(j,0)=itr->Lat;
+              ret(j,1)=itr->Lon;
+              ret(j,2)=Angles::degrees(bearing);
+              ret(j,3)=range;
+            }
+          }
+          // Special case where the range goes from e.g. 175 to -175 and the first does not work
+          if (ranges(j,0) > 0 && ranges(j,1) < 0)
+          {
+            if((bearing>=ranges(j,0) || bearing<=ranges(j,1)) && range<size)
+            {
+              if(ret(j,3) == 0.0)
+              {
+                ret(j,0)=itr->Lat;
+                ret(j,1)=itr->Lon;
+                ret(j,2)=Angles::degrees(bearing);
+                ret(j,3)=range;
+              }
+              else if(range < ret(j,3)){ // In order to find the point with the shortest distance
+                ret(j,0)=itr->Lat;
+                ret(j,1)=itr->Lon;
+                ret(j,2)=Angles::degrees(bearing);
+                ret(j,3)=range;
+              }
+            }
           }
         }
       }
-
       return ret;
     }
 

@@ -84,6 +84,8 @@ namespace
 
           //! Task arguments.
           Arguments m_args;
+          //! Activate estimation.
+          bool m_active;
           //! Estimator Gain.
           double m_gain;
           //! Average factor.
@@ -117,7 +119,7 @@ namespace
           //! Estimated Wave Frequency.
           double m_wave;
           //! Heave measured from GPS.
-          IMC::Heave m_gps_heave;
+          double m_gps_heave;
           //! Heave measured from GPS, moved to CG.
           IMC::Heave m_cg_heave;
           //! Euler Angles from GPS.
@@ -127,8 +129,9 @@ namespace
 
           Task(const std::string& name, Tasks::Context& ctx):
             DUNE::Tasks::Task(name, ctx),
+            m_active(false),
             m_gain(0.0),
-            m_avg(0.0),
+            m_avg(0),
             m_zeta_1(0.0),
             m_zeta_2(0.0),
             m_zeta_2_dot(0.0),
@@ -138,11 +141,12 @@ namespace
             m_phi_est_last(0.0),
             m_wave_avg_last(0.0),
             m_wave(0.0),
+            m_gps_heave(0.0),
             m_valid_heave(false)
           {
             param("Active", m_args.active)
               .defaultValue("false")
-              .description("Determines if output has to be used");
+              .description("Activates and deactivates the estimator");
 
             param("Amplitude LPF cutoff frequency", m_args.lpf_ampl_cutoff)
               .units(Units::Hertz)
@@ -159,44 +163,44 @@ namespace
               .minimumValue("1.0")
               .description("Low-pass filter(s) number of taps");            
 
-            param("Data Sampling Frequency", m_args.data_sampl_freq)
+            param("Data sampling frequency", m_args.data_sampl_freq)
               .units(Units::Hertz)
               .defaultValue("2.0")
-              .description("Heave Sampling Frequency");
+              .description("Heave sampling frequency");
 
-            param("Period", m_args.period)
+            param("Estimation period", m_args.period)
               .units(Units::Second)
               .defaultValue("1800.0")
-              .description("Estimation Period");
+              .description("Estimation period");
 
-            param("Estimation Duration", m_args.duration)
+            param("Estimation duration", m_args.duration)
               .units(Units::Second)
               .defaultValue("600.0")
-              .description("Estimation Duration");
+              .description("Estimation duration");
 
-            param("Minimum Gain", m_args.gain_min)
+            param("Minimum gain", m_args.gain_min)
               .defaultValue("2.0")
               .minimumValue("1.0")
               .description("Estimator Minimum Gain");
 
-            param("Maximum Gain", m_args.gain_max)
+            param("Maximum gain", m_args.gain_max)
               .defaultValue("10.0")
               .maximumValue("100.0")
               .description("Estimator Maximum Gain");
 
-            param("Switching Amplitude", m_args.a_switch)
+            param("Switching amplitude", m_args.a_switch)
               .units(Units::Meter)
               .defaultValue("0.1")
               .description("Amplitude for Gain Switching");
 
-            param("WEF Initial Guess", m_args.wef_init)
+            param("WEF initial guess", m_args.wef_init)
               .units(Units::RadianPerSecond)
               .defaultValue("1")
               .description("Initial guess for estimation of the wave encounter frequency");
 
             // Setup processing of IMC messages
-            bind<Heave>(this);
-            bind<EulerAngles>(this);
+            bind<IMC::Heave>(this);
+            bind<IMC::EulerAngles>(this);
           }
 
           //! Update internal state with new parameter values.
@@ -205,6 +209,16 @@ namespace
           {
             if(paramChanged(m_args.duration))
               m_timer.setTop(m_args.period+m_args.duration);
+
+            if(paramChanged(m_args.active))
+            {
+              m_active = m_args.active;
+              if(m_active)
+              {
+                buildFilters();
+                m_timer.setTop(m_args.period+m_args.duration);
+              }
+            }
 
             if(paramChanged(m_args.lpf_est_cutoff) ||
               paramChanged(m_args.lpf_taps) ||
@@ -220,41 +234,37 @@ namespace
           void
           consume(const IMC::EulerAngles* msg)
           {
-            if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"GPS")==0)
+            if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"HemisphereGPS")==0)
             {
               // Get Euler Angles from GPS.
               m_euler.theta = msg->theta;
               m_euler.phi = msg->phi;
 
-              trace("ESTIMATOR - EULER ANGLES FROM GPS: theta = %f phi = %f", m_euler.theta, m_euler.phi);
+              trace("ESTIMATOR - EULER ANGLES FROM HemisphereGPS: theta = %f phi = %f", Angles::degrees(m_euler.theta), Angles::degrees(m_euler.phi));
             }
-            else
-              return;
           }
 
           void
           consume(const IMC::Heave* msg)
           {
             // If this transformation makes it should be included in Sensors/GPS.
-            if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"GPS")==0)
+            if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"HemisphereGPS")==0)
             {
-              double m_gps_heave = msg->value;
-              trace("ESTIMATOR - GPS HEAVE: %f", m_gps_heave);
+              m_gps_heave = msg->value;
+              trace("GPS HEAVE: %f", m_gps_heave);
 
               // Compute wrt vessel CG: h_cg = h_gps - (0 0 1)*R*r, R=rot matrix between frames, r=vector between frames origins.
               double r_x = 2.0, r_y = 0.0, r_z = -0.25;
               m_cg_heave.value = m_gps_heave + r_x*std::sin(m_euler.theta) - r_z*std::cos(m_euler.theta)*std::cos(m_euler.phi) - r_y*std::cos(m_euler.theta)*std::sin(m_euler.phi);
 
-              trace("ESTIMATOR - CG HEAVE: %f", m_cg_heave.value);
+              trace("CG HEAVE: %f", m_cg_heave.value);
 
               dispatch(m_cg_heave); // no loopback.
 
               m_valid_heave = true;
 
               setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-            } else
-                return;
-           
+            }           
           }
 
           //! Initialize resources.
@@ -284,76 +294,56 @@ namespace
           void
           estimation(void)
           {
-            if(m_timer.getElapsed()>=m_args.period && m_timer.getElapsed()<=m_args.period+m_args.duration)
-            {
-              
-              if(m_avg==0) // first iteration, build filters.
-                buildFilters();
+            if(m_avg==0) // first iteration, build filters.
+              buildFilters();
 
-              spew("Wave Amplitude = Heave Amplitude at CG: %f",m_cg_heave.value);
+            spew("Wave Amplitude = Heave Amplitude at CG: %f",m_cg_heave.value);
+          
+            if(m_cg_heave.value>m_args.a_switch)
+              m_gain = m_args.gain_min;
+            else
+              m_gain = m_args.gain_max;
+
+            //Compute zeta_2_dot.
+            m_zeta_1 = lowpass_est.step(m_cg_heave.value);              
+            m_zeta_2 = m_deriv.update(m_zeta_1);
+            m_zeta_2_dot = -2*m_args.lpf_est_cutoff*m_zeta_2 - std::pow(m_args.lpf_est_cutoff,2)*m_zeta_1 + std::pow(m_args.lpf_est_cutoff,2)*m_cg_heave.value;              
+
+            //Compute phi_dot.
+            m_phi_est_dot = m_gain*m_zeta_1*(m_zeta_2_dot-(std::real(m_phi_est)*m_zeta_1));
+
+            // Compute Time Delta.
+            double tstep = m_delta.getDelta();
+            // Check if we have a valid time delta.
+            if (tstep < 0.0)
+              return;
             
-              if(m_cg_heave.value>m_args.a_switch)
-                m_gain = m_args.gain_min;
-              else
-                m_gain = m_args.gain_max;
+            //Backward Euler Method.
+            m_phi_est = m_phi_est_last + tstep*m_phi_est_dot;
 
-              //Compute zeta_2_dot.
-              m_zeta_1 = lowpass_est.step(m_cg_heave.value);              
-              m_zeta_2 = m_deriv.update(m_zeta_1);
-              m_zeta_2_dot = -2*m_args.lpf_est_cutoff*m_zeta_2 - std::pow(m_args.lpf_est_cutoff,2)*m_zeta_1 + std::pow(m_args.lpf_est_cutoff,2)*m_cg_heave.value;              
+            //Post-process data.
+            m_wave_cplx = -m_phi_est;
+            m_wave_cplx = sqrt(m_wave_cplx);
+            //spew("Wave Frequency:%f\n ",m_wave_cplx);
 
-              //Compute phi_dot.
-              m_phi_est_dot = m_gain*m_zeta_1*(m_zeta_2_dot-(std::real(m_phi_est)*m_zeta_1));
+            m_phi_est_last = m_phi_est;
 
-              // Compute Time Delta.
-              double tstep = m_delta.getDelta();
-              // Check if we have a valid time delta.
-              if (tstep < 0.0)
-                return;
-              
-              //Backward Euler Method.
-              m_phi_est = m_phi_est_last + tstep*m_phi_est_dot;
+            m_wave = real(m_wave_cplx);
+            //spew("Wave Frequency:%f\n",m_wave);
 
-              //Post-process data.
-              m_wave_cplx = -m_phi_est;
-              m_wave_cplx = sqrt(m_wave_cplx);
-              //spew("Wave Frequency:%f\n ",m_wave_cplx);
+            // Incremental average for the chosen period.
+            if(m_avg==0)
+              m_wave_avg.value = m_wave;
+            else
+              m_wave_avg.value = ((m_wave_avg_last * m_avg + m_wave) / (m_avg + 1));
 
-              m_phi_est_last = m_phi_est;
+            m_avg++;
+            m_wave_avg_last = m_wave_avg.value;
 
-              m_wave = real(m_wave_cplx);
-              //spew("Wave Frequency:%f\n",m_wave);
+            debug("Raw WEF: %f - Incrementally averaged WEF: %f", m_wave, m_wave_avg.value);
 
-              // Incremental average for the chosen period.
-              if(m_avg==0)
-                m_wave_avg.value = m_wave;
-              else
-                m_wave_avg.value = ((m_wave_avg_last * m_avg + m_wave) / (m_avg + 1));
-
-              m_avg++;
-              m_wave_avg_last = m_wave_avg.value;
-
-              //if(m_args.active==true)
-              //  m_wave_avg.value = m_wave_avg.value; //*100.0
-
-            }
-
-            if(m_timer.overflow())
-            {
-              //buildFilters();
-              m_timer.reset();
-              if(m_args.active==true){
-                dispatch(m_wave_avg); //*100;
-                trace("Averaged Estimated Frequency: %f\n",m_wave_avg.value);
-                trace("Wave Amplitude: %f",m_cg_heave.value);
-              }
-
-              // Reset weighted average - keep if next estimation should start from last.
-              //m_avg=0;
-              
-              // Free allocated filters memory.
-              lowpass_est.freeMem();              
-            }
+            //if(m_args.active==true)
+            //  m_wave_avg.value = m_wave_avg.value; //*100.0
           }
 
           //! Main loop.
@@ -362,9 +352,30 @@ namespace
           {
             while (!stopping())
             {
-              if(m_valid_heave)
-                estimation();
               waitForMessages(1.0);
+
+              if(m_active && m_valid_heave)
+              {
+                if(m_timer.getElapsed()>=m_args.period && m_timer.getElapsed()<=m_args.period+m_args.duration)
+                  estimation();
+              }
+
+              if(m_timer.overflow())
+              {
+                //buildFilters();
+                m_timer.reset();
+                if(m_active && m_avg != 0)
+                {
+                  debug("Wave Amplitude: %f - Averaged WEF: %f\n", m_cg_heave.value, m_wave_avg.value);
+                  dispatch(m_wave_avg); //*100;
+                }
+
+                // Reset weighted average - keep if next estimation should start from last.
+                //m_avg=0;
+                
+                // Free allocated filters memory.
+                //lowpass_est.freeMem();              
+              }
             }
           }
         };

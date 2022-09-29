@@ -90,7 +90,7 @@ namespace Autonomy
       //! Last received info.
       std::string m_par_reduced, m_dom_reduced, m_turb_reduced, m_chl_reduced, m_temp_opt_reduced, m_airsat_reduced, m_dox_reduced, m_temp_ctd_reduced, m_cond_reduced, m_sal_reduced, m_ss_reduced, m_depth_reduced, m_pres_reduced, depth_found_r, vel_found_r, dir_found_r;
       //! Iridium-ready L3 science messages.
-      IMC::Temperature m_temp_l3_ctd,m_temp_l3_opt,m_temp_l2;
+      IMC::Temperature m_temp_l3_ctd,m_temp_l3_tbl,m_temp_l3_opt,m_temp_l2;
       IMC::AirSaturation m_airsat;
       IMC::Chlorophyll m_chl;
       IMC::SingleCurrentCell m_cp;
@@ -272,6 +272,8 @@ namespace Autonomy
             m_temp_l3_opt = *msg;
           else if(msg->getSourceEntity() == m_ctd_ent)
             m_temp_l3_ctd = *msg;
+          else if(msg->getSourceEntity() == m_tbl_ent)
+            m_temp_l3_tbl = *msg;
           else
             war("IMC::Temperature from L3 - Entity NOT FOUND");
 
@@ -794,6 +796,10 @@ namespace Autonomy
           handleFenceCommand(origin,args);
         else if (cmd == "camera")
           handleCameraCommand(origin,args);
+        else if (cmd == "colav")
+          handleColavCommand(origin,args);
+        else if (cmd == "gains")
+          handleGainsCommand(origin,args);
         else
           handlePlanGeneratorCommand(origin, cmd, args);
       }
@@ -1099,10 +1105,10 @@ namespace Autonomy
               pair_double[0] = std::stod(pair.substr(0,comma_pos-1));
               pair_double[1] = std::stod(pair.substr(comma_pos+1,pair.length()-1));
               IMC::PolygonVertex vertex;
-              vertex.lat = pair_double[0];
-              vertex.lon = pair_double[1];
+              vertex.lat = Angles::radians(pair_double[0]);
+              vertex.lon = Angles::radians(pair_double[1]);
               locations.push_back(vertex);
-              debug("LAT: %f, LON: %f",pair_double[0],pair_double[1]);
+              debug("LAT: %f, LON: %f",Angles::degrees(pair_double[0]),Angles::degrees(pair_double[1]));
             } else
             {
               std::string pair = args.substr(loc_pos[i-1]+1,loc_pos[i]-1);
@@ -1111,10 +1117,10 @@ namespace Autonomy
               pair_double[0] = std::stod(pair.substr(0,comma_pos-1));
               pair_double[1] = std::stod(pair.substr(comma_pos+1,pair.length()-1));
               IMC::PolygonVertex vertex;
-              vertex.lat = pair_double[0];
-              vertex.lon = pair_double[1];
+              vertex.lat = Angles::radians(pair_double[0]);
+              vertex.lon = Angles::radians(pair_double[1]);
               locations.push_back(vertex);
-              debug("LAT: %f, LON: %f",pair_double[0],pair_double[1]);
+              debug("LAT: %f, LON: %f",Angles::degrees(pair_double[0]),Angles::degrees(pair_double[1]));
             }
           }
 
@@ -1132,31 +1138,46 @@ namespace Autonomy
         }
       }
 
-            //! Execute command 'CAMERA'
+      //! Execute command 'CAMERA'
       void
       handleCameraCommand(const std::string& origin, const std::string& args)
       {
         std::stringstream ss;
-
-        char what[32];
-        std::sscanf(args.c_str(), "%s", what);
-
-        if(!strcmp(what, "frame"))
-        {
-          debug("Frame wanted via Iridium!");
-          ss << "Sending frame command to camera..";
-          reply(origin,ss.str());
-        } else if(!strcmp(what, "video"))
-        {
-          debug("Video wanted via Iridium!");
-          ss << "Sending video command to camera..";
-          reply(origin,ss.str());
-        }
+        ss << "Sending command to camera..";
+        reply(origin,ss.str());
 
         // Send command to Sensors/Camera.
         IMC::DevDataText cmd;
         cmd.value = args;
         cmd.setDestinationEntity(resolveEntity("Camera"));
+        dispatch(cmd);
+      }
+
+      void
+      handleColavCommand(const std::string& origin, const std::string& args)
+      {
+        std::stringstream ss;
+        ss << "Sending command to path controller..";
+        reply(origin,ss.str());
+
+        // Send command to Control/Path/CAS.
+        IMC::DevDataText cmd;
+        cmd.value = args;
+        cmd.setDestinationEntity(resolveEntity("Path Control"));
+        dispatch(cmd);
+      }
+
+      void
+      handleGainsCommand(const std::string& origin, const std::string& args)
+      {
+        std::stringstream ss;
+        ss << "Sending command to Autopilot..";
+        reply(origin,ss.str());
+
+        // Send command to Control/ASV/Autopilot.
+        IMC::DevDataText cmd;
+        cmd.value = args;
+        cmd.setDestinationEntity(resolveEntity("Autopilot"));
         dispatch(cmd);
       }
 

@@ -60,13 +60,9 @@ namespace Sensors
       double auto_frame_period;
       //! Automatic video record period.
       double auto_video_period;
-      //! Path to manual folder.
-      std::string man_path;
-      //! Path to automatic folder.
-      std::string auto_path;
       //! Frame capture command.
       std::string m_frame_rec_cmd;
-      //! Video capture command.
+      //! Video record command.
       std::string m_video_cmd;
     };
 
@@ -75,9 +71,9 @@ namespace Sensors
       //! GPIO state handle
       Hardware::GPIO* m_gpio;
       //! Indicates camera state.
-      bool m_active;
+      bool m_active, m_is_booting;
       //! Enable/disable modes.
-      bool m_broadcast, m_man_frame, m_man_video, m_video_saved, m_transmit, m_frame_taken, m_video_taken;
+      bool m_broadcast, m_man_frame, m_man_video, m_video_transmitted, m_transmit, m_frame_taken, m_video_taken;
       //! Video length.
       int m_video_length;
       //! Automaitc routines.
@@ -89,8 +85,6 @@ namespace Sensors
       Counter<double> m_video_timer, m_camera_booting;
       //! Command string from Iridium.
       std::string m_cmd;
-      //! Paths.
-      std::string m_man_path, m_auto_path;
       //! Task arguments.
       Arguments m_args;
 
@@ -98,7 +92,9 @@ namespace Sensors
         Tasks::Task(name, ctx),
         //m_gpio(NULL),
         m_active(false),
+        m_is_booting(false),
         m_broadcast(false),
+        m_video_transmitted(true),
         m_transmit(false),
         m_frame_taken(false),
         m_video_taken(false)
@@ -151,15 +147,9 @@ namespace Sensors
         .defaultValue("1800")
         .description("Time after which a video is recorded.");
 
-        param("Manual path", m_args.man_path)
-        .defaultValue("")
-        .description("Where manual frames/videos are stored.");
-
-        param("Automatic path", m_args.auto_path)
-        .defaultValue("")
-        .description("Where automatic frames/videos are stored.");
-
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+
+        bind<IMC::DevDataText>(this);
 
       }
 
@@ -174,24 +164,11 @@ namespace Sensors
         if(paramChanged(m_args.broadcast))
         {
           m_broadcast = m_args.broadcast;
-          if(m_broadcast && !m_active)
-          {
-            spew("On update parameters: CAMERA ON");
-            m_gpio->setValue(1); // UNCOMMENT AFTER DEBUGGING.
+          if(m_broadcast)
+            startLive();
 
-            // Device is on.
-            m_active = true;
-
-            // If a broadcast is requested, automatic routines are disabled.
-            m_auto_frame = false;
-            m_auto_video = false;
-          }
-          if(!m_broadcast && m_active) {
-            // The camera is turned off, no matter if automatic routines are desired.
-            spew("On update parameters: CAMERA OFF");
-            m_gpio->setValue(0); // UNCOMMENT AFTER DEBUGGING.
-            m_active = false;
-          }
+          if(!m_broadcast && m_active)
+            stopLive();
         }
 
         if(paramChanged(m_args.man_frame))
@@ -199,10 +176,13 @@ namespace Sensors
           m_man_frame = m_args.man_frame;
           if(m_man_frame)
           {
+            spew("Manual frame capture requested ...");
+            m_auto_frame = false; // disable automatic routines.
+            m_frame_taken = false;
             if(!m_active)
               turnOnandWait();
             else
-              recordAndTransmitFrame("man");
+              recordAndTransmitFrame();
           }
         }
 
@@ -211,10 +191,13 @@ namespace Sensors
           m_man_video = m_args.man_video;
           if(m_man_video)
           {
+            spew("Manual video record requested ...");
+            m_video_taken = false;
+            m_auto_video = false; // disable automatic routines.
             if(!m_active)
               turnOnandWait();
             else
-              recordVideo("man");
+              recordVideo();
           }
         }
 
@@ -222,7 +205,12 @@ namespace Sensors
           m_video_length = m_args.video_length;
 
         if(paramChanged(m_args.auto_frame_period))
+        {
           m_auto_frame_period = m_args.auto_frame_period;
+          if(m_auto_frame)
+            m_auto_frame_timer.setTop(m_auto_frame_period);
+        }
+          
 
         if(paramChanged(m_args.auto_frame))
         {
@@ -233,29 +221,27 @@ namespace Sensors
         }
 
         if(paramChanged(m_args.auto_video_period))
-          m_auto_video_period = m_args.auto_video_period;
-
-        if(paramChanged(m_args.auto_video))
         {
-          m_man_video = false; // Turn off manual frame capture in case it was ON.
-          m_auto_video = m_args.auto_video;
+          m_auto_video_period = m_args.auto_video_period;
           if(m_auto_video)
             m_auto_video_timer.setTop(m_auto_video_period);
         }
 
-        if(paramChanged(m_args.man_path))
-          m_man_path = m_args.man_path;
-
-        if(paramChanged(m_args.auto_path))
-          m_auto_path = m_args.auto_path;
+        if(paramChanged(m_args.auto_video))
+        {
+          m_man_video = false; // Turn off manual video record in case it was ON.
+          m_auto_video = m_args.auto_video;
+          if(m_auto_video)
+            m_auto_video_timer.setTop(m_auto_video_period);
+        }
       }
 
       //! Acquire resources.
       void
       onResourceAcquisition(void)
       {
-        m_video_timer.setTop(100000000.0);
-        m_camera_booting.setTop(100000000.0);
+        m_video_timer.setTop(m_video_length);
+        m_camera_booting.setTop(boot_time);
         
         try
         {
@@ -288,62 +274,137 @@ namespace Sensors
       {}
 
       void
+      startLive(void)
+      {
+        m_auto_frame = false;
+        m_auto_video = false;
+        m_man_frame = false;
+        m_man_video = false;
+
+        m_gpio->setValue(1);
+        trace("Live on!");
+        m_active = true;
+      }
+
+      void
+      stopLive(void)
+      {
+        m_auto_frame = false;
+        m_auto_video = false;
+        m_man_frame = false;
+        m_man_video = false;
+
+        m_gpio->setValue(0);
+        trace("Live killed, camera shutting down ...");
+        m_active = false;
+      }
+
+      void
       turnOnandWait(void)
       {
         if(!m_active)
         {
-          spew("Camera is OFF, turning ON first ... ");
-          m_gpio->setValue(1); // UNCOMMENT AFTER DEBUGGING.
+          debug("Camera is OFF, turning ON first ... ");
+          m_gpio->setValue(1);
 
-          // Wait 5 seconds before capturing the frame.
+          // Set camera booting.
           m_camera_booting.setTop(boot_time);
-          m_active = true;
+          m_is_booting = true;
         }
       }
 
       void
       consume(const IMC::DevDataText * msg)
       {
-        spew("Command arrived from Iridium.");
-        m_cmd = msg->value;
-
-        // Parse command.
-        char what[32];
-        std::sscanf(m_cmd.c_str(), "%s", what);
-        
-        if(!strcmp(what, "frame"))
+        if(std::strcmp(resolveEntity(msg->getSourceEntity()).c_str(),"Text Actions")==0 && msg->getDestinationEntity()==resolveEntity("Camera"))
         {
-          m_man_frame = true; // enable manual frame capture.
-          m_transmit = false; // disable transmission, we are on Iridium!
-          if(!m_active)
-            turnOnandWait();
-          else
-            recordAndTransmitFrame("man");
-        } else
-        {
-          char video[32], length[32];
-          std::sscanf(m_cmd.c_str(), "%s %s", video, length);
-          m_video_length = std::atoi(length);
+          debug("Command arrived from Iridium.");
+          m_cmd = msg->value;
 
-          m_man_video = true; // enable manual video capture.
-          m_transmit = false; // disable transmission, we are on Iridium!
-          if(!m_active)
-            turnOnandWait();
-          else
-            recordVideo("man");
+          // Parse command.
+          char what[32];
+          std::sscanf(m_cmd.c_str(), "%s", what);
+          
+          if(!strcmp(what, "on"))
+            startLive();
+          if(!strcmp(what, "off"))
+            stopLive();
+          else if(!strcmp(what, "frame"))
+          {
+            m_man_frame = true; // enable manual frame capture.
+            m_transmit = false; // disable transmission, we are on Iridium!
+            if(!m_active)
+              turnOnandWait();
+            else
+              recordAndTransmitFrame();
+          } else if(!strcmp(what, "video"))
+          {
+            char video[32], length[32];
+            std::sscanf(m_cmd.c_str(), "%s %s", video, length);
+            m_video_length = std::atoi(length);
+
+            m_man_video = true; // enable manual video capture.
+            m_transmit = false; // disable transmission, we are on Iridium!
+            if(!m_active)
+              turnOnandWait();
+            else
+              recordVideo();
+          } else if(!strcmp(what, "frame-p"))
+          {
+            char period[32];
+            std::sscanf(m_cmd.c_str(), "%s %s", what, period);
+            int periodi = std::atoi(period);
+            if(periodi == 0)
+            {
+              m_auto_frame = false;
+              debug("Iridium: periodical frame capture off.");
+            }              
+            else
+            {
+              m_auto_frame = true;
+              m_man_frame = false; // Turn off manual frame capture in case it was ON.
+              double periodd = (double) periodi;
+              m_auto_frame_timer.setTop(periodd);
+              debug("Iridium: periodical frame capture with period %.3f",periodd);
+            }
+          } else if(!strcmp(what, "video-p"))
+          {
+            char period[32], duration[32];
+            std::sscanf(m_cmd.c_str(), "%s %s %s", what, period, duration);
+            int periodi = std::atoi(period);
+
+            if(periodi == 0)
+            {
+              m_auto_video = false;
+              debug("Iridium: periodical video record off.");
+            } else
+            {
+              m_man_video = false; // Turn off manual video record in case it was ON.
+              m_auto_video = true;
+              int duration_it = std::atoi(duration);
+              if (duration_it != 0)
+                m_video_length = duration_it;
+              // else the video lenght remaines the default one.
+              double periodd = (double) periodi;
+              m_auto_video_timer.setTop(periodd);
+              debug("Iridium: periodical video record with period %.3f and length %d", periodd, m_video_length);
+            }
+          }
         }
       }      
 
       void
-      recordAndTransmitFrame(std::string mode)
+      recordAndTransmitFrame()
       {
         std::string m_frame_rec_cmd, m_frame_transfer_cmd;
-        if(mode == "man")
+        if(m_man_frame)
         {
+          debug("Capturing manual frame ...");
           m_frame_rec_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash getFrameMan.sh >> /dev/null 2>&1"); // Manual record.
           m_frame_transfer_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash transmitFrameMan.sh >> /dev/null 2>&1");
-        } else
+        } else if(m_auto_frame)
         {
+          debug("Capturing automatic frame ...");
           m_frame_rec_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash getFrameAuto.sh >> /dev/null 2>&1"); // Automatic record.
           m_frame_transfer_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash transmitFrameAuto.sh >> /dev/null 2>&1");
         }
@@ -365,35 +426,46 @@ namespace Sensors
         // Turn off the camera if it is not broadcasting.
         if(!m_broadcast)
         {
-          spew("Frame captured and transmitted. Camera turning off..");
+          debug("Frame captured (and maybe transmitted). Camera turning off..");
           m_gpio->setValue(0);
           m_active = false;
         }
+
+        m_frame_taken = true;
+        m_man_frame = false; // Set to false after a frame has been captured.
       }
       
       void
-      recordVideo(std::string mode)
+      recordVideo()
       {
         std::string m_video_rec_cmd;
-        if(mode == "man")
+        if(m_man_video)
+        {
+          debug("Recording manual video ...");
           m_video_rec_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash getVideoMan.sh ") + std::to_string(m_video_length) + String::str(" >> /dev/null 2>&1");
-        else
+        }
+        else if(m_auto_video)
+        {
+          debug("Recording automatic video ...");
           m_video_rec_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash getVideoAuto.sh ") + std::to_string(m_video_length) + String::str(" >> /dev/null 2>&1");
+        }
 
-        spew("Video string: %s", m_video_rec_cmd.c_str());
+        //spew("Video string: %s", m_video_rec_cmd.c_str());
         int ret = std::system(m_video_rec_cmd.c_str())/256;
 
         m_video_timer.setTop((double)m_video_length + 5.0);
-        m_video_saved = false;
+        m_video_taken = true;
+        m_video_transmitted = false;
+        m_man_video = false; // Set to false after a video has been recorded.
       }
 
       void
-      transmitVideo(std::string mode)
+      transmitVideo()
       {
         std::string m_video_transfer_cmd;
-        if(mode == "man")
+        if(m_man_video)
           m_video_transfer_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash transmitVideoMan.sh >> /dev/null 2>&1");
-        else
+        else if(m_auto_video)
           m_video_transfer_cmd = String::str("cd /opt/lsts/camera/scripts/ && ash transmitVideoAuto.sh >> /dev/null 2>&1");
         
         // Transmit to NTNU server if internet connection is up.
@@ -408,83 +480,69 @@ namespace Sensors
         // Turn off the camera if it is not broadcasting.
         if(!m_broadcast)
         {
-          spew("Video captured and transmitted. Camera turning off..");
+          debug("Video recorded (and maybe transmitted). Camera turning off..");
           m_gpio->setValue(0);
           m_active = false;
         }
+
+        m_video_transmitted = true;
       }
 
       void
       onMain(void)
       {
-
         while (!stopping())
         {
           waitForMessages(0.01);
 
-          if(m_camera_booting.overflow() && m_man_video)
-          {
-            m_man_video = false;
-            spew("Camera has booted, recording video ...");
-            recordVideo("man");
-          } else if(m_camera_booting.overflow() && m_man_frame)
-          {
-            m_man_frame = false;
-            spew("Camera has booted, recording frame ...");
-            recordAndTransmitFrame("man");
-          }
-
-          if(m_video_timer.overflow() && !m_video_saved && m_transmit && m_man_video)
-          {
-            m_video_saved = true;
-            transmitVideo("man");
-          } else if(m_video_timer.overflow() && !m_video_saved && m_transmit && m_auto_video)
-          {
-            m_video_saved = true;
-            transmitVideo("auto");
-          }
-
           // Automatic routines.
+          if(m_camera_booting.overflow() && m_is_booting)
+          {
+            spew("Camera has booted!");
+            m_is_booting = false;
+            m_active = true;
+
+            // Now the camera is ready to be used.
+            if((m_man_frame || m_auto_frame) && !m_frame_taken)
+              recordAndTransmitFrame();
+
+            if((m_man_video || m_auto_video) && !m_video_taken)
+              recordVideo();
+          }
+
           if(m_auto_frame_timer.overflow() && m_auto_frame)
           {
-            spew("Automatic frame record ...");
+            trace("Automatic frame capture requested ...");
             m_auto_frame_timer.reset();
+            m_frame_taken = false;
+
+            if(m_is_booting)
+              return;
+
             if(!m_active)
               turnOnandWait();
             else
-            {
-              recordAndTransmitFrame("auto");
-              return;
-            }
-            m_frame_taken = false;
+              recordAndTransmitFrame();
           }
-
-          if(m_camera_booting.overflow() && m_auto_frame && !m_frame_taken && m_active)
-          {
-            recordAndTransmitFrame("auto");
-            m_frame_taken = true;
-          }
-
 
           if(m_auto_video_timer.overflow() && m_auto_video)
           {
-            spew("Automatic video record ...");
+            spew("Automatic video record requested ...");
             m_auto_video_timer.reset();
+            m_video_taken = false;
+
+            if(m_is_booting)
+              return;
+
             if(!m_active)
               turnOnandWait();
             else
-            {
-              recordVideo("auto");
-              return;
-            }
-            m_video_taken = false;
+              recordVideo();
           }
 
-          if(m_camera_booting.overflow() && m_auto_video && !m_video_taken && m_active)
-          {
-            recordVideo("auto");
-            m_video_taken = true;
-          }
+          // What to do when a video has been recorded.
+          if(m_video_timer.overflow() && m_transmit && !m_video_transmitted)
+            transmitVideo();
         }
       }
     };

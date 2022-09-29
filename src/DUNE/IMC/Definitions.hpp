@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: d90ab8a30587da18e36034b3b517c553                            *
+// IMC XML MD5: 20a504881dddf9f325ff8d637ebaf4e3                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -11134,7 +11134,13 @@ namespace DUNE
         //! Aligning.
         AS_ALIGNING = 3,
         //! Wrong Medium.
-        AS_WRONG_MEDIUM = 4
+        AS_WRONG_MEDIUM = 4,
+        //! Coarse Alignment.
+        AS_COARSE_ALIGNMENT = 5,
+        //! Fine Alignment.
+        AS_FINE_ALIGNMENT = 6,
+        //! System Ready.
+        AS_SYSTEM_READY = 7
       };
 
       //! State.
@@ -20684,6 +20690,8 @@ namespace DUNE
       fp32_t course;
       //! Speed.
       fp32_t speed;
+      //! Distance.
+      fp32_t dist;
       //! Size A Length.
       fp32_t a;
       //! Size B Length.
@@ -20742,7 +20750,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 46;
+        return 50;
       }
 
       unsigned
@@ -26287,7 +26295,7 @@ namespace DUNE
     {
     public:
       //! MMSI.
-      fp32_t mmsi;
+      std::string mmsi;
       //! Latitude (WGS-84).
       fp64_t lat;
       //! Longitude (WGS-84).
@@ -26356,7 +26364,13 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 52;
+        return 48;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(mmsi);
       }
 
       void

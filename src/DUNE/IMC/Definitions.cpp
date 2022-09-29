@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: d90ab8a30587da18e36034b3b517c553                            *
+// IMC XML MD5: 20a504881dddf9f325ff8d637ebaf4e3                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -22071,6 +22071,7 @@ namespace DUNE
       lon = 0;
       course = 0;
       speed = 0;
+      dist = 0;
       a = 0;
       b = 0;
       c = 0;
@@ -22093,6 +22094,7 @@ namespace DUNE
       if (lon != other__.lon) return false;
       if (course != other__.course) return false;
       if (speed != other__.speed) return false;
+      if (dist != other__.dist) return false;
       if (a != other__.a) return false;
       if (b != other__.b) return false;
       if (c != other__.c) return false;
@@ -22122,6 +22124,7 @@ namespace DUNE
       ptr__ += IMC::serialize(lon, ptr__);
       ptr__ += IMC::serialize(course, ptr__);
       ptr__ += IMC::serialize(speed, ptr__);
+      ptr__ += IMC::serialize(dist, ptr__);
       ptr__ += IMC::serialize(a, ptr__);
       ptr__ += IMC::serialize(b, ptr__);
       ptr__ += IMC::serialize(c, ptr__);
@@ -22145,6 +22148,7 @@ namespace DUNE
       bfr__ += IMC::deserialize(lon, bfr__, size__);
       bfr__ += IMC::deserialize(course, bfr__, size__);
       bfr__ += IMC::deserialize(speed, bfr__, size__);
+      bfr__ += IMC::deserialize(dist, bfr__, size__);
       bfr__ += IMC::deserialize(a, bfr__, size__);
       bfr__ += IMC::deserialize(b, bfr__, size__);
       bfr__ += IMC::deserialize(c, bfr__, size__);
@@ -22168,6 +22172,7 @@ namespace DUNE
       bfr__ += IMC::reverseDeserialize(lon, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(course, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(speed, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(dist, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(a, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(b, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(c, bfr__, size__);
@@ -22190,6 +22195,7 @@ namespace DUNE
       IMC::toJSON(os__, "lon", lon, nindent__);
       IMC::toJSON(os__, "course", course, nindent__);
       IMC::toJSON(os__, "speed", speed, nindent__);
+      IMC::toJSON(os__, "dist", dist, nindent__);
       IMC::toJSON(os__, "a", a, nindent__);
       IMC::toJSON(os__, "b", b, nindent__);
       IMC::toJSON(os__, "c", c, nindent__);
@@ -27918,7 +27924,7 @@ namespace DUNE
     void
     CollisionAvoidance::clear(void)
     {
-      mmsi = 0;
+      mmsi.clear();
       lat = 0;
       lon = 0;
       x = 0;

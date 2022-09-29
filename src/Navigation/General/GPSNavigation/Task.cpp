@@ -221,7 +221,6 @@ namespace Navigation
           m_estate.height = msg->height - m_offset;
 
           // Decompose velocity vector.
-          //double sog = 0.3;
           m_estate.vx = std::cos(msg->cog) * msg->sog;
           m_estate.vy = std::sin(msg->cog) * msg->sog;
           m_estate.u = m_estate.vx*std::cos(m_estate.psi) + m_estate.vy*std::sin(m_estate.psi);
