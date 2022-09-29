@@ -180,14 +180,14 @@ namespace Sensors
 
         	if (msg_type_ptntccd.compare(msg_type) == 0)
         	{
-				std::getline(hmr_ss, raw_tilt_x, ',');
-				std::getline(hmr_ss, raw_tilt_y, ',');
-				std::getline(hmr_ss, raw_mag_x, ',');
-				std::getline(hmr_ss, raw_mag_y, ',');
-				std::getline(hmr_ss, raw_mag_z, ',');
-				std::getline(hmr_ss, raw_mag_t, ',');
-				std::getline(hmr_ss, raw_heading, '*');
-				std::getline(hmr_ss, checksum_str);
+            std::getline(hmr_ss, raw_tilt_x, ',');
+            std::getline(hmr_ss, raw_tilt_y, ',');
+            std::getline(hmr_ss, raw_mag_x, ',');
+            std::getline(hmr_ss, raw_mag_y, ',');
+            std::getline(hmr_ss, raw_mag_z, ',');
+            std::getline(hmr_ss, raw_mag_t, ',');
+            std::getline(hmr_ss, raw_heading, '*');
+            std::getline(hmr_ss, checksum_str);
 	        	convertRawPtntccd();
         	}
         	else if (msg_type_hcxdr.compare(msg_type) == 0)
@@ -195,31 +195,31 @@ namespace Sensors
         		std::string dummy;
 
         		std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, raw_tilt_x, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, raw_tilt_y, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, raw_mag_x, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, raw_mag_y, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, raw_mag_z, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, raw_mag_t, ',');
-				std::getline(hmr_ss, dummy, ',');
-				std::getline(hmr_ss, dummy, '*');
-				std::getline(hmr_ss, checksum_str);
-				convertRawHcxdr();
+            std::getline(hmr_ss, raw_tilt_x, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, raw_tilt_y, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, raw_mag_x, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, raw_mag_y, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, raw_mag_z, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, raw_mag_t, ',');
+            std::getline(hmr_ss, dummy, ',');
+            std::getline(hmr_ss, dummy, '*');
+            std::getline(hmr_ss, checksum_str);
+            convertRawHcxdr();
         	}
         	else
         	{
@@ -228,7 +228,7 @@ namespace Sensors
         }
 
         void
-		convertRawPtntccd(void)
+		    convertRawPtntccd(void)
         {
         	compareChecksum();
         	tilt_x = atan(std::stod(raw_tilt_x, nullptr))/32767.0;
@@ -244,7 +244,7 @@ namespace Sensors
         }
 
         void
-		convertRawHcxdr(void)
+		    convertRawHcxdr(void)
         {
         	compareChecksum();
         	tilt_x = std::stod(raw_tilt_x, nullptr)*M_PI/180.0;
@@ -260,7 +260,7 @@ namespace Sensors
         }
 
         void
-		compareChecksum(void)
+		    compareChecksum(void)
         {
         	int checksum_i = std::stoi(checksum_str, nullptr, 16);
 
@@ -271,7 +271,7 @@ namespace Sensors
         }
 
         int
-		calcChecksum(const char *s, uint16_t size)
+		    calcChecksum(const char *s, uint16_t size)
         {
         	int c = 0;
 
@@ -525,7 +525,17 @@ namespace Sensors
     public:
       double gyro_x, gyro_y, gyro_z;
       double accl_x, accl_y, accl_z;
-      double incl_x, incl_y, incl_z;
+      double  gyro_x_temp, gyro_y_temp, gyro_z_temp;
+      double  accl_x_temp, accl_y_temp, accl_z_temp;
+      double PPS;
+      uint16_t COUNT_P;
+      uint16_t LATENCY_P;
+      uint8_t gyro_status;
+      uint8_t accl_status;
+      uint8_t gyro_t_status;
+      uint8_t accl_t_status;
+      uint8_t PPS_status;
+      //double incl_x, incl_y, incl_z;
 
       STIM(void):
         gyro_x(0),
@@ -534,19 +544,31 @@ namespace Sensors
         accl_x(0),
         accl_y(0),
         accl_z(0),
-        incl_x(0),
-        incl_y(0),
-        incl_z(0)
+        gyro_x_temp(0),
+        gyro_y_temp(0),
+        gyro_z_temp(0),
+        accl_x_temp(0),
+        accl_y_temp(0),
+        accl_z_temp(0),
+        PPS(0)
+        //incl_x(0),
+        //incl_y(0),
+        //incl_z(0)
       {
         GX3 = 0, GX2 = 0, GX1 = 0, GY3 = 0, GY2 = 0, GY1 = 0, GZ3 = 0, GZ2 = 0, GZ1 = 0, GS = 0;
         AX3 = 0, AX2 = 0, AX1 = 0, AY3 = 0, AY2 = 0, AY1 = 0, AZ3 = 0, AZ2 = 0, AZ1 = 0, AS = 0;
-        IX3 = 0, IX2 = 0, IX1 = 0, IY3 = 0, IY2 = 0, IY1 = 0, IZ3 = 0, IZ2 = 0, IZ1 = 0, IS = 0;
+        GXT2 = 0, GXT1 = 0, GYT2 = 0, GYT1 = 0, GZT2 = 0, GZT1 = 0, GST = 0;
+        AXT2 = 0, AXT1 = 0, AYT2 = 0, AYT1 = 0, AZT2 = 0, AZT1 = 0, AST = 0;
+        PPS3 = 0, PPS2 = 0, PPS1 = 0, PPSS = 0;
+        //IX3 = 0, IX2 = 0, IX1 = 0, IY3 = 0, IY2 = 0, IY1 = 0, IZ3 = 0, IZ2 = 0, IZ1 = 0, IS = 0;
         COUNT = 0, LATENCY = 0, CRC = 0;
-        gyro_div = 21; accl_div = 22; incl_div = 22;
+        gyro_div = 21; accl_div = 22; incl_div = 22; pps_div = 23, temp_div = 8;
       }
 
       STIM(const SenTiBoard::Packet* pkt, bool delta_gyro=true, bool delta_accl=true, uint8_t incl_mode=2, uint8_t g_range=10)
       {
+        temp_div = 8;
+        pps_div = 23;
         if(delta_gyro)
             gyro_div = 21;
         else
@@ -613,20 +635,21 @@ namespace Sensors
           default:
             throw(DUNE::Exception("Given inclinometer mode not supported!"));
         }
-	num_dummy_bytes = 2; //depends on the config. See Table 6-20 in datasheet
-
+        //num_dummy_bytes = 2; //depends on the config. See Table 6-20 in datasheet
+        num_dummy_bytes = 1; //depends on the config. See Table 6-20 in datasheet
         readTimes(pkt->data, 12);
-	// copy the STIM message up to the CRC into a buffer for crc calculations
-	const uint8_t length_stim_data = pkt->getLength() - 12 - 4; //minus senti header and 4 CRC bytes
-	uint8_t crc_buf[36]; //length_stim_data + num_dummy_bytes
+	      // copy the STIM message up to the CRC into a buffer for crc calculations
+	      const uint8_t length_stim_data = pkt->getLength() - 12 - 4; //minus senti header and 4 CRC bytes
+	      //uint8_t crc_buf[36]; //length_stim_data + num_dummy_bytes
+        uint8_t crc_buf[44];
         std::memcpy(crc_buf, pkt->data + 12, pkt->getLength() - 12 - 4);
-	// add dummy bytes
-	for(uint8_t i = length_stim_data; i < length_stim_data + num_dummy_bytes; ++i)
-		crc_buf[i] = 0x00;
-	uint32_t crc = CRC32::reflect((CRC32::compute((const uint8_t*)crc_buf, length_stim_data + num_dummy_bytes, true, 0) ^ 0xFFFFFFFF), 32);
+	      // add dummy bytes
+	      for(uint8_t i = length_stim_data; i < length_stim_data + num_dummy_bytes; ++i)
+		      crc_buf[i] = 0x00;
+	      uint32_t crc = CRC32::reflect((CRC32::compute((const uint8_t*)crc_buf, length_stim_data + num_dummy_bytes, true, 0) ^ 0xFFFFFFFF), 32);
         deserializeFields(pkt->data + 12, pkt->getLength() - 12);
-	if(crc != CRC)
-	   throw InvalidCrc();
+	      if(crc != CRC)
+	        throw InvalidCrc();
 
       }
 
@@ -654,7 +677,26 @@ namespace Sensors
         bfr__ += IMC::deserialize(AZ2,        bfr__, size__);
         bfr__ += IMC::deserialize(AZ1,        bfr__, size__);
         bfr__ += IMC::deserialize(AS,         bfr__, size__);
-        bfr__ += IMC::deserialize(IX3,        bfr__, size__);
+        bfr__ += IMC::deserialize(GXT2,       bfr__, size__);
+        bfr__ += IMC::deserialize(GXT1,       bfr__, size__);
+        bfr__ += IMC::deserialize(GYT2,       bfr__, size__);
+        bfr__ += IMC::deserialize(GYT1,       bfr__, size__);
+        bfr__ += IMC::deserialize(GZT2,       bfr__, size__);
+        bfr__ += IMC::deserialize(GZT1,       bfr__, size__);
+        bfr__ += IMC::deserialize(GST,        bfr__, size__);
+        bfr__ += IMC::deserialize(AXT2,       bfr__, size__);
+        bfr__ += IMC::deserialize(AXT1,       bfr__, size__);
+        bfr__ += IMC::deserialize(AYT2,       bfr__, size__);
+        bfr__ += IMC::deserialize(AYT1,       bfr__, size__);
+        bfr__ += IMC::deserialize(AZT2,       bfr__, size__);
+        bfr__ += IMC::deserialize(AZT1,       bfr__, size__);
+        bfr__ += IMC::deserialize(AST,        bfr__, size__);
+        bfr__ += IMC::deserialize(PPS3,       bfr__, size__);
+        bfr__ += IMC::deserialize(PPS2,       bfr__, size__);
+        bfr__ += IMC::deserialize(PPS1,       bfr__, size__);
+        bfr__ += IMC::deserialize(PPSS,       bfr__, size__);
+
+/*         bfr__ += IMC::deserialize(IX3,        bfr__, size__);
         bfr__ += IMC::deserialize(IX2,        bfr__, size__);
         bfr__ += IMC::deserialize(IX1,        bfr__, size__);
         bfr__ += IMC::deserialize(IY3,        bfr__, size__);
@@ -663,7 +705,7 @@ namespace Sensors
         bfr__ += IMC::deserialize(IZ3,        bfr__, size__);
         bfr__ += IMC::deserialize(IZ2,        bfr__, size__);
         bfr__ += IMC::deserialize(IZ1,        bfr__, size__);
-        bfr__ += IMC::deserialize(IS,         bfr__, size__);
+        bfr__ += IMC::deserialize(IS,         bfr__, size__); */
         bfr__ += IMC::deserialize(COUNT,      bfr__, size__);
         bfr__ += IMC::deserialize(LATENCY,    bfr__, size__);
         bfr__ += IMC::reverseDeserialize(CRC, bfr__, size__);
@@ -693,36 +735,64 @@ namespace Sensors
       uint8_t AZ1,AZ2;
       int8_t AZ3;
       uint8_t AS;
-      uint8_t IX1,IX2;
-      int8_t IX3;
-      uint8_t IY1,IY2;
-      int8_t IY3;
-      uint8_t IZ1,IZ2;
-      int8_t IZ3;
-      uint8_t IS;
-      uint8_t COUNT;
+      uint8_t GXT1;
+      int8_t GXT2;
+      uint8_t GYT1;
+      int8_t GYT2;
+      uint8_t GZT1;
+      int8_t GZT2;
+      uint8_t GST;
+      uint8_t AXT1;
+      int8_t AXT2;
+      uint8_t AYT1;
+      int8_t AYT2;
+      uint8_t AZT1;
+      int8_t AZT2;
+      uint8_t AST;
+      uint8_t PPS1, PPS2;
+      int8_t PPS3;
+      uint8_t PPSS;
+      uint16_t COUNT;
       uint16_t LATENCY;
       uint32_t CRC;
-      uint8_t gyro_div, accl_div, incl_div;
+      uint8_t gyro_div, accl_div, incl_div, pps_div, temp_div;
       uint8_t num_dummy_bytes;
+
+      double
+      concatTemp(int8_t x2, uint8_t x1, uint8_t div)
+      {
+        return double((x2 << 8) + x1) / (1 << div);
+      }
 
       double
       concatDiv(int8_t x3, uint8_t x2, uint8_t x1, uint8_t div)
       {
-	return double((x3 << 16) + (x2 << 8) + x1) / (1 << div);
+	      return double((x3 << 16) + (x2 << 8) + x1) / (1 << div);
       }
+
       void
       convertRaw(void)
       {
-        gyro_x = concatDiv(GX3,GX2,GX1, gyro_div);
-        gyro_y = concatDiv(GY3,GY2,GY1, gyro_div);
-        gyro_z = concatDiv(GZ3,GZ2,GZ1, gyro_div);
-        accl_x = concatDiv(AX3,AX2,AX1, accl_div);
-        accl_y = concatDiv(AY3,AY2,AY1, accl_div);
-        accl_z = concatDiv(AZ3,AZ2,AZ1, accl_div);
-        incl_x = concatDiv(IX3,IX2,IX1, incl_div);
-        incl_y = concatDiv(IY3,IY2,IY1, incl_div);
-        incl_z = concatDiv(IZ3,IZ2,IZ1, incl_div);
+        gyro_x      = concatDiv(GX3,GX2,GX1, gyro_div);
+        gyro_y      = concatDiv(GY3,GY2,GY1, gyro_div);
+        gyro_z      = concatDiv(GZ3,GZ2,GZ1, gyro_div);
+        accl_x      = concatDiv(AX3,AX2,AX1, accl_div);
+        accl_y      = concatDiv(AY3,AY2,AY1, accl_div);
+        accl_z      = concatDiv(AZ3,AZ2,AZ1, accl_div);
+        gyro_x_temp = concatTemp(GXT2, GXT1, temp_div);
+        gyro_y_temp = concatTemp(GYT2, GYT1, temp_div);
+        gyro_z_temp = concatTemp(GZT2, GZT1, temp_div);
+        accl_x_temp = concatTemp(AXT2, AXT1, temp_div);
+        accl_y_temp = concatTemp(AYT2, AYT1, temp_div);
+        accl_z_temp = concatTemp(AZT2, AZT1, temp_div);
+        PPS         = concatDiv(PPS3,PPS2,PPS1, pps_div);
+        COUNT_P = COUNT;
+        LATENCY_P = LATENCY;
+        gyro_status = GS;
+        accl_status = AS;
+        gyro_t_status = GST;
+        accl_t_status = AST;
+        PPS_status = PPSS;
       }
     };
     

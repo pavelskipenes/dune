@@ -119,6 +119,8 @@ namespace Sensors
       IMC::Temperature m_temp;
       //! combined Acc and ang vel data
       IMC::Imu m_imu;
+      //! Moving average for message drop outs, temperature
+      Math::MovingAverage<double>* m_temp_avg;
       //! Moving average for message drop outs, delta vel x
       Math::MovingAverage<double>* m_deltvel_avg_x;
       //! Moving average for message drop outs, delta vel y
@@ -132,8 +134,7 @@ namespace Sensors
       //! Moving average for message drop outs, delta ang z
       Math::MovingAverage<double>* m_deltang_avg_z;
 
-      /*
-      // GNSS messages.
+      /* // GNSS messages.
       //! GPS Fix.
       IMC::GpsFix m_gps_fix;
       //! GPS Nav Data.
@@ -149,9 +150,8 @@ namespace Sensors
       //! Receiver status
       IMC::UbxStatus m_ubxstatus;
       //! Receiver survey-in status
-      IMC::UbxSvIn m_ubxsvin;
-      */
-
+      IMC::UbxSvIn m_ubxsvin;*/
+      
 
       //! Serial port device.
       SerialPort* m_uart;
@@ -453,6 +453,7 @@ namespace Sensors
       onResourceRelease(void)
       {
         Memory::clear(m_uart);
+        Memory::clear(m_temp_avg);
         Memory::clear(m_deltvel_avg_x);
         Memory::clear(m_deltvel_avg_y);
         Memory::clear(m_deltvel_avg_z);
@@ -716,25 +717,40 @@ namespace Sensors
       void
       handleSTIMPacket(const SenTiBoard::Packet* pkt)
       {
+        fp32_t temp;
+        //int numBytes = 0;
+        //uint32_t bytes;
+        //const uint8_t* bfr;
+
         m_delt_ang.setTimeStamp();
         m_delt_vel.setTimeStamp(m_delt_ang.getTimeStamp());
         m_accel.setTimeStamp(m_delt_ang.getTimeStamp());
         m_ang_vel.setTimeStamp(m_delt_ang.getTimeStamp());
+        m_temp.setTimeStamp(m_delt_ang.getTimeStamp());
 
         try
         {
           SenTiBoard::STIM stim_message(pkt);
 
-          spew("STIM: %f %f %f, %f, %f, %f, %f, %f, %f",
+          spew("STIM: %f %f %f, %f %f %f, %f %f %f, %f %f %f, %f",
               stim_message.gyro_x,
               stim_message.gyro_y,
               stim_message.gyro_z,
               stim_message.accl_x,
               stim_message.accl_y,
               stim_message.accl_z,
-              stim_message.incl_x,
+              stim_message.gyro_x_temp,
+              stim_message.gyro_y_temp,
+              stim_message.gyro_z_temp,
+              stim_message.accl_x_temp,
+              stim_message.accl_y_temp,
+              stim_message.accl_z_temp,
+              stim_message.PPS);
+          spew("COUNT AND LATENCY: %u %u", stim_message.COUNT_P, stim_message.LATENCY_P);
+          spew("STATUS: Gyro, Accl, Gyro_T, Accl_T, PPS  %u %u %u %u %u", stim_message.gyro_status, stim_message.accl_status, stim_message.gyro_t_status, stim_message.accl_t_status, stim_message.PPS_status);
+/*               stim_message.incl_x,
               stim_message.incl_y,
-              stim_message.incl_z);
+              stim_message.incl_z); */
 
           double timestamp = getTimestamp(stim_message.getTOV(), pkt->getID());
           float fps = 1 / (timestamp - m_timestamps[pkt->getID()]);
@@ -743,6 +759,13 @@ namespace Sensors
                   war("low FPS!");
                   // return;
           }
+
+          m_temp.time = timestamp;
+          temp = stim_message.gyro_x_temp + stim_message.gyro_y_temp + stim_message.gyro_z_temp
+                 + stim_message.accl_x_temp + stim_message.accl_y_temp + stim_message.accl_z_temp;
+          m_temp.value = temp / 6;
+
+          spew("Temp value, time: %f, %f", m_temp.value, m_temp.time);
 
           m_delt_ang.time = timestamp;
           //STIM gyro is in degrees
@@ -755,11 +778,13 @@ namespace Sensors
           m_delt_vel.y = stim_message.accl_y;
           m_delt_vel.z = stim_message.accl_z;
 
+          m_temp.setSourceEntity(m_sensor_entity[pkt->getID()]);
           m_delt_ang.setSourceEntity(m_sensor_entity[pkt->getID()]);
           m_delt_vel.setSourceEntity(m_sensor_entity[pkt->getID()]);
 
           if (fps > 200)
           {
+            dispatch(m_temp,DF_KEEP_TIME);
             dispatch(m_delt_ang,DF_KEEP_TIME);
             dispatch(m_delt_vel,DF_KEEP_TIME);
           }
@@ -813,7 +838,7 @@ namespace Sensors
         
           //approximate the timestamp, to avoid wrong fps in next message
           // NB: Assume STIM runs at 250 Hz
-          float fps = 250;
+          float fps = 1000; //250?
           double timestamp = m_timestamps[pkt->getID()] + 1.0/fps;
           m_timestamps[pkt->getID()] = timestamp;
 
@@ -823,6 +848,9 @@ namespace Sensors
             
             // Error handling
             m_bad_samples[pkt->getID()]++;
+
+            m_temp.time = timestamp;
+            m_temp.value = m_temp_avg->mean();
 
             m_delt_ang.time = timestamp;
             //STIM gyro is in degrees
@@ -835,9 +863,11 @@ namespace Sensors
             m_delt_vel.y = m_deltang_avg_y->mean();
             m_delt_vel.z = m_deltang_avg_z->mean();
 
+            m_temp.setSourceEntity(m_sensor_entity[pkt->getID()]);
             m_delt_ang.setSourceEntity(m_sensor_entity[pkt->getID()]);
             m_delt_vel.setSourceEntity(m_sensor_entity[pkt->getID()]);
 
+            dispatch(m_temp,DF_KEEP_TIME);
             dispatch(m_delt_ang,DF_KEEP_TIME);
             dispatch(m_delt_vel,DF_KEEP_TIME);
 
