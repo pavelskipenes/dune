@@ -38,6 +38,7 @@
 #define SENTIBOARD_MSG_ID_HMR  5
 
 #include <numeric>
+#include <cstdio>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
@@ -528,6 +529,7 @@ namespace Sensors
       double  gyro_x_temp, gyro_y_temp, gyro_z_temp;
       double  accl_x_temp, accl_y_temp, accl_z_temp;
       double PPS;
+      uint32_t CRC;
       uint16_t COUNT_P;
       uint16_t LATENCY_P;
       uint8_t gyro_status;
@@ -648,8 +650,11 @@ namespace Sensors
 		      crc_buf[i] = 0x00;
 	      uint32_t crc = CRC32::reflect((CRC32::compute((const uint8_t*)crc_buf, length_stim_data + num_dummy_bytes, true, 0) ^ 0xFFFFFFFF), 32);
         deserializeFields(pkt->data + 12, pkt->getLength() - 12);
-	      if(crc != CRC)
-	        throw InvalidCrc();
+        if(crc != CRC)
+        {
+          printf("crc = %d --- CRC = %d \n", crc,CRC);
+          throw InvalidCrc();
+        }
 
       }
 
@@ -706,8 +711,8 @@ namespace Sensors
         bfr__ += IMC::deserialize(IZ2,        bfr__, size__);
         bfr__ += IMC::deserialize(IZ1,        bfr__, size__);
         bfr__ += IMC::deserialize(IS,         bfr__, size__); */
-        bfr__ += IMC::deserialize(COUNT,      bfr__, size__);
-        bfr__ += IMC::deserialize(LATENCY,    bfr__, size__);
+        bfr__ += IMC::reverseDeserialize(COUNT,      bfr__, size__);
+        bfr__ += IMC::reverseDeserialize(LATENCY,    bfr__, size__);
         bfr__ += IMC::reverseDeserialize(CRC, bfr__, size__);
 
         convertRaw();
@@ -754,7 +759,7 @@ namespace Sensors
       uint8_t PPSS;
       uint16_t COUNT;
       uint16_t LATENCY;
-      uint32_t CRC;
+      //uint32_t CRC;
       uint8_t gyro_div, accl_div, incl_div, pps_div, temp_div;
       uint8_t num_dummy_bytes;
 

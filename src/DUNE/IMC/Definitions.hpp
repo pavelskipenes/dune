@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 20a504881dddf9f325ff8d637ebaf4e3                            *
+// IMC XML MD5: 1d1543231bdc5804e63b8fd0f213b309                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -6548,6 +6548,8 @@ namespace DUNE
     class Temperature: public Message
     {
     public:
+      //! Device Time.
+      fp64_t time;
       //! Measured Temperature.
       fp32_t value;
 
@@ -6598,7 +6600,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 4;
+        return 12;
       }
 
       fp64_t

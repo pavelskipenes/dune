@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 20a504881dddf9f325ff8d637ebaf4e3                            *
+// IMC XML MD5: 1d1543231bdc5804e63b8fd0f213b309                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -6526,6 +6526,7 @@ namespace DUNE
     void
     Temperature::clear(void)
     {
+      time = 0;
       value = 0;
     }
 
@@ -6533,6 +6534,7 @@ namespace DUNE
     Temperature::fieldsEqual(const Message& msg__) const
     {
       const IMC::Temperature& other__ = static_cast<const Temperature&>(msg__);
+      if (time != other__.time) return false;
       if (value != other__.value) return false;
       return true;
     }
@@ -6547,6 +6549,7 @@ namespace DUNE
     Temperature::serializeFields(uint8_t* bfr__) const
     {
       uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(time, ptr__);
       ptr__ += IMC::serialize(value, ptr__);
       return ptr__;
     }
@@ -6555,6 +6558,7 @@ namespace DUNE
     Temperature::deserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(time, bfr__, size__);
       bfr__ += IMC::deserialize(value, bfr__, size__);
       return bfr__ - start__;
     }
@@ -6563,6 +6567,7 @@ namespace DUNE
     Temperature::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(time, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(value, bfr__, size__);
       return bfr__ - start__;
     }
@@ -6582,6 +6587,7 @@ namespace DUNE
     void
     Temperature::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
     {
+      IMC::toJSON(os__, "time", time, nindent__);
       IMC::toJSON(os__, "value", value, nindent__);
     }
 

@@ -746,7 +746,7 @@ namespace Sensors
               stim_message.accl_y_temp,
               stim_message.accl_z_temp,
               stim_message.PPS);
-          spew("COUNT AND LATENCY: %u %u", stim_message.COUNT_P, stim_message.LATENCY_P);
+          spew("COUNT AND LATENCY: %u %u %d", stim_message.COUNT_P, stim_message.LATENCY_P, stim_message.CRC);
           spew("STATUS: Gyro, Accl, Gyro_T, Accl_T, PPS  %u %u %u %u %u", stim_message.gyro_status, stim_message.accl_status, stim_message.gyro_t_status, stim_message.accl_t_status, stim_message.PPS_status);
 /*               stim_message.incl_x,
               stim_message.incl_y,
