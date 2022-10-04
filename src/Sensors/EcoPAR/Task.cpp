@@ -217,7 +217,7 @@ namespace Sensors
           m_uart->setCanonicalInput(true);
           m_uart->flush();
 
-          m_gpio = new Hardware::GPIO(75);
+          m_gpio = new Hardware::GPIO(244);
           m_gpio->setDirection(Hardware::GPIO::GPIO_DIR_OUTPUT);
           if(m_active)
           {

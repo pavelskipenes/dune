@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: d42cead96ccbcb8f221e1aa539695508                            *
+// IMC XML MD5: 524dbc97028101949af1a079da5b2e62                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_BITFIELDS_HPP_INCLUDED_
@@ -95,7 +95,9 @@ namespace DUNE
       //! Maximum Vertical Rate.
       OPL_MAX_VRATE = 0x20,
       //! Operation Area.
-      OPL_AREA = 0x40
+      OPL_AREA = 0x40,
+      //! Polygon Operation Area.
+      OPL_POLYGON = 0x80
     };
   }
 }

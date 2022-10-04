@@ -450,7 +450,7 @@ namespace Transports
         {
           waitForMessages(1.0);
 
-          if(m_timer.overflow() && year.compare("2021")!=0)
+          if(m_timer.overflow() && year.compare("2022")!=0)
             throw RestartNeeded(DTR("Restart Transports/Logging"), 5);
 
           if (m_active)
