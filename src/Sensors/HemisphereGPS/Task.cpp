@@ -637,6 +637,7 @@ namespace Sensors
 
         if (parts[0] == m_args.stn_order.back())
         {
+          debug("Dispatching fix");
           m_wdog.reset();
           m_fix.setDestinationEntity(resolveEntity("NavManager"));
           dispatch(m_fix);
@@ -741,6 +742,7 @@ namespace Sensors
           m_fix.lat = Angles::radians(m_fix.lat);
           m_fix.lon = Angles::radians(m_fix.lon);
           m_fix.validity |= IMC::GpsFix::GFV_VALID_POS;
+          debug("lat: %f, lon: %f",m_fix.lat,m_fix.lon);
         }
         else
         {

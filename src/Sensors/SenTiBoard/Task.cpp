@@ -34,11 +34,13 @@
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
+#include <DUNE/Time/Format.hpp>
 
 // Local headers.
 #include "Parser.hpp"
 #include "Messages.hpp"
 #include "uBlox.hpp"
+#include "Hemisphere.hpp"
 
 namespace Sensors
 {
@@ -49,10 +51,10 @@ namespace Sensors
     //! Serial port baud rate.
     static const unsigned c_baud_rate = 115200;
     //! Maximum number of sensors connected to SenTiBoard
-    static const unsigned c_max_sensors = 64;//9;
+    static const unsigned c_max_sensors = 10;//64;
 
     //! Maximum number of triggers connected to SenTiBoard
-    static const unsigned c_max_triggers = 64;//5;
+    static const unsigned c_max_triggers = 10;//64;
 
     //! %Task arguments.
     struct Arguments
@@ -88,6 +90,10 @@ namespace Sensors
       bool unwrap_tov_internally;
       //! Experiment with new, simple TOV unwrap
       bool new_tov_unwrap;
+      //! Two-speed decimation factor
+      int two_speed_decimation_factor;
+      //! What sensors should log raw data
+      uint8_t sensor_should_log[c_max_sensors];
     };
 
     struct TimeConversion
@@ -119,6 +125,8 @@ namespace Sensors
       IMC::Temperature m_temp;
       //! combined Acc and ang vel data
       IMC::Imu m_imu;
+      //! GPS Fix.
+      IMC::GpsFix m_gps_fix;
       //! Moving average for message drop outs, temperature
       Math::MovingAverage<double>* m_temp_avg;
       //! Moving average for message drop outs, delta vel x
@@ -133,10 +141,9 @@ namespace Sensors
       Math::MovingAverage<double>* m_deltang_avg_y;
       //! Moving average for message drop outs, delta ang z
       Math::MovingAverage<double>* m_deltang_avg_z;
-
+      
+      
       /* // GNSS messages.
-      //! GPS Fix.
-      IMC::GpsFix m_gps_fix;
       //! GPS Nav Data.
       IMC::GpsNavData m_gps_nav;
       //! GNSS relative position
@@ -206,6 +213,10 @@ namespace Sensors
       //! Parsers ready
       bool m_parsers_ready;
 
+      // IMU measurement downsampling parameters
+      Eigen::Vector3d m_alpha, m_beta, m_alpha_prev, m_delta_alpha_prev, m_nu, m_nu_prev, m_delta_nu_prev, m_v_scul, m_delta_alpha, m_delta_nu, m_incremental_angle, m_incremental_velocity;
+      int m_imu_counter = 0;      
+
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
         m_deltvel_avg_x(NULL),
@@ -217,7 +228,13 @@ namespace Sensors
         m_uart(NULL),
         m_state_timer(1.0),
         m_has_gps(false),
-        m_parsers_ready(false)
+        m_parsers_ready(false),
+        m_alpha(0,0,0),
+        m_beta(0,0,0),
+        m_alpha_prev(0,0,0),
+        m_delta_alpha_prev(0,0,0),
+        m_delta_alpha(0,0,0),
+        m_delta_nu(0,0,0)
       {
         // Define configuration parameters.
         param("Serial Port - Device", m_args.uart_dev)
@@ -278,6 +295,11 @@ namespace Sensors
           param(option, m_args.max_meas_drop_count_restart[i])
           .defaultValue("0")
           .description("Max number of consequtive dropped samples before restart");
+
+          /*option = String::str("Sensor %u - should log", i);
+          param(option, m_args.sensor_should_log[i])
+          .defaultValue("0")
+          .description("Enable or disable logging of individual sensors");*/
         }
 
         // Extract trigger configurations. Offset by 64 since
@@ -307,14 +329,19 @@ namespace Sensors
 
         param("Raw Log Dir", m_args.log_dir)
         .defaultValue("")
-        .description("Path to SenTiBoard Log Directory");
+        .description("Path to SenTiBoard Log Directory");  
+
+        param("Two-speed decimation factor", m_args.two_speed_decimation_factor)
+        .defaultValue("1")
+        .description("Decimation factor for incremental downsampling");                
 
         // Setup packet handlers to handle each type of packet here.
-        m_sbph[SENTIBOARD_MSG_ID_ADIS] = &Task::handleADISPacket;
+        m_sbph[SENTIBOARD_MSG_ID_ADIS]       = &Task::handleADISPacket;
+        m_sbph[SENTIBOARD_MSG_ID_PULS]       = &Task::handlePULSPacket;
+        m_sbph[SENTIBOARD_MSG_ID_STIM]       = &Task::handleSTIMPacket;
+        m_sbph[SENTIBOARD_MSG_ID_HMR]        = &Task::handleHMRPacket;
+        m_sbph[SENTIBOARD_MSG_ID_HEMISPHERE] = &Task::handleHEMISPHEREPacket;        
         //m_sbph[SENTIBOARD_MSG_ID_UBLX] = &Task::handleUBLXPacket;
-        m_sbph[SENTIBOARD_MSG_ID_PULS] = &Task::handlePULSPacket;
-        m_sbph[SENTIBOARD_MSG_ID_STIM] = &Task::handleSTIMPacket;
-        m_sbph[SENTIBOARD_MSG_ID_HMR] = &Task::handleHMRPacket;
         //std::fill_n(m_timestamps, c_max_sensors, -1.0);
         //std::fill_n(m_prev_tov, c_max_sensors, -1);
         //std::fill_n(m_num_wrapped_tov, c_max_sensors, 0);
@@ -342,6 +369,8 @@ namespace Sensors
             m_sensor_parser[i] = SENTIBOARD_MSG_ID_STIM;
           else if (m_args.sensor_parser[i] == "HMR")
             m_sensor_parser[i] = SENTIBOARD_MSG_ID_HMR;
+          else if (m_args.sensor_parser[i] == "HEMISPHERE")
+            m_sensor_parser[i] = SENTIBOARD_MSG_ID_HEMISPHERE;          
           else if (m_args.sensor_parser[i] == "")
             m_sensor_parser[i] = 0;
           else
@@ -437,6 +466,7 @@ namespace Sensors
         m_deltang_avg_x = new Math::MovingAverage<double>(3);
         m_deltang_avg_y = new Math::MovingAverage<double>(3);
         m_deltang_avg_z = new Math::MovingAverage<double>(3);
+
         try
         {
           m_uart = new SerialPort(m_args.uart_dev, c_baud_rate);
@@ -460,6 +490,7 @@ namespace Sensors
         Memory::clear(m_deltang_avg_x);
         Memory::clear(m_deltang_avg_y);
         Memory::clear(m_deltang_avg_z);
+
 
         for( auto it = ostreams.begin(); it != ostreams.end(); ++it)
         {
@@ -490,7 +521,7 @@ namespace Sensors
             for(unsigned i = 0; i < c_max_sensors; i++)
             {
               // Open files for writing logs
-              if (m_args.sensor_label[i] != "")
+              if (m_args.sensor_label[i] != "") //&& m_args.sensor_should_log[i] != 0
               {
 		            war("Opening file for sensor %u!",i);
 		
@@ -548,8 +579,8 @@ namespace Sensors
             Packet packet = m_parser.getPacket();
             spew("Packet received! Sensor: %u", packet.getID());
 
-	          // Check if we are logging packets AND if the received packet ID is valid.
-            if (m_args.should_log && ostreams.count(packet.getID()) &&
+	          // Check if we are logging packets AND if at least ONE sensor is logging AND if the received packet ID is valid.
+            if (m_args.should_log && ostreams.count(packet.getID()) &&  // force log sensor 5.
 			        ((m_control_operation == IMC::LoggingControl::COP_REQUEST_START) ||
               (m_control_operation == IMC::LoggingControl::COP_CURRENT_NAME) ||
               (m_control_operation == IMC::LoggingControl::COP_STARTED)))
@@ -730,8 +761,8 @@ namespace Sensors
 
         try
         {
-          SenTiBoard::STIM stim_message(pkt);
-
+          SenTiBoard::STIM stim_message(pkt);           
+          /*
           spew("STIM: %f %f %f, %f %f %f, %f %f %f, %f %f %f, %f",
               stim_message.gyro_x,
               stim_message.gyro_y,
@@ -746,99 +777,192 @@ namespace Sensors
               stim_message.accl_y_temp,
               stim_message.accl_z_temp,
               stim_message.PPS);
-          spew("COUNT AND LATENCY: %u %u %d", stim_message.COUNT_P, stim_message.LATENCY_P, stim_message.CRC);
+          spew("COUNT AND LATENCY: %u %u %u %u", stim_message.COUNT_P, stim_message.LATENCY_P, stim_message.CRC, stim_message.crc);
           spew("STATUS: Gyro, Accl, Gyro_T, Accl_T, PPS  %u %u %u %u %u", stim_message.gyro_status, stim_message.accl_status, stim_message.gyro_t_status, stim_message.accl_t_status, stim_message.PPS_status);
+          */
 /*               stim_message.incl_x,
               stim_message.incl_y,
               stim_message.incl_z); */
 
-          double timestamp = getTimestamp(stim_message.getTOV(), pkt->getID());
+          double timestamp = getTimestamp(stim_message.getTOV(), pkt->getID());          
           float fps = 1 / (timestamp - m_timestamps[pkt->getID()]);
-          if (fps < 200)
+
+          /*
+          if (fps < 900)
           {
                   war("low FPS!");
                   // return;
           }
+          */
 
-          m_temp.time = timestamp;
-          temp = stim_message.gyro_x_temp + stim_message.gyro_y_temp + stim_message.gyro_z_temp
-                 + stim_message.accl_x_temp + stim_message.accl_y_temp + stim_message.accl_z_temp;
-          m_temp.value = temp / 6;
+          m_imu_counter += 1;
 
-          spew("Temp value, time: %f, %f", m_temp.value, m_temp.time);
+          if (m_imu_counter <= m_args.two_speed_decimation_factor)
+          { 
+            // New measurements 
+            m_delta_alpha = {Angles::radians(stim_message.gyro_x),
+                           Angles::radians(stim_message.gyro_y),
+                           Angles::radians(stim_message.gyro_z)};
+            m_delta_nu = {stim_message.accl_x,
+                        stim_message.accl_y,
+                        stim_message.accl_z};
 
-          m_delt_ang.time = timestamp;
-          //STIM gyro is in degrees
-          m_delt_ang.x = Angles::radians(stim_message.gyro_x);
-          m_delt_ang.y = Angles::radians(stim_message.gyro_y);
-          m_delt_ang.z = Angles::radians(stim_message.gyro_z);
+            // Incremental values
+            m_alpha  = m_alpha + m_delta_alpha;
+            m_nu     = m_nu    + m_delta_nu;
 
-          m_delt_vel.time = timestamp;
-          m_delt_vel.x = stim_message.accl_x;
-          m_delt_vel.y = stim_message.accl_y;
-          m_delt_vel.z = stim_message.accl_z;
+            // Compute coning motion
+            m_beta   = m_beta  + (1/2) * m_alpha_prev.cross(m_delta_alpha) + (1/12) * m_delta_alpha_prev.cross(m_delta_alpha);
 
-          m_temp.setSourceEntity(m_sensor_entity[pkt->getID()]);
-          m_delt_ang.setSourceEntity(m_sensor_entity[pkt->getID()]);
-          m_delt_vel.setSourceEntity(m_sensor_entity[pkt->getID()]);
+            // Compute sculling motion
+            m_v_scul = m_v_scul + 0.5*((1/6)*m_delta_alpha_prev * m_delta_nu.dot(m_alpha_prev) - m_alpha_prev * ((1/6)*m_delta_alpha_prev.dot(m_delta_nu)) + m_nu_prev.cross(m_delta_alpha) + (1/6)*m_delta_nu_prev.cross(m_delta_alpha));
+            
+            // save values for next iteration
+            m_alpha_prev       = m_alpha;
+            m_nu_prev          = m_nu;
+            m_delta_alpha_prev = m_delta_alpha;
+            m_delta_nu_prev    = m_delta_nu;
 
-          if (fps > 200)
-          {
-            dispatch(m_temp,DF_KEEP_TIME);
-            dispatch(m_delt_ang,DF_KEEP_TIME);
-            dispatch(m_delt_vel,DF_KEEP_TIME);
           }
-
-          // fps is valid, we can find acc and rates
-          if (m_timestamps[pkt->getID()] > 0)
+          
+          if (m_imu_counter == m_args.two_speed_decimation_factor)
           {
-            m_accel.time = timestamp;
-            m_accel.x = m_delt_vel.x * fps;
-            m_accel.y = m_delt_vel.y * fps;
-            m_accel.z = m_delt_vel.z * fps;
+            m_incremental_angle    = m_alpha + m_beta;
+            m_incremental_velocity = m_nu + 0.5*m_alpha.cross(m_nu) + m_v_scul;
+
+            m_delt_ang.time = timestamp;
+            m_delt_ang.x = m_incremental_angle[0];
+            m_delt_ang.y = m_incremental_angle[1];
+            m_delt_ang.z = m_incremental_angle[2];
+
+            m_delt_vel.time = timestamp;
+            m_delt_vel.x = m_incremental_velocity[0];
+            m_delt_vel.y = m_incremental_velocity[1];
+            m_delt_vel.z = m_incremental_velocity[2];
 
             m_ang_vel.time = timestamp;
-            m_ang_vel.x = m_delt_ang.x * fps;
-            m_ang_vel.y = m_delt_ang.y * fps;
-            m_ang_vel.z = m_delt_ang.z * fps;
+            m_ang_vel.x = m_incremental_angle[0] * fps / m_args.two_speed_decimation_factor;
+            m_ang_vel.y = m_incremental_angle[1] * fps / m_args.two_speed_decimation_factor;
+            m_ang_vel.z = m_incremental_angle[2] * fps / m_args.two_speed_decimation_factor;
 
+            m_accel.time = timestamp;
+            m_accel.x = m_incremental_velocity[0] * fps / m_args.two_speed_decimation_factor;
+            m_accel.y = m_incremental_velocity[1] * fps / m_args.two_speed_decimation_factor;
+            m_accel.z = m_incremental_velocity[2] * fps / m_args.two_speed_decimation_factor;
+
+            m_temp.time = timestamp;
+            temp = stim_message.gyro_x_temp + stim_message.gyro_y_temp + stim_message.gyro_z_temp + stim_message.accl_x_temp + stim_message.accl_y_temp + stim_message.accl_z_temp;
+            m_temp.value = temp / 6;
+
+            m_temp.setSourceEntity(m_sensor_entity[pkt->getID()]);
+            m_delt_ang.setSourceEntity(m_sensor_entity[pkt->getID()]);
+            m_delt_vel.setSourceEntity(m_sensor_entity[pkt->getID()]);
             m_accel.setSourceEntity(m_sensor_entity[pkt->getID()]);
             m_ang_vel.setSourceEntity(m_sensor_entity[pkt->getID()]);
 
-            if (fps > 200)
-            {
-              dispatch(m_accel,DF_KEEP_TIME);
-              dispatch(m_ang_vel,DF_KEEP_TIME);
-            }
-          }
+            dispatch(m_delt_ang,DF_KEEP_TIME);
+            dispatch(m_delt_vel,DF_KEEP_TIME);
+            dispatch(m_accel,DF_KEEP_TIME);
+            dispatch(m_ang_vel,DF_KEEP_TIME);
+            dispatch(m_temp,DF_KEEP_TIME);
+            
 
-          m_timestamps[pkt->getID()] = timestamp;
-          if(m_args.is_closed_loop)
-          {
+            if(m_args.is_closed_loop)
+            {
+              if (m_timestamps[pkt->getID()] > 0)
+              {
+                //also dispatch IMU message
+                m_imu.acceleration.set(m_accel);
+                m_imu.angular_velocity.set(m_ang_vel);
+                m_imu.setSourceEntity(m_sensor_entity[pkt->getID()]);
+                dispatch(m_imu, DF_KEEP_TIME);
+              }
+              //add measurements to moving average, in case of future dropout
+              m_deltvel_avg_x->update(m_delt_vel.x);
+              m_deltvel_avg_y->update(m_delt_vel.y);
+              m_deltvel_avg_z->update(m_delt_vel.z);
+              m_deltang_avg_x->update(m_delt_ang.x);
+              m_deltang_avg_y->update(m_delt_ang.y);
+              m_deltang_avg_z->update(m_delt_ang.z);
+              m_bad_samples[pkt->getID()] = 0;
+            }
+
+            m_imu_counter      = 0;
+            m_alpha            = {0,0,0};
+            m_nu               = {0,0,0};
+            m_beta             = {0,0,0};
+            m_alpha_prev       = {0,0,0};
+            m_delta_alpha_prev = {0,0,0};
+            m_nu_prev          = {0,0,0};
+            m_delta_nu_prev    = {0,0,0};
+            m_v_scul           = {0,0,0};
+
+            //if (fps > 900)
+            //{
+            //  dispatch(m_temp,DF_KEEP_TIME);
+            //  dispatch(m_delt_ang,DF_KEEP_TIME);
+            //  dispatch(m_delt_vel,DF_KEEP_TIME);
+            //  dispatch(m_temp,DF_KEEP_TIME);
+            //}
+
+            /*
+            // fps is valid, we can find acc and rates
             if (m_timestamps[pkt->getID()] > 0)
             {
-              //also dispatch IMU message
-              m_imu.acceleration.set(m_accel);
-              m_imu.angular_velocity.set(m_ang_vel);
-              m_imu.setSourceEntity(m_sensor_entity[pkt->getID()]);
-              dispatch(m_imu, DF_KEEP_TIME);
+              m_accel.time = timestamp;
+              m_accel.x = incremental_velocity[0] * fps / m_args.two_speed_decimation_factor;
+              m_accel.y = incremental_velocity[1] * fps / m_args.two_speed_decimation_factor;
+              m_accel.z = incremental_velocity[2] * fps / m_args.two_speed_decimation_factor;
+
+              m_ang_vel.time = timestamp;
+              m_ang_vel.x = incremental_angle[0] * fps / m_args.two_speed_decimation_factor;
+              m_ang_vel.y = incremental_angle[1] * fps / m_args.two_speed_decimation_factor;
+              m_ang_vel.z = incremental_angle[2] * fps / m_args.two_speed_decimation_factor;
+
+              m_accel.setSourceEntity(m_sensor_entity[pkt->getID()]);
+              m_ang_vel.setSourceEntity(m_sensor_entity[pkt->getID()]);
+
+              dispatch(m_accel,DF_KEEP_TIME);
+              dispatch(m_ang_vel,DF_KEEP_TIME);
+              
+              if (fps > 900)
+              {
+                dispatch(m_accel,DF_KEEP_TIME);
+                dispatch(m_ang_vel,DF_KEEP_TIME);
+              }
+              
             }
-            //add measurements to moving average, in case of future dropout
-            m_deltvel_avg_x->update(m_delt_vel.x);
-            m_deltvel_avg_y->update(m_delt_vel.y);
-            m_deltvel_avg_z->update(m_delt_vel.z);
-            m_deltang_avg_x->update(m_delt_ang.x);
-            m_deltang_avg_y->update(m_delt_ang.y);
-            m_deltang_avg_z->update(m_delt_ang.z);
-            m_bad_samples[pkt->getID()] = 0;
+ 
+            if(m_args.is_closed_loop)
+            {
+              if (m_timestamps[pkt->getID()] > 0)
+              {
+                //also dispatch IMU message
+                m_imu.acceleration.set(m_accel);
+                m_imu.angular_velocity.set(m_ang_vel);
+                m_imu.setSourceEntity(m_sensor_entity[pkt->getID()]);
+                dispatch(m_imu, DF_KEEP_TIME);
+              }
+              //add measurements to moving average, in case of future dropout
+              m_deltvel_avg_x->update(m_delt_vel.x);
+              m_deltvel_avg_y->update(m_delt_vel.y);
+              m_deltvel_avg_z->update(m_delt_vel.z);
+              m_deltang_avg_x->update(m_delt_ang.x);
+              m_deltang_avg_y->update(m_delt_ang.y);
+              m_deltang_avg_z->update(m_delt_ang.z);
+              m_bad_samples[pkt->getID()] = 0;
+            }
+            */                      
           }
+          // Where in the code should this be placed? It matters
+          m_timestamps[pkt->getID()] = timestamp; 
         }
         catch(std::runtime_error& e)
         {
         
           //approximate the timestamp, to avoid wrong fps in next message
           // NB: Assume STIM runs at 250 Hz
-          float fps = 1000; //250?
+          float fps = 1000; //250? 
           double timestamp = m_timestamps[pkt->getID()] + 1.0/fps;
           m_timestamps[pkt->getID()] = timestamp;
 
@@ -854,9 +978,9 @@ namespace Sensors
 
             m_delt_ang.time = timestamp;
             //STIM gyro is in degrees
-            m_delt_ang.x = Angles::radians(m_deltang_avg_x->mean());
-            m_delt_ang.y = Angles::radians(m_deltang_avg_y->mean());
-            m_delt_ang.z = Angles::radians(m_deltang_avg_z->mean());
+            m_delt_ang.x = m_deltang_avg_x->mean();
+            m_delt_ang.y = m_deltang_avg_y->mean();
+            m_delt_ang.z = m_deltang_avg_z->mean();
 
             m_delt_vel.time = timestamp;
             m_delt_vel.x = m_deltang_avg_x->mean();
@@ -872,14 +996,14 @@ namespace Sensors
             dispatch(m_delt_vel,DF_KEEP_TIME);
 
             m_accel.time = timestamp;
-            m_accel.x = m_deltvel_avg_x->mean() * fps;
-            m_accel.y = m_deltvel_avg_y->mean() * fps;
-            m_accel.z = m_deltvel_avg_z->mean() * fps;
+            m_accel.x = m_deltvel_avg_x->mean() * fps / m_args.two_speed_decimation_factor;
+            m_accel.y = m_deltvel_avg_y->mean() * fps / m_args.two_speed_decimation_factor;
+            m_accel.z = m_deltvel_avg_z->mean() * fps / m_args.two_speed_decimation_factor;
 
             m_ang_vel.time = timestamp;
-            m_ang_vel.x = m_deltang_avg_x->mean() * fps;
-            m_ang_vel.y = m_deltang_avg_y->mean() * fps;
-            m_ang_vel.z = m_deltang_avg_z->mean() * fps;
+            m_ang_vel.x = m_deltang_avg_x->mean() * fps / m_args.two_speed_decimation_factor;
+            m_ang_vel.y = m_deltang_avg_y->mean() * fps / m_args.two_speed_decimation_factor;
+            m_ang_vel.z = m_deltang_avg_z->mean() * fps / m_args.two_speed_decimation_factor;
 
             m_accel.setSourceEntity(m_sensor_entity[pkt->getID()]);
             m_ang_vel.setSourceEntity(m_sensor_entity[pkt->getID()]);
@@ -894,6 +1018,77 @@ namespace Sensors
           }
 	      }
       }
+
+      void
+      handleHEMISPHEREPacket(const SenTiBoard::Packet* pkt)
+      {
+        SenTiBoard::Hemisphere hemisphere_message(pkt);
+
+        double timestamp = getTimestamp(hemisphere_message.getTOV(), pkt->getID());        
+
+        if (timestamp - m_timestamps[pkt->getID()] != 0)
+        {
+          trace("Hemisphere message: ID:%u, Length: %u", hemisphere_message.id, hemisphere_message.getLength());
+          //trace("Hemisphere message Timestamp: %f", timestamp);
+          if (hemisphere_message.id == HEM_MSG_BIN_1)
+          {
+            
+            SenTiBoard::HemisphereBin1 bin1_msg = SenTiBoard::HemisphereBin1(hemisphere_message);
+
+
+            //! GPS Fix data
+            m_gps_fix.utc_year   = bin1_msg.year;
+            m_gps_fix.utc_month  = bin1_msg.month;
+            m_gps_fix.utc_day    = bin1_msg.day;
+            m_gps_fix.utc_time   = bin1_msg.utc_time;
+            m_gps_fix.lat        = bin1_msg.lat;
+            m_gps_fix.lon        = bin1_msg.lon;
+            m_gps_fix.height     = bin1_msg.height;
+            m_gps_fix.satellites = bin1_msg.NumOfSats;
+            m_gps_fix.sog        = std::sqrt(bin1_msg.VNorth * bin1_msg.VNorth + bin1_msg.VEast * bin1_msg.VEast + bin1_msg.VUp * bin1_msg.VUp);;
+
+            switch (bin1_msg.NavMode) 
+            {
+            case 0:
+              war("Waiting for GPS fix");
+              break;
+            case 1:
+              m_gps_fix.type = GpsFix::GFT_STANDALONE;
+              break;
+            case 2:
+              m_gps_fix.type = GpsFix::GFT_STANDALONE;
+              break;            
+            case 3:
+              m_gps_fix.type = GpsFix::GFT_DIFFERENTIAL;
+              break;
+            case 4:
+              m_gps_fix.type = GpsFix::GFT_DIFFERENTIAL;
+              break;            
+            default:
+              throw(DUNE::Exception("Given NavMode not supported!"));
+            }
+            
+
+            m_gps_fix.validity |= GpsFix::GFV_VALID_POS;
+            m_gps_fix.validity |= GpsFix::GFV_VALID_SOG;
+            m_gps_fix.validity |= GpsFix::GFV_VALID_TIME;
+            m_gps_fix.validity |= GpsFix::GFV_VALID_DATE;
+
+            m_gps_fix.setSourceEntity(m_sensor_entity[pkt->getID()]);
+            m_gps_fix.setTimeStamp(timestamp);
+            
+            dispatch(m_gps_fix, DF_KEEP_TIME);
+            
+            //trace("BIN 1 message time: Year:%u, Month:%u, Day:%u, Seconds:%f", bin1_msg.year, bin1_msg.month, bin1_msg.day, bin1_msg.utc_time);
+            //trace("BIN 1 message: lat:%f, lon:%f, height:%f", bin1_msg.lat, bin1_msg.lon, bin1_msg.height);
+            //trace("BIN 1 message: VNorth:%f, VEast:%f, VUp:%f", bin1_msg.VNorth, bin1_msg.VEast, bin1_msg.VUp);
+            //trace("BIN 1 message: AgeOfDiff:%u, NumOfSats:%u, NavMode:%u, ExAgeOfDiff:%u", bin1_msg.AgeOfDiff, bin1_msg.NumOfSats, bin1_msg.NavMode, bin1_msg.ExAgeOfDiff);
+          }
+        m_timestamps[pkt->getID()] = timestamp;  
+        }        
+      }
+
+
 
       /*void
       handleUBLXPacket(const SenTiBoard::Packet* pkt)

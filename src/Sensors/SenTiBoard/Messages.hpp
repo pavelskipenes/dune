@@ -36,6 +36,7 @@
 #define SENTIBOARD_MSG_ID_PULS 3
 #define SENTIBOARD_MSG_ID_STIM 4
 #define SENTIBOARD_MSG_ID_HMR  5
+#define SENTIBOARD_MSG_ID_HEMISPHERE  6
 
 #include <numeric>
 #include <cstdio>
@@ -101,13 +102,13 @@ namespace Sensors
       getName(void) const = 0;
 
       bool
-	  isValid(void)
+	    isValid(void)
       {
       	return is_valid;
       }
 
       std::string
-	  getFault(void)
+	    getFault(void)
       {
       	return fault_str;
       }
@@ -308,7 +309,7 @@ namespace Sensors
 
       ADIS(const SenTiBoard::Packet* pkt)
       {
-	prod_ids.resize(1,0);
+	      prod_ids.resize(1,0);
         readTimes(pkt->data, 12);
         deserializeFields(pkt->data + 12, pkt->getLength() - 12);
       }
@@ -503,6 +504,69 @@ namespace Sensors
       uint8_t cka, ckb;
     };
 
+
+    class Hemisphere: public SenTiBoard::Message
+    {
+    public:
+      uint16_t id;
+
+      Hemisphere(void)
+      {
+        header = 0;
+        id     = 0;
+        length = 0;
+        ck     = 0;
+      }
+
+      Hemisphere(const SenTiBoard::Packet* pkt)
+      {
+        readTimes(pkt->data, 12);
+        deserializeFields(pkt->data + 12, pkt->getLength() - 12);
+      }
+
+      void
+      deserializeFields(const uint8_t* bfr__, uint16_t size__)
+      {
+        bfr__ += IMC::deserialize(header, bfr__, size__);
+        bfr__ += IMC::deserialize(id    , bfr__, size__);
+        bfr__ += IMC::deserialize(length, bfr__, size__);
+        std::memcpy(payload, bfr__, length);
+        bfr__ += length;
+        bfr__ += IMC::deserialize(ck     , bfr__, size__);
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "Hemisphere";
+      }
+
+      uint16_t
+      getLength(void)
+      {
+        return length;
+      }
+
+      void
+      getChecksum(uint8_t& a) const
+      {
+        a = ck;
+      }
+
+      void
+      getPayload(uint8_t* bfr) const
+      {
+        std::memcpy(bfr, payload, length);
+      }
+
+    private:
+      uint32_t header;
+      uint16_t length;
+      uint8_t payload[2048];
+      uint16_t ck;
+    };
+
+
     class Pulse: public SenTiBoard::Message
     {
     public:
@@ -530,6 +594,7 @@ namespace Sensors
       double  accl_x_temp, accl_y_temp, accl_z_temp;
       double PPS;
       uint32_t CRC;
+      uint32_t crc;
       uint16_t COUNT_P;
       uint16_t LATENCY_P;
       uint8_t gyro_status;
@@ -648,7 +713,7 @@ namespace Sensors
 	      // add dummy bytes
 	      for(uint8_t i = length_stim_data; i < length_stim_data + num_dummy_bytes; ++i)
 		      crc_buf[i] = 0x00;
-	      uint32_t crc = CRC32::reflect((CRC32::compute((const uint8_t*)crc_buf, length_stim_data + num_dummy_bytes, true, 0) ^ 0xFFFFFFFF), 32);
+	      crc = CRC32::reflect((CRC32::compute((const uint8_t*)crc_buf, length_stim_data + num_dummy_bytes, true, 0) ^ 0xFFFFFFFF), 32);
         deserializeFields(pkt->data + 12, pkt->getLength() - 12);
         if(crc != CRC)
         {

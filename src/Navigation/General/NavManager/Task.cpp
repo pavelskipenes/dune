@@ -124,9 +124,9 @@ namespace Navigation
         onResourceAcquisition(void)
         {
           // Navigation enters error mode without valid GPS data.
-          m_time_without_main_unit.setTop(5.0);
-          m_time_without_secondary_unit.setTop(5.0);
-          m_time_without_third_unit.setTop(5.0);
+          m_time_without_main_unit.setTop(30.0);
+          m_time_without_secondary_unit.setTop(30.0);
+          m_time_without_third_unit.setTop(30.0);
         }
 
         void
