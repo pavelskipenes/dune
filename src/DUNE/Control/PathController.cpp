@@ -187,14 +187,17 @@ namespace DUNE
       param("Bottom Track -- Minimum Depth", m_btd.args.min_depth)
       .defaultValue("0.0")
       .units(Units::Meter)
-      .visibility(Tasks::Parameter::VISIBILITY_USER)
-      .scope(Tasks::Parameter::SCOPE_MANEUVER)
       .description("Minimum depth to maintain during bottom tracking");
 
       param("Maximum Track Length", m_max_track_length)
-      .defaultValue("25000")
+      .defaultValue("100000")
       .units(Units::Meter)
       .description("Maximum adimissible track length");
+
+      param("Minimum waypoint dist switch", m_dist_switch)
+      .defaultValue("50.0")
+	    .units(Units::Meter)
+	    .description("Distance from waypoint when switch to next waypoint happens.");
 
       m_ctx.config.get("General", "Absolute Maximum Depth", "50.0", m_btd.args.depth_limit);
       m_btd.args.depth_limit -= c_depth_margin;
@@ -210,6 +213,7 @@ namespace DUNE
       bind<IMC::Distance>(this);
       bind<IMC::DesiredZ>(this);
       bind<IMC::DesiredSpeed>(this);
+      bind<IMC::PlanSpecification>(this);
     }
 
     PathController::~PathController(void)
@@ -299,6 +303,32 @@ namespace DUNE
     }
 
     void
+    PathController::consume(const IMC::PlanSpecification* plspec)
+    {
+      std::vector<IMC::Maneuver> maneuvers_list;
+
+      std::vector<IMC::PlanManeuver*>::const_iterator itr;
+      itr = plspec->maneuvers.begin();
+
+      Math::Matrix waypoints(plspec->maneuvers.size(), 2);
+      m_ts.waypoints = waypoints;
+
+      unsigned i=0;
+      // Iterate through plan maneuvers
+      for (; itr != plspec->maneuvers.end(); ++itr)
+      {
+        // For now just to GoTos.
+        const IMC::Goto* m = static_cast<const IMC::Goto*>((*itr)->data.get());
+
+        m_ts.waypoints(i,0) = m->lat;
+        m_ts.waypoints(i,1) = m->lon;
+
+        inf("PATH CONTROLLER - PLAN WAYPOINTS: LAT LON: %0.4f %0.4f", Angles::degrees(m_ts.waypoints(i,0)), Angles::degrees(m_ts.waypoints(i,1)));
+        i=i+1;
+      }
+    }
+
+    void
     PathController::consume(const IMC::DesiredPath* dpath)
     {
       if (!isActive())
@@ -356,6 +386,11 @@ namespace DUNE
             m_estate.x, m_estate.y, m_estate.z,
             m_ts.track_pos.x, m_ts.track_pos.y, m_ts.track_pos.z,
             Angles::degrees(m_ts.course_error));
+
+      m_ts.lat_st = m_pcs.start_lat;
+      m_ts.lat_en = m_pcs.end_lat;
+      m_ts.lon_st = m_pcs.start_lon;
+      m_ts.lon_en = m_pcs.end_lon;
 
       if (m_atm.enabled)
       {
@@ -755,7 +790,11 @@ namespace DUNE
 
         const bool was_nearby = m_ts.nearby;
 
-        if (!m_ts.nearby && m_ts.eta <= 0)
+        bool is_last = false;
+        if(m_ts.waypoints(m_ts.waypoints.rows()-1,0) == m_pcs.end_lat && m_ts.waypoints(m_ts.waypoints.rows()-1,1) == m_pcs.end_lon)
+          is_last = true;
+
+        if (((!m_ts.nearby && m_ts.eta <= 0) || m_ts.range < m_dist_switch) && !is_last)
         {
           m_ts.eta = 0;
           m_ts.nearby = true;

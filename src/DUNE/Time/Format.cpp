@@ -73,6 +73,34 @@ namespace DUNE
     }
 
     std::string
+    Format::getTimeDateISO(void)
+    {
+      return getTimeDateISO(static_cast<double>(std::time(0)));
+    }
+
+    std::string
+    Format::getTimeDateISO(double tstamp, bool utc)
+    {
+      char bfr[32] = {0};
+      std::time_t t = static_cast<std::time_t>(tstamp);
+
+#if defined(DUNE_SYS_HAS_GMTIME_R) && defined(DUNE_SYS_HAS_LOCALTIME_R)
+      std::tm tm_bfr = {0};
+      std::tm* tmp = utc ? gmtime_r(&t, &tm_bfr) : localtime_r(&t, &tm_bfr);
+#else
+      std::tm* tmp = utc ? std::gmtime(&t) : std::localtime(&t);
+#endif
+
+      if (tmp == 0)
+        return "unknown time";
+
+      if (std::strftime(bfr, sizeof(bfr), "%F %T", tmp) == 0)
+        return "unknown time";
+
+      return bfr;
+    }
+
+    std::string
     Format::getDateSafe(void)
     {
       return getDateSafe(static_cast<double>(std::time(0)));

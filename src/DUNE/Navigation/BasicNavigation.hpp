@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2022 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2019 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -46,7 +46,6 @@
 #include <DUNE/Navigation/KalmanFilter.hpp>
 #include <DUNE/Navigation/Ranging.hpp>
 #include <DUNE/Navigation/StreamEstimator.hpp>
-#include <DUNE/Navigation/UsblTools.hpp>
 #include <DUNE/Time/Clock.hpp>
 #include <DUNE/Time/Counter.hpp>
 #include <DUNE/Time/Delta.hpp>
@@ -131,19 +130,19 @@ namespace DUNE
 
       //! Update internal parameters.
       virtual void
-      onUpdateParameters(void) override;
+      onUpdateParameters(void);
 
       //! Resolve entities.
       virtual void
-      onEntityResolution(void) override;
+      onEntityResolution(void);
 
       //! Initialize resources.
       virtual void
-      onResourceInitialization(void) override;
+      onResourceInitialization(void);
 
       //! Release allocated resources.
       virtual void
-      onResourceRelease(void) override;
+      onResourceRelease(void);
 
       void
       consume(const IMC::Acceleration* msg);
@@ -723,12 +722,6 @@ namespace DUNE
       uint8_t m_gvel_val_bits;
       //! DVL water velocity validation bits.
       uint8_t m_wvel_val_bits;
-      //! USBL position filter.
-      UsblTools::Filter* m_usbl_filter;
-      //! Number of moving average samples for USBL filter.
-      unsigned m_usbl_avg_samples;
-      //! Maximum deviation possible to issue error.
-      double m_usbl_k_std;
     };
   }
 }

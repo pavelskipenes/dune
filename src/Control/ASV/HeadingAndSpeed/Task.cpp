@@ -125,6 +125,8 @@ namespace Control
         uint16_t m_rpm_eid[2];
         //! Control loops last reference
         uint32_t m_scope_ref;
+        //! Thrust forward.
+        bool m_tf;
         //! Task arguments.
         Arguments m_args;
 
@@ -132,7 +134,8 @@ namespace Control
           Tasks::Task(name, ctx),
           m_previous_rpm(0.0),
           m_common(false),
-          m_scope_ref(0)
+          m_scope_ref(0),
+          m_tf(false)
         {
           param("Maximum Thrust Actuation", m_args.act_max)
           .defaultValue("1.0")
@@ -386,8 +389,11 @@ namespace Control
           // Yaw controller.
           float thrust_diff = m_yaw_pid.step(tstep, err_yaw);
 
+          //m_tf = thrustForward(err_yaw);
+          m_tf = true;
+
           // Thrust forward.
-          if (thrustForward(err_yaw))
+          if(m_tf)
           {
             // Velocity controller.
             switch (m_speed_units)
@@ -427,6 +433,7 @@ namespace Control
             return;
 
           m_desired_yaw = msg->value;
+          debug("DH %f",Angles::degrees(m_desired_yaw));
         }
 
         void
@@ -437,6 +444,7 @@ namespace Control
 
           m_desired_speed = msg->value;
           m_speed_units = msg->speed_units;
+          debug("DS %f DSU %d",m_desired_speed,m_speed_units);
         }
 
         void
@@ -542,8 +550,16 @@ namespace Control
                                                      0.0, m_args.act_ramp * timestep);
           }
 
-          m_act[id].value = trimValue(value, -m_args.act_max, m_args.act_max);
+          if(m_tf)
+          {
+            m_act[id].value = m_act[id].value*1.6;
+            m_act[id].value = trimValue(value, -m_args.act_max, m_args.act_max);
+          }
+          else
+            m_act[id].value = trimValue(value, -m_args.act_max, m_args.act_max);
+          
           dispatch(m_act[id]);
+          debug("Thrust %f",m_act[id].value);
 
           m_last_act[id].value = m_act[id].value;
         }
@@ -564,7 +580,10 @@ namespace Control
           else
           {
             if (std::fabs(yaw_err) < m_args.yaw_max)
+            {
+              debug("THRUSTINGGGGGGGGGGGGGGG");
               m_common = true;
+            }
           }
 
           return m_common;

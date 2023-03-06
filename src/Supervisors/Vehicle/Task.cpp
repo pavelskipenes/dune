@@ -67,6 +67,8 @@ namespace Supervisors
       bool ext_control;
       //! Timeout for starting or stopping a maneuver
       double handle_timeout;
+      //! timeout, in seconds, for replies
+      int reply_timeout;
     };
 
     struct Task: public DUNE::Tasks::Periodic
@@ -85,6 +87,8 @@ namespace Supervisors
       IMC::StopManeuver m_stop;
       //! Idle maneuver message.
       IMC::IdleManeuver m_idle;
+      //! Transmission request id
+      int m_reqid;
       //! Control loops last reference
       uint32_t m_scope_ref;
       //! Vector of labels from entities in error
@@ -99,6 +103,10 @@ namespace Supervisors
       ManeuverSupervisor* m_man_sup;
       //! A timeout for calibration state
       float m_calib_timeout;
+      //! Test timer
+      Time::Counter<float> m_timer;
+      //! Send iridium
+      bool m_iridium;
       //! Task arguments.
       Arguments m_args;
 
@@ -107,7 +115,8 @@ namespace Supervisors
         m_switch_time(-1.0),
         m_ignore_errors(false),
         m_scope_ref(0),
-        m_man_sup(NULL)
+        m_man_sup(NULL),
+        m_iridium(false)
       {
         param("Vital Entities", m_args.vital_ents)
         .defaultValue("")
@@ -121,6 +130,10 @@ namespace Supervisors
         param("Maneuver Handling Timeout", m_args.handle_timeout)
         .defaultValue("1.0")
         .description("Timeout for starting or stopping a maneuver");
+
+        param("Iridium Message timeout", m_args.reply_timeout)
+          .defaultValue("60")
+          .minimumValue("30");
 
         bind<IMC::Abort>(this);
         bind<IMC::ControlLoops>(this);
@@ -149,6 +162,8 @@ namespace Supervisors
         m_err_timer.setTop(c_error_period);
         m_loops_timer.setTop(c_loops_check_time);
         m_idle.duration = 0;
+
+        m_timer.setTop(60);
       }
 
       void
@@ -389,8 +404,52 @@ namespace Supervisors
         if (entityError() && !calibrationMode())
         {
           reset();
+
+          if(!m_iridium)
+          {
+            sendIridium(IMC::VehicleState::VS_ERROR);
+            m_iridium = true;
+          }
+
           changeMode(IMC::VehicleState::VS_ERROR);
         }
+      }
+
+      void
+      sendIridium(IMC::VehicleState::OperationModeEnum s)
+      {
+        if(s == IMC::VehicleState::VS_ERROR)
+        {
+          IMC::TransmissionRequest req;
+          req.setDestination(m_ctx.resolver.id());
+          req.data_mode = TransmissionRequest::DMODE_TEXT;
+          req.txt_data = "(A) AutoNaut in ERROR mode!";
+          req.deadline = Clock::getSinceEpoch() + m_args.reply_timeout;
+          req.req_id = ++m_reqid;
+
+          req.comm_mean = TransmissionRequest::CMEAN_SATELLITE;
+          req.destination = "";
+          inf("Sending via Iridium: '%s'", req.txt_data.c_str());
+          dispatch(req);
+        }
+
+        /*
+        if(s == IMC::VehicleState::VS_SERVICE && m_drifting)
+        {
+          IMC::TransmissionRequest req;
+          req.setDestination(m_ctx.resolver.id());
+          req.data_mode = TransmissionRequest::DMODE_TEXT;
+          req.txt_data = "(A) AutoNaut is DRIFTING!";
+          req.deadline = Clock::getSinceEpoch() + m_args.reply_timeout;
+          req.req_id = ++m_reqid;
+
+          req.comm_mean = TransmissionRequest::CMEAN_SATELLITE;
+          req.destination = "";
+          inf("Sending via Iridium: '%s'", req.txt_data.c_str());
+          dispatch(req);
+
+          m_drifting = false;
+        }*/
       }
 
       void

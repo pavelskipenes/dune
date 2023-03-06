@@ -1,0 +1,175 @@
+//! CHLA STUFF
+
+        //! Enable chla guidance.
+        bool en_chla_guidance;
+                //! Frequency of the chla data collection.
+        double chla_collection_period;
+        //! Use chla course.
+        bool m_use_chla_gradient;
+                //! Chla timer.
+        Time::Counter<float> m_timer_chla;
+        //! Chla collection period.
+        double m_chla_period;
+                //! Enable chla guidance.
+        bool m_enable_chla;
+        //! Counting chla measurements.
+        bool m_chla_count, m_chla_full;
+        //! Vector of (Chla) Sample.
+        std::vector<Sample> m_samples;
+
+
+
+
+                m_enable_chla(false),
+        m_chla_count(false),
+        m_chla_full(false),
+
+
+
+        param("Compute Chla Gradient", m_args.en_chla_guidance)
+          .defaultValue("false")
+          .description("Enable chla gradient following algorithm");
+
+          param("Enable Chla Guidance", m_args.m_use_chla_gradient)
+          .defaultValue("false")
+          .description("Enable chla gradient following algorithm");
+
+                    param("Chla collection Period", m_args.chla_collection_period)
+          .units(Units::Second)
+          .description("Chla collection period");
+
+          bind<IMC::Chlorophyll>(this);
+
+                    if(paramChanged(m_args.en_chla_guidance))
+              m_enable_chla = m_args.en_chla_guidance;
+
+                        if(paramChanged(m_args.chla_collection_period))
+          {
+            m_chla_period = m_args.chla_collection_period;
+            m_timer_chla.setTop(m_chla_period);
+          }
+
+
+
+                  void
+        consume(const IMC::Chlorophyll * msg)
+        {
+          if(msg->getSource() != getSystemId())
+          {
+            //debug("Chlorophyll from L3: %.3f",msg->value);
+            
+            // Incremental average for the chosen period.
+            if(m_avg==0)
+              m_samples.push_back({m_lat_asv, m_lon_asv, msg->value});
+            else
+            {
+              m_samples.push_back({m_lat_asv, m_lon_asv, ((m_avg_last * m_avg + msg->value) / (m_avg + 1))});
+              if(m_samples.size()==600)
+              {
+                m_samples.erase(m_samples.begin());
+                m_chla_full = true;
+                //debug("Chla vector is full, estimation can begin!");
+              }
+            }
+            m_avg++;
+            m_avg_last = msg->value;
+            if(!m_chla_count && m_chla_full)
+            {
+              m_timer_chla.setTop(m_chla_period);
+              m_chla_count = true;
+            }
+          }
+        }
+
+
+void
+        computeChlaDirection(void)
+        {
+          Matrix psi(2, 1);
+
+          psi = gradientEstimator(m_samples);
+
+          float chl_value = m_samples.back().chl_value;
+
+          double const norm = psi.norm_2();
+
+          if(norm < 1e-6)
+          {
+            war("Small gradient signal, using default desired course.");
+            return;
+          }
+
+          // Larger gradient, desired course is updated.
+          psi = psi / norm;
+
+          double m_chla_dcog = std::atan2(psi(1), psi(0));
+
+          debug("Chla guidance: last chla %.3f, #samples %d, norm %.3f, angle %.3f", chl_value, m_samples.size(), norm, Angles::degrees(m_chla_dcog));
+
+          //m_samples.clear();
+
+          if(m_args.m_use_chla_gradient)
+            m_des_heading.value = m_chla_dcog;
+
+          /*
+          // orthogonal to the gradient direction
+          Matrix epsi(2, 1);
+          epsi(0) = -psi(1);
+          epsi(1) = psi(0);
+
+          double const error = m_args.target_value - chl_value;
+          Matrix const u_seek = m_params.seeking_gain * error * psi;
+          Matrix const u_follow = m_params.following_gain * epsi;
+          Matrix const u = u_seek + u_follow;
+
+          spew("seek control: %.4f, %.4f", u_seek(0), u_seek(1));
+          spew("follow control: %.4f, %.4f", u_follow(0), u_follow(1));
+
+          spew("Chl error: %.4f [%.4f - %.4f]", error, m_args.target_value, chl_value);
+
+          double const heading = std::atan2(u(1), u(0));
+          spew("Heading: %.2f", Angles::degrees(heading));
+          m_state.direction = heading;*/
+        }
+
+        static Matrix
+        gradientEstimator(const std::vector<Sample>& samples)
+        {
+          Matrix regressor(samples.size() - 1, 2);
+          Matrix outputs(samples.size() - 1, 1);
+          Matrix inv_mat(2,2);
+          Matrix temp_mat(2,2);
+
+          for (unsigned row = 0; row < samples.size() - 1; ++row)
+          {
+            regressor(row, 0) = samples[row].lat - samples.back().lat;
+            regressor(row, 1) = samples[row].lon - samples.back().lon;
+
+            outputs(row) = samples[row].chl_value - samples.back().chl_value;
+          }
+
+          Matrix const regressor_t = transpose(regressor);
+          temp_mat = regressor_t * regressor;
+          long double det = temp_mat(0,0)*temp_mat(1,1) - temp_mat(0,1)*temp_mat(1,0);
+          inv_mat(0,0) = temp_mat(1,1);
+          inv_mat(0,1) = -temp_mat(0,1);
+          inv_mat(1,0) = -temp_mat(1,0);
+          inv_mat(1,1) = temp_mat(0,0);
+
+          inv_mat = (long double)(1.0/det) * inv_mat;
+          //std::cout << inv_mat << std::endl;
+
+          return inv_mat * regressor_t * outputs;
+        }
+
+
+
+IN THE MAIN
+//! Track Chla if some measurements are received.
+          if(m_enable_chla && m_timer_chla.overflow() && m_chla_full)
+          {
+            m_timer_chla.reset();
+            m_chla_count = false;
+
+            computeChlaDirection();
+          }

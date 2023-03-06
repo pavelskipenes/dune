@@ -32,6 +32,7 @@
 
 // ISO C++ 98 headers.
 #include <string>
+#include <map>
 
 // DUNE headers.
 #include <DUNE/Coordinates.hpp>
@@ -104,6 +105,11 @@ namespace DUNE
       void
       consume(const IMC::DesiredSpeed* dspeed);
 
+      //! Consumer for PlanSpecification message.
+      //! @param plspec message to consume.
+      void
+      consume(const IMC::PlanSpecification* plspec);
+
       //! Handler for parameter updates.
       //! This can be overriden but in that case this parent
       //! class implementation MUST be called.
@@ -173,6 +179,16 @@ namespace DUNE
         double speed;
         //! course error in relation to track bearing.
         double course_error;
+        //! Start lat.
+        double lat_st;
+        //! Start lon.
+        double lon_st;
+        //! End lat.
+        double lat_en;
+        //! End lon.
+        double lon_en;
+        //! Plan Waypoints.
+        Math::Matrix waypoints;
 
         //! Track position & velocity.
         struct TrackCoord
@@ -526,6 +542,8 @@ namespace DUNE
       uint32_t m_scope_ref;
       //! Maximum admitted track length
       double m_max_track_length;
+      //! Minimum distance for waypoint switching.
+      double m_dist_switch;
     };
   }
 }

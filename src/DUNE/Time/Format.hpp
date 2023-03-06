@@ -56,6 +56,12 @@ namespace DUNE
       getTimeDate(double tstamp, bool utc = true);
 
       static std::string
+      getTimeDateISO(void);
+
+      static std::string
+      getTimeDateISO(double tstamp, bool utc = true);
+
+      static std::string
       getDateSafe(void);
 
       static std::string

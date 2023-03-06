@@ -382,50 +382,53 @@ namespace Plan
       void
       consume(const IMC::VehicleState* vs)
       {
-        if (getEntityState() == IMC::EntityState::ESTA_BOOT)
-          return;
-
-        m_last_vstate = Clock::get();
-
-        switch (vs->op_mode)
+        if(vs->getSource() == getSystemId())
         {
-          case IMC::VehicleState::VS_SERVICE:
-            onVehicleService(vs);
-            break;
-          case IMC::VehicleState::VS_CALIBRATION:
-            onVehicleCalibration(vs);
-            break;
-          case IMC::VehicleState::VS_ERROR:
-          case IMC::VehicleState::VS_BOOT:
-            onVehicleError(vs);
-            break;
-          case IMC::VehicleState::VS_MANEUVER:
-            onVehicleManeuver(vs);
-            break;
-          case IMC::VehicleState::VS_EXTERNAL:
-            onVehicleExternalControl(vs);
-            break;
-        }
+          if (getEntityState() == IMC::EntityState::ESTA_BOOT)
+            return;
 
-        // update calibration status
-        if (m_plan != NULL && initMode())
-        {
-          m_plan->updateCalibration(vs);
+          m_last_vstate = Clock::get();
 
-          if (m_plan->isCalibrationDone())
+          switch (vs->op_mode)
           {
-            if ((vs->op_mode == IMC::VehicleState::VS_CALIBRATION) &&
-                !pendingReply())
-            {
-              IMC::PlanManeuver* pman = m_plan->loadStartManeuver();
-              startManeuver(pman);
-            }
+            case IMC::VehicleState::VS_SERVICE:
+              onVehicleService(vs);
+              break;
+            case IMC::VehicleState::VS_CALIBRATION:
+              onVehicleCalibration(vs);
+              break;
+            case IMC::VehicleState::VS_ERROR:
+            case IMC::VehicleState::VS_BOOT:
+              onVehicleError(vs);
+              break;
+            case IMC::VehicleState::VS_MANEUVER:
+              onVehicleManeuver(vs);
+              break;
+            case IMC::VehicleState::VS_EXTERNAL:
+              onVehicleExternalControl(vs);
+              break;
           }
-          else if (m_plan->hasCalibrationFailed())
+
+          // update calibration status
+          if (m_plan != NULL && initMode())
           {
-            onFailure(m_plan->getCalibrationInfo());
-            m_reply.plan_id = m_spec.plan_id;
-            changeMode(IMC::PlanControlState::PCS_READY, m_plan->getCalibrationInfo());
+            m_plan->updateCalibration(vs);
+
+            if (m_plan->isCalibrationDone())
+            {
+              if ((vs->op_mode == IMC::VehicleState::VS_CALIBRATION) &&
+                  !pendingReply())
+              {
+                IMC::PlanManeuver* pman = m_plan->loadStartManeuver();
+                startManeuver(pman);
+              }
+            }
+            else if (m_plan->hasCalibrationFailed())
+            {
+              onFailure(m_plan->getCalibrationInfo());
+              m_reply.plan_id = m_spec.plan_id;
+              changeMode(IMC::PlanControlState::PCS_READY, m_plan->getCalibrationInfo());
+            }
           }
         }
       }
@@ -433,114 +436,129 @@ namespace Plan
       void
       onVehicleService(const IMC::VehicleState* vs)
       {
-        switch (m_pcs.state)
+        if(vs->getSource() == getSystemId())
         {
-          case IMC::PlanControlState::PCS_BLOCKED:
-            changeMode(IMC::PlanControlState::PCS_READY, DTR("vehicle ready"), TYPE_INF);
-            break;
-          case IMC::PlanControlState::PCS_INITIALIZING:
-            if (!pendingReply())
-            {
-              m_plan->updateCalibration(vs);
-              IMC::PlanManeuver* pman = m_plan->loadStartManeuver();
-              startManeuver(pman);
-            }
-            break;
-          case IMC::PlanControlState::PCS_EXECUTING:
-            if (!pendingReply())
-            {
-              onFailure(vs->last_error, false);
-              m_reply.plan_id = m_spec.plan_id;
-              changeMode(IMC::PlanControlState::PCS_READY, vs->last_error);
-            }
-            break;
-          default:
-            break;
+          switch (m_pcs.state)
+          {
+            case IMC::PlanControlState::PCS_BLOCKED:
+              changeMode(IMC::PlanControlState::PCS_READY, DTR("vehicle ready"), TYPE_INF);
+              break;
+            case IMC::PlanControlState::PCS_INITIALIZING:
+              if (!pendingReply())
+              {
+                m_plan->updateCalibration(vs);
+                IMC::PlanManeuver* pman = m_plan->loadStartManeuver();
+                startManeuver(pman);
+              }
+              break;
+            case IMC::PlanControlState::PCS_EXECUTING:
+              if (!pendingReply())
+              {
+                onFailure(vs->last_error, false);
+                m_reply.plan_id = m_spec.plan_id;
+                changeMode(IMC::PlanControlState::PCS_READY, vs->last_error);
+              }
+              break;
+            default:
+              break;
+          }
         }
       }
 
       void
       onVehicleManeuver(const IMC::VehicleState* vs)
       {
-        if (!execMode() || pendingReply())
-          return;
-
-        if (vs->flags & IMC::VehicleState::VFLG_MANEUVER_DONE)
+        if(vs->getSource() == getSystemId())
         {
-          if (m_plan->isDone())
-          {
-            vehicleRequest(IMC::VehicleCommand::VC_STOP_MANEUVER);
+          if (!execMode() || pendingReply())
+            return;
 
-            std::string comp = DTR("plan completed");
-            onSuccess(comp, false);
-            m_pcs.last_outcome = IMC::PlanControlState::LPO_SUCCESS;
-            m_reply.plan_id = m_spec.plan_id;
-            changeMode(IMC::PlanControlState::PCS_READY, comp, TYPE_INF);
+          if (vs->flags & IMC::VehicleState::VFLG_MANEUVER_DONE)
+          {
+            if (m_plan->isDone())
+            {
+              vehicleRequest(IMC::VehicleCommand::VC_STOP_MANEUVER);
+
+              std::string comp = DTR("plan completed");
+              onSuccess(comp, false);
+              m_pcs.last_outcome = IMC::PlanControlState::LPO_SUCCESS;
+              m_reply.plan_id = m_spec.plan_id;
+              changeMode(IMC::PlanControlState::PCS_READY, comp, TYPE_INF);
+            }
+            else
+            {
+              IMC::PlanManeuver* pman = m_plan->loadNextManeuver();
+              startManeuver(pman);
+            }
           }
           else
           {
-            IMC::PlanManeuver* pman = m_plan->loadNextManeuver();
-            startManeuver(pman);
+            m_pcs.man_eta = vs->maneuver_eta;
           }
-        }
-        else
-        {
-          m_pcs.man_eta = vs->maneuver_eta;
         }
       }
 
       void
       onVehicleError(const IMC::VehicleState* vs)
       {
-        std::string err_ents = DTR("vehicle errors: ") + vs->error_ents;
-        std::string edesc = vs->last_error_time < 0 ? err_ents : vs->last_error;
-
-        if (execMode())
+        if(vs->getSource() == getSystemId())
         {
-          onFailure(edesc);
-          m_reply.plan_id = m_spec.plan_id;
-        }
+          std::string err_ents = DTR("vehicle errors: ") + vs->error_ents;
+          std::string edesc = vs->last_error_time < 0 ? err_ents : vs->last_error;
 
-        // there are new error entities
-        if (edesc != m_last_event && !pendingReply())
-        {
-          if (initMode())
+          if (execMode())
           {
             onFailure(edesc);
-            // stop calibration if any is running
-            vehicleRequest(IMC::VehicleCommand::VC_STOP_CALIBRATION);
             m_reply.plan_id = m_spec.plan_id;
           }
 
-          changeMode(IMC::PlanControlState::PCS_BLOCKED, edesc, TYPE_NONE);
+          // there are new error entities
+          if (edesc != m_last_event && !pendingReply())
+          {
+            if (initMode())
+            {
+              onFailure(edesc);
+              // stop calibration if any is running
+              vehicleRequest(IMC::VehicleCommand::VC_STOP_CALIBRATION);
+              m_reply.plan_id = m_spec.plan_id;
+            }
+
+            changeMode(IMC::PlanControlState::PCS_BLOCKED, edesc, TYPE_NONE);
+          }
         }
       }
 
       void
       onVehicleCalibration(const IMC::VehicleState* vs)
       {
-        (void)vs;
-
-        if (initMode())
-          return;
-
-        if (!blockedMode())
+        if(vs->getSource() == getSystemId())
         {
-          changeMode(IMC::PlanControlState::PCS_BLOCKED,
-                     DTR("vehicle in CALIBRATION mode"), TYPE_NONE);
+          (void)vs;
+
+          if (initMode())
+            return;
+
+          if (!blockedMode())
+          {
+            changeMode(IMC::PlanControlState::PCS_BLOCKED,
+                      DTR("vehicle in CALIBRATION mode"), TYPE_NONE);
+          }
         }
       }
 
       void
       onVehicleExternalControl(const IMC::VehicleState* vs)
       {
-        (void)vs;
+        if(vs->getSource() == getSystemId())
+        {
+          (void)vs;
 
-        if (blockedMode())
-          return;
+          if (blockedMode())
+            return;
 
-        changeMode(IMC::PlanControlState::PCS_BLOCKED,
-                   DTR("vehicle in EXTERNAL mode"), TYPE_NONE);
+          changeMode(IMC::PlanControlState::PCS_BLOCKED,
+                    DTR("vehicle in EXTERNAL mode"), TYPE_NONE);
+        }
       }
 
       void
@@ -936,6 +954,14 @@ namespace Plan
         changeMode(IMC::PlanControlState::PCS_EXECUTING,
                    pman->maneuver_id + DTR(": executing maneuver"),
                    pman->maneuver_id, pman->data.get(), TYPE_INF);
+        IMC::PlanManeuver* next_man = m_plan->peekNextManeuver();
+        if(next_man != NULL)
+        {
+          IMC::PeekManeuver peek_man;
+          peek_man.man.set(*next_man);
+          dispatch(peek_man);
+          debug("Dispatching peek maneuver!");
+        }
 
         m_plan->maneuverStarted(pman->maneuver_id);
       }

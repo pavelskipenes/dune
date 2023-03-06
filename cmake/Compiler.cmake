@@ -69,6 +69,10 @@ macro(dune_probe_cxx)
   endif(NOT DUNE_CXX_NAME)
 
   # GNU C Compiler
+  if(CMAKE_BUILD_TYPE MATCHES "Debug")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+  endif(CMAKE_BUILD_TYPE MATCHES "Debug")
   if(NOT DUNE_CXX_NAME)
     check_symbol_exists(__GNUC__ stdio.h DUNE_CXX_GNU)
     if(DUNE_CXX_GNU)

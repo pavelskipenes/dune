@@ -65,6 +65,8 @@
 #include <DUNE/Status.hpp>
 #include <DUNE/I18N.hpp>
 #include <DUNE/IO.hpp>
+#include <DUNE/SituationalAwareness.hpp>
+#include <DUNE/SenTiBoardMng.hpp>
 
 //! DUNE: Uniform Navigational Environment.
 namespace DUNE
@@ -96,6 +98,8 @@ namespace DUNE
   using namespace DUNE::Time;                   \
   using namespace DUNE::Utils;                  \
   using namespace DUNE::Navigation;             \
-  using namespace DUNE::IO
+  using namespace DUNE::IO;                     \
+  using namespace DUNE::SituationalAwareness;	\
+  using namespace DUNE::SenTiBoardMng
 
 #endif
