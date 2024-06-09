@@ -33,7 +33,7 @@
 #include <sstream>
 #include <cstring>
 #include <string>
-#include <Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 
 
 // DUNE headers.

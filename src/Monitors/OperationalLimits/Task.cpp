@@ -35,7 +35,7 @@
 #include <map>
 #include <iostream>
 #include <sstream>
-#include <Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>

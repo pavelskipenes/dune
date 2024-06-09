@@ -35,7 +35,7 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 #include <DUNE/SenTiBoardMng.hpp>
-#include <Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 
 namespace Sensors
 {

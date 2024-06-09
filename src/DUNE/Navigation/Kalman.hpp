@@ -25,7 +25,7 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 #include <DUNE/Tasks/Task.hpp>
-#include <Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 
 #pragma once
 
