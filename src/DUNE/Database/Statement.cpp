@@ -37,7 +37,7 @@
 #include <DUNE/Database/Statement.hpp>
 
 // SQLITE3 headers
-#include <sqlite3/sqlite3.h>
+#include <sqlite3.h>
 
 namespace DUNE
 {
