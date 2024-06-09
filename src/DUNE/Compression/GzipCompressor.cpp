@@ -36,7 +36,7 @@
 #include <DUNE/Compression/GzipCompressor.hpp>
 
 // Gzip headers.
-#include <zlib/zlib.h>
+#include <zlib.h>
 
 namespace DUNE
 {

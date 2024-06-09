@@ -36,7 +36,7 @@
 #include <DUNE/Algorithms/CRC32.hpp>
 #include "Test.hpp"
 /* // Gzip headers. */
-/* #include <zlib/zlib.h> */
+/* #include <zlib.h> */
 
 using namespace DUNE::Algorithms;
 

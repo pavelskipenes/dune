@@ -32,7 +32,7 @@
 #include <DUNE/Compression/ZlibCompressor.hpp>
 
 // Zlib headers.
-#include <zlib/zlib.h>
+#include <zlib.h>
 
 namespace DUNE
 {

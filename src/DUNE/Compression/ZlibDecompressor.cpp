@@ -33,7 +33,7 @@
 #include <DUNE/Compression/ZlibDecompressor.hpp>
 
 // Zlib headers.
-#include <zlib/zlib.h>
+#include <zlib.h>
 
 namespace DUNE
 {
